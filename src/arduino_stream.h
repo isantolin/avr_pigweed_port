@@ -24,14 +24,19 @@ namespace avr_port {
 /// - Immune to single-byte hardware FIFO overrun.
 class ArduinoStream final : public pw::stream::NonSeekableReaderWriter {
  public:
-  explicit constexpr ArduinoStream(Stream& stream) : stream_(stream) {}
+  constexpr ArduinoStream() : stream_(nullptr) {}
+  explicit constexpr ArduinoStream(::Stream& stream) : stream_(&stream) {}
+  explicit constexpr ArduinoStream(::Stream* stream) : stream_(stream) {}
+
+  void setStream(::Stream* stream) { stream_ = stream; }
+  void setStream(::Stream& stream) { stream_ = &stream; }
 
  private:
   pw::Status DoWrite(pw::ConstByteSpan data) override {
-    if (data.empty()) {
+    if (!stream_ || data.empty()) {
       return pw::OkStatus();
     }
-    const size_t written = stream_.write(
+    const size_t written = stream_->write(
         reinterpret_cast<const uint8_t*>(data.data()), data.size());
     if (written != data.size()) {
       return pw::Status::ResourceExhausted();
@@ -40,12 +45,12 @@ class ArduinoStream final : public pw::stream::NonSeekableReaderWriter {
   }
 
   pw::StatusWithSize DoRead(pw::ByteSpan destination) override {
-    if (destination.empty()) {
+    if (!stream_ || destination.empty()) {
       return pw::StatusWithSize(0);
     }
     size_t bytes_read = 0;
-    while (bytes_read < destination.size() && stream_.available() > 0) {
-      const int c = stream_.read();
+    while (bytes_read < destination.size() && stream_->available() > 0) {
+      const int c = stream_->read();
       if (c < 0) {
         break;
       }
@@ -57,7 +62,7 @@ class ArduinoStream final : public pw::stream::NonSeekableReaderWriter {
     return pw::StatusWithSize(bytes_read);
   }
 
-  Stream& stream_;
+  ::Stream* stream_ = nullptr;
 };
 
 }  // namespace avr_port
