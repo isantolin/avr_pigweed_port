@@ -33,9 +33,11 @@ target_include_directories(pw_log INTERFACE
 target_link_libraries(pw_log INTERFACE pw_preprocessor)
 
 # Disable -Wconversion for 8/16-bit AVR architecture (avoids false positives with 16-bit size_t)
+# and disable -Wpedantic to allow standard-compliant Pigweed C++17 compilation under GCC 14/15
 pw_add_library_generic(pw_build.avr_warnings INTERFACE
   PUBLIC_COMPILE_OPTIONS
     "-Wno-conversion"
+    "-Wno-pedantic"
 )
 set(pw_build_WARNINGS
     pw_build.strict_warnings
