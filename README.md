@@ -10,6 +10,9 @@ To avoid the 32-bit toolchain constraints of GN/Bazel, this architecture leverag
 
 ```text
 avr_pigweed_port/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                      # GitHub Actions: automated build & simavr execution
 ├── avr-toolchain.cmake                 # avr-gcc cross-compiler definition and C++17 flags
 ├── CMakeLists.txt                      # Modular build with pw_build, tests, and CRC-32 optimization
 ├── bootstrap_avr_pigweed.sh            # Automated setup and build script
@@ -733,6 +736,16 @@ cmake --build build --target run_tests
 [==========] Total tests: 20, Passed: 20, Failed: 0
 [  PASSED  ] 100% OF PORTED PIGWEED MODULES VERIFIED OK!
 ```
+
+### 5.5. GitHub Actions Continuous Integration (`.github/workflows/ci.yml`)
+
+The repository includes a complete automated CI pipeline that triggers on every `push` and `pull_request` to `main`:
+* Installs `gcc-avr`, `avr-libc`, `cmake`, `ninja`, and `simavr` on `ubuntu-latest`.
+* Performs shallow recursive checkout of submodules (`pigweed` and `avr-libstdcpp`).
+* Runs a test matrix verifying both **4-bit** (`PW_CHECKSUM_CRC32_4BITS`) and **1-bit** (`PW_CHECKSUM_CRC32_1BITS`) configurations.
+* Executes the complete 20-test Pigweed suite in `simavr` cycle-accurate simulation.
+* Validates Python host tooling syntax.
+* Uploads `firmware.hex`, `firmware.lst`, and `test_runner.elf` as build artifacts.
 
 ---
 

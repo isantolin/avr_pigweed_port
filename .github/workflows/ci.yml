@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: Build & Test (${{ matrix.crc_impl }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        crc_impl: [PW_CHECKSUM_CRC32_4BITS, PW_CHECKSUM_CRC32_1BITS]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize submodules (shallow)
+        run: |
+          git submodule update --init --recursive --depth 1
+
+      - name: Install AVR Toolchain & simavr
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-avr avr-libc binutils-avr cmake ninja-build simavr
+
+      - name: Configure CMake (${{ matrix.crc_impl }})
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
+            -DAVR_MCU=atmega328p \
+            -DAVR_F_CPU=16000000UL \
+            -DAVR_CRC32_IMPL=${{ matrix.crc_impl }}
+
+      - name: Build Firmware and Test Runner
+        run: |
+          cmake --build build --target all
+
+      - name: Run Pigweed AVR Test Suite in simavr
+        run: |
+          cmake --build build --target run_tests
+
+      - name: Verify Python Host Tools
+        if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
+        run: |
+          python3 -m py_compile tools/receive_telemetry.py
+
+      - name: Upload Build Artifacts
+        if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: avr-pigweed-firmware
+          path: |
+            build/firmware.hex
+            build/firmware.lst
+            build/test_runner.elf
