@@ -63,11 +63,23 @@ pw_add_library(pw_assert_avr INTERFACE
 pw_set_backend(pw_assert.check pw_assert_avr)
 pw_set_backend(pw_assert.assert pw_assert_avr)
 
-# 5. Include only 8-bit AVR-compatible Pigweed modules
+# Chrono backend for AVR
+include("${PW_ROOT}/pw_chrono/backend.cmake")
+pw_add_library(pw_chrono_avr.system_clock STATIC
+  SOURCES
+    pw_chrono_avr/src/system_clock_avr.cpp
+  PUBLIC_INCLUDES
+    pw_chrono_avr/public_overrides
+    ${PW_ROOT}/pw_chrono/public
+  PUBLIC_DEPS
+    pw_preprocessor
+)
+pw_set_backend(pw_chrono.system_clock pw_chrono_avr.system_clock)
+
+# 5. Include 8-bit AVR-compatible Pigweed modules
 add_subdirectory("${PW_ROOT}/third_party/fuchsia" pw_third_party_fuchsia EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_numeric" pw_numeric EXCLUDE_FROM_ALL)
 add_library(pw_allocator INTERFACE)
-add_library(pw_tokenizer INTERFACE)
 add_library(pw_unit_test INTERFACE)
 add_library(pw_toolchain.constexpr_tag INTERFACE)
 target_include_directories(pw_toolchain.constexpr_tag INTERFACE "${PW_ROOT}/pw_toolchain/public")
@@ -83,9 +95,68 @@ add_subdirectory("${PW_ROOT}/pw_span" pw_span EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_bytes" pw_bytes EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_varint" pw_varint EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_containers" pw_containers EXCLUDE_FROM_ALL)
+add_subdirectory("${PW_ROOT}/pw_string" pw_string EXCLUDE_FROM_ALL)
+add_subdirectory("${PW_ROOT}/pw_base64" pw_base64 EXCLUDE_FROM_ALL)
+add_subdirectory("${PW_ROOT}/pw_tokenizer" pw_tokenizer EXCLUDE_FROM_ALL)
+add_subdirectory("${PW_ROOT}/pw_chrono" pw_chrono EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_stream" pw_stream EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_checksum" pw_checksum EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_hdlc" pw_hdlc EXCLUDE_FROM_ALL)
+
+# pw_cobs (Consistent Overhead Byte Stuffing)
+pw_add_library(pw_cobs STATIC
+  SOURCES
+    ${PW_ROOT}/pw_cobs/cpp/cobs.cc
+  PUBLIC_INCLUDES
+    ${PW_ROOT}/pw_cobs/cpp/public
+  PUBLIC_DEPS
+    pw_assert
+    pw_bytes
+    pw_containers
+    pw_result
+    pw_span
+    pw_status
+)
+
+# pw_crypto with pure AVR SHA-256 backend
+pw_add_library(pw_crypto_avr STATIC
+  SOURCES
+    pw_crypto_avr/src/sha256_avr.cpp
+  PUBLIC_INCLUDES
+    pw_crypto_avr/public
+    ${PW_ROOT}/pw_crypto/public
+  PUBLIC_DEPS
+    pw_bytes
+    pw_status
+    pw_stream
+    pw_log
+)
+
+pw_add_library(pw_crypto INTERFACE
+  PUBLIC_INCLUDES
+    ${PW_ROOT}/pw_crypto/public
+  PUBLIC_DEPS
+    pw_crypto_avr
+    pw_bytes
+    pw_status
+    pw_stream
+    pw_log
+)
+
+# pw_ring_buffer
+pw_add_library(pw_ring_buffer STATIC
+  SOURCES
+    ${PW_ROOT}/pw_ring_buffer/prefixed_entry_ring_buffer.cc
+  PUBLIC_INCLUDES
+    ${PW_ROOT}/pw_ring_buffer/public
+  PUBLIC_DEPS
+    pw_assert
+    pw_status
+    pw_result
+    pw_varint
+    pw_span
+    pw_function
+)
 
 # Ensure pw_checksum configuration target exports macro to pw_hdlc
 if(TARGET pw_checksum)
@@ -141,6 +212,14 @@ target_link_libraries(test_runner.elf PRIVATE
   pw_checksum
   pw_hdlc.encoder
   pw_hdlc.decoder
+  pw_cobs
+  pw_crypto
+  pw_ring_buffer
+  pw_function
+  pw_string
+  pw_base64
+  pw_tokenizer
+  pw_chrono.system_clock
 )
 
 add_custom_command(TARGET test_runner.elf POST_BUILD

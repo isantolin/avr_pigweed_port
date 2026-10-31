@@ -16,15 +16,20 @@ avr_pigweed_port/
 ├── pw_assert_avr/                      # Minimalist assertion backend (0 bytes of SRAM)
 │   ├── public/
 │   │   └── pw_assert_backend/
-│   │       ├── assert_backend.h
-│   │       ├── assert_lite_backend.h
-│   │       └── check_backend.h
 │   └── public_overrides/
 │       └── pw_assert_backend/
-│           ├── assert_backend.h
-│           ├── assert_lite_backend.h
-│           └── check_backend.h
+├── pw_chrono_avr/                      # SystemClock backend for 8-bit AVR microcontrollers
+│   ├── public_overrides/
+│   │   └── pw_chrono_backend/
+│   └── src/
+│       └── system_clock_avr.cpp
+├── pw_crypto_avr/                      # Pure C++ SHA-256 backend with Flash-resident PROGMEM table
+│   ├── public/
+│   │   └── pw_crypto/
+│   └── src/
+│       └── sha256_avr.cpp
 ├── src/
+│   ├── avr_stdio_compat.h              # std::snprintf / std::vsnprintf polyfill for avr-libstdcpp
 │   ├── avr_uart_stream.h               # pw::stream implementation over AVR USART0 registers
 │   ├── cxx_abi_stubs.cpp               # C++17 ABI stubs (operator delete and static guards)
 │   └── main.cpp                        # Firmware with pw_result, pw_containers, pw_varint, and pw_hdlc
@@ -627,7 +632,7 @@ The test suite runs either directly on hardware or inside the `simavr` cycle-acc
 
 ### 5.1. Module Test Matrix
 
-The suite exercises 12 distinct unit test cases covering 100% of the ported Pigweed components:
+The suite exercises 20 distinct unit test cases covering 100% of the ported Pigweed components:
 
 | # | Test Case | Target Module / Component | Verification Criteria |
 | :--- | :--- | :--- | :--- |
@@ -643,14 +648,22 @@ The suite exercises 12 distinct unit test cases covering 100% of the ported Pigw
 | 10 | `TestPwHdlcRoundtrip` | `pw_hdlc` | End-to-end UI frame encoding via `WriteUIFrame` and subsequent parsing/verification via `DecoderBuffer`. |
 | 11 | `TestPwAssert` | `pw_assert` (`pw_assert_avr`) | `PW_ASSERT`, `PW_CHECK`, `PW_CHECK_OK`, and `PW_CHECK_INT_EQ` macro functionality. |
 | 12 | `TestCxxAbi` | C++17 ABI runtime | Virtual method table resolution via `pw::stream::Writer&` polymorphic references and static initialization guards. |
+| 13 | `TestPwCobs` | `pw_cobs` | Consistent Overhead Byte Stuffing: zero-delimiter framing and round-trip decoding. |
+| 14 | `TestPwCryptoSha256` | `pw_crypto` (`pw_crypto_avr`) | FIPS 180-4 standard SHA-256 hash validation on NIST test vector (`"abc"` $\to$ digest match) with Flash-resident `PROGMEM` lookup tables. |
+| 15 | `TestPwRingBuffer` | `pw_ring_buffer` | `PrefixedEntryRingBuffer`: length-prefixed FIFO entry push, peek, pop, and entry counting. |
+| 16 | `TestPwFunction` | `pw_function` | `pw::InlineFunction<T, N>` callable and lambda with state capture without dynamic memory allocation. |
+| 17 | `TestPwString` | `pw_string` | `pw::InlineString<N>` bounds checking, append operations, and safe string view interoperability. |
+| 18 | `TestPwBase64` | `pw_base64` | Base-64 binary-to-text encoding and decoding round-trip verification. |
+| 19 | `TestPwTokenizer` | `pw_tokenizer` | Compile-time `constexpr` and runtime 32-bit token calculation via `pw::tokenizer::Hash`. |
+| 20 | `TestPwChrono` | `pw_chrono` (`pw_chrono_avr`) | `SystemClock` monotonic ticks, time points, and duration arithmetic on AVR bare-metal. |
 
 ### 5.2. AVR Harvard Architecture Optimization in Test Suite
 
-On AVR microcontrollers, string literals in `.rodata` are by default copied into SRAM by `avr-libc` runtime initialization (`__do_copy_data`). For a large unit test suite, test names and status strings would quickly exhaust the 2048 bytes of SRAM, colliding with the stack.
+On AVR microcontrollers, string literals and constant tables in `.rodata` are by default copied into SRAM by `avr-libc` runtime initialization (`__do_copy_data`). For a large unit test suite, test names, status strings, and SHA-256 round constants would quickly exhaust the 2048 bytes of SRAM, colliding with the stack.
 
-`tests/test_runner.cpp` uses AVR `PROGMEM` macros (`PSTR(...)` and `pgm_read_byte`) to keep all test descriptions in Flash memory:
-* Total SRAM usage of the full test runner: **660 bytes** (only 32.2% of RAM, leaving $> 1.3\text{ KB}$ for stack and buffers).
-* Total Flash usage: **6638 bytes** (20.3% of 32 KB Flash).
+`tests/test_runner.cpp` and `pw_crypto_avr` use AVR `PROGMEM` macros (`PSTR(...)` and `pgm_read_byte` / `pgm_read_dword`) to keep all test descriptions and cryptography tables in Flash memory:
+* Total SRAM usage of the full test runner (20 tests): **918 bytes** (only 44.8% of RAM, leaving $> 1.1\text{ KB}$ for stack and buffers).
+* Total Flash usage: **15592 bytes** (47.6% of 32 KB Flash).
 
 ### 5.3. Running the Test Suite via Simulator (`simavr`)
 
@@ -700,8 +713,24 @@ cmake --build build --target run_tests
 [       OK ] TestPwAssert
 [ RUN      ] TestCxxAbi
 [       OK ] TestCxxAbi
+[ RUN      ] TestPwCobs
+[       OK ] TestPwCobs
+[ RUN      ] TestPwCryptoSha256
+[       OK ] TestPwCryptoSha256
+[ RUN      ] TestPwRingBuffer
+[       OK ] TestPwRingBuffer
+[ RUN      ] TestPwFunction
+[       OK ] TestPwFunction
+[ RUN      ] TestPwString
+[       OK ] TestPwString
+[ RUN      ] TestPwBase64
+[       OK ] TestPwBase64
+[ RUN      ] TestPwTokenizer
+[       OK ] TestPwTokenizer
+[ RUN      ] TestPwChrono
+[       OK ] TestPwChrono
 
-[==========] Total tests: 12, Passed: 12, Failed: 0
+[==========] Total tests: 20, Passed: 20, Failed: 0
 [  PASSED  ] 100% OF PORTED PIGWEED MODULES VERIFIED OK!
 ```
 

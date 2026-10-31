@@ -22,6 +22,14 @@
 #include "pw_hdlc/decoder.h"
 #include "pw_assert/assert.h"
 #include "pw_assert/check.h"
+#include "pw_cobs/cobs.h"
+#include "pw_crypto/sha256.h"
+#include "pw_ring_buffer/prefixed_entry_ring_buffer.h"
+#include "pw_function/function.h"
+#include "pw_string/string.h"
+#include "pw_base64/base64.h"
+#include "pw_tokenizer/hash.h"
+#include "pw_chrono/system_clock.h"
 
 namespace {
 
@@ -381,6 +389,127 @@ bool TestCxxAbi() {
   return true;
 }
 
+// 13. Test pw_cobs (Consistent Overhead Byte Stuffing)
+bool TestPwCobs() {
+  const std::byte unencoded[] = {
+      std::byte{0x00}, std::byte{0x01}, std::byte{0x00}, std::byte{0x02}, std::byte{0x03}};
+  std::byte encoded[16];
+  auto encode_res = pw::cobs::Encode(pw::span(unencoded), pw::span(encoded));
+  if (!encode_res.ok()) return false;
+
+  std::byte decoded[16];
+  auto decode_res = pw::cobs::Decode(pw::span(encoded).first(encode_res.value().size()), pw::span(decoded));
+  if (!decode_res.ok()) return false;
+  if (decode_res.value().size() != sizeof(unencoded)) return false;
+  if (std::memcmp(unencoded, decoded, sizeof(unencoded)) != 0) return false;
+  return true;
+}
+
+// 14. Test pw_crypto (SHA-256 standard NIST test vector)
+bool TestPwCryptoSha256() {
+  const char* msg = "abc";
+  std::byte digest[pw::crypto::sha256::kDigestSizeBytes];
+  auto status = pw::crypto::sha256::Hash(
+      pw::as_bytes(pw::span(msg, 3)), pw::span(digest));
+  if (!status.ok()) return false;
+
+  // NIST SHA-256 vector for "abc":
+  // ba7816bf 8f01cfea 414140de 5dae2223 b00361a3 96177a9c b410ff61 f20015ad
+  const uint8_t expected[32] = {
+      0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea,
+      0x41, 0x41, 0x40, 0xde, 0x5d, 0xae, 0x22, 0x23,
+      0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c,
+      0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00, 0x15, 0xad};
+
+  return std::memcmp(digest, expected, 32) == 0;
+}
+
+// 15. Test pw_ring_buffer
+bool TestPwRingBuffer() {
+  std::byte raw_buffer[64];
+  pw::ring_buffer::PrefixedEntryRingBuffer ring;
+  if (!ring.SetBuffer(raw_buffer).ok()) return false;
+
+  const std::byte entry1[] = {std::byte{0xAA}, std::byte{0xBB}};
+  const std::byte entry2[] = {std::byte{0xCC}, std::byte{0xDD}, std::byte{0xEE}};
+
+  if (!ring.PushBack(pw::span(entry1)).ok()) return false;
+  if (!ring.PushBack(pw::span(entry2)).ok()) return false;
+  if (ring.EntryCount() != 2) return false;
+
+  std::byte read_buf[8];
+  size_t bytes_read = 0;
+  if (!ring.PeekFront(pw::span(read_buf), &bytes_read).ok()) return false;
+  if (bytes_read != 2 || read_buf[0] != std::byte{0xAA} || read_buf[1] != std::byte{0xBB}) return false;
+  if (!ring.PopFront().ok()) return false;
+
+  if (!ring.PeekFront(pw::span(read_buf), &bytes_read).ok()) return false;
+  if (bytes_read != 3 || read_buf[0] != std::byte{0xCC}) return false;
+  if (!ring.PopFront().ok()) return false;
+
+  if (ring.EntryCount() != 0) return false;
+  return true;
+}
+
+// 16. Test pw_function (Zero-heap callbacks and delegates)
+bool TestPwFunction() {
+  pw::InlineFunction<int(int), 16> triple = [](int val) { return val * 3; };
+  if (triple(7) != 21) return false;
+
+  int adder = 100;
+  pw::InlineFunction<int(int), 16> add_offset = [&adder](int val) { return val + adder; };
+  if (add_offset(5) != 105) return false;
+
+  return true;
+}
+
+// 17. Test pw_string (Safe bounded inline strings)
+bool TestPwString() {
+  pw::InlineString<20> str = "Hello";
+  str.append(" AVR");
+  if (str.size() != 9) return false;
+  if (str != "Hello AVR") return false;
+  if (str.capacity() != 20) return false;
+  return true;
+}
+
+// 18. Test pw_base64
+bool TestPwBase64() {
+  const char* plain = "Pigweed";
+  char encoded[16];
+  const size_t encoded_len = pw::base64::Encode(
+      pw::as_bytes(pw::span(plain, 7)), pw::span(encoded));
+  if (encoded_len != 12) return false;
+  if (std::memcmp(encoded, "UGlnd2VlZA==", 12) != 0) return false;
+
+  std::byte decoded[16];
+  const size_t decoded_len = pw::base64::Decode(
+      std::string_view(encoded, encoded_len), pw::span(decoded));
+  if (decoded_len != 7) return false;
+  if (std::memcmp(decoded, plain, 7) != 0) return false;
+
+  return true;
+}
+
+// 19. Test pw_tokenizer (Compile-time and runtime string hashing)
+bool TestPwTokenizer() {
+  constexpr uint32_t token = pw::tokenizer::Hash("Hello AVR Pigweed");
+  uint32_t rt_token = pw::tokenizer::Hash("Hello AVR Pigweed");
+  if (token == 0) return false;
+  if (token != rt_token) return false;
+  return true;
+}
+
+// 20. Test pw_chrono (SystemClock duration and time points)
+bool TestPwChrono() {
+  auto t1 = pw::chrono::SystemClock::now();
+  auto t2 = pw::chrono::SystemClock::now();
+  if (t2 < t1) return false;
+  auto diff = t2 - t1;
+  if (diff < pw::chrono::SystemClock::duration::zero()) return false;
+  return true;
+}
+
 }  // namespace
 
 int main() {
@@ -401,6 +530,14 @@ int main() {
   RUN_TEST(TestPwHdlcRoundtrip);
   RUN_TEST(TestPwAssert);
   RUN_TEST(TestCxxAbi);
+  RUN_TEST(TestPwCobs);
+  RUN_TEST(TestPwCryptoSha256);
+  RUN_TEST(TestPwRingBuffer);
+  RUN_TEST(TestPwFunction);
+  RUN_TEST(TestPwString);
+  RUN_TEST(TestPwBase64);
+  RUN_TEST(TestPwTokenizer);
+  RUN_TEST(TestPwChrono);
 
   uart::Finish(g_total_tests, g_passed_tests);
   return 0;

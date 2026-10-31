@@ -17,7 +17,7 @@ set(AVR_STDLIB_INCLUDE "${CMAKE_CURRENT_LIST_DIR}/third_party/avr-libstdcpp/incl
 set(COMMON_AVR_FLAGS "-mmcu=${AVR_MCU} -DF_CPU=${AVR_F_CPU} -Os -ffunction-sections -fdata-sections -flto")
 
 set(CMAKE_C_FLAGS_INIT "${COMMON_AVR_FLAGS} -Wall -Wextra -Wno-conversion")
-set(CMAKE_CXX_FLAGS_INIT "${COMMON_AVR_FLAGS} -Wall -Wextra -Wno-conversion -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit -D__cpp_lib_endian=201907L -isystem ${AVR_STDLIB_INCLUDE}")
+set(CMAKE_CXX_FLAGS_INIT "${COMMON_AVR_FLAGS} -Wall -Wextra -Wno-conversion -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit -D__cpp_lib_endian=201907L -include ${CMAKE_CURRENT_LIST_DIR}/src/avr_stdio_compat.h -isystem ${AVR_STDLIB_INCLUDE}")
 set(CMAKE_EXE_LINKER_FLAGS_INIT "-mmcu=${AVR_MCU} -Wl,--gc-sections -flto")
 
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
