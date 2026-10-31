@@ -23,6 +23,14 @@ set(ENV{PW_ROOT} "${PW_ROOT}")
 set(pw_unit_test_ENABLE_PW_ADD_TEST OFF CACHE BOOL "" FORCE)
 include("${PW_ROOT}/pw_build/pigweed.cmake")
 include("${PW_ROOT}/pw_assert/backend.cmake")
+# Null logging support (zero-cost for 8-bit AVR)
+add_library(pw_log INTERFACE)
+target_include_directories(pw_log INTERFACE
+  "${PW_ROOT}/pw_log_null/public_overrides"
+  "${PW_ROOT}/pw_log_null/public"
+  "${PW_ROOT}/pw_log/public"
+)
+target_link_libraries(pw_log INTERFACE pw_preprocessor)
 
 # Disable -Wconversion for 8/16-bit AVR architecture (avoids false positives with 16-bit size_t)
 pw_add_library_generic(pw_build.avr_warnings INTERFACE
@@ -112,4 +120,36 @@ add_custom_command(TARGET firmware.elf POST_BUILD
   COMMAND avr-objdump -h -S $<TARGET_FILE:firmware.elf> > firmware.lst
   COMMAND avr-size --format=avr --mcu=${AVR_MCU} $<TARGET_FILE:firmware.elf>
   COMMENT "Generating firmware.hex, disassembly listing, and AVR memory report (${AVR_CRC32_IMPL})"
+)
+
+# 8. Test Runner: Automated module validation suite for 8-bit AVR
+add_executable(test_runner.elf
+  tests/test_runner.cpp
+  src/cxx_abi_stubs.cpp
+)
+
+target_include_directories(test_runner.elf PRIVATE src)
+
+target_link_libraries(test_runner.elf PRIVATE
+  pw_status
+  pw_result
+  pw_span
+  pw_bytes
+  pw_varint
+  pw_containers.vector
+  pw_stream
+  pw_checksum
+  pw_hdlc.encoder
+  pw_hdlc.decoder
+)
+
+add_custom_command(TARGET test_runner.elf POST_BUILD
+  COMMAND avr-size --format=avr --mcu=${AVR_MCU} $<TARGET_FILE:test_runner.elf>
+  COMMENT "Report of test_runner.elf memory usage"
+)
+
+add_custom_target(run_tests
+  COMMAND simavr -m ${AVR_MCU} $<TARGET_FILE:test_runner.elf>
+  DEPENDS test_runner.elf
+  COMMENT "Running Pigweed AVR test suite in simavr"
 )
