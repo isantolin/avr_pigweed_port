@@ -1,6 +1,7 @@
 // File: src/avr_uart_stream.h
 #pragma once
 
+#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
 #include <avr/io.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -93,3 +94,5 @@ class AvrUartStream final : public pw::stream::NonSeekableReaderWriter {
 };
 
 }  // namespace avr_port
+
+#endif  // defined(__AVR__) || defined(ARDUINO_ARCH_AVR)

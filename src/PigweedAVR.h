@@ -29,7 +29,9 @@
 
 // 3. Hardware Adapters for Arduino
 #include "arduino_stream.h"
+#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
 #include "avr_uart_stream.h"
+#endif
 
 // 4. Crypto and Tokenization
 #include "pw_crypto/sha256.h"
