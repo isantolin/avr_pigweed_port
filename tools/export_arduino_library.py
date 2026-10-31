@@ -84,10 +84,11 @@ def export_library(dest_dir: Path):
             if not cc_file.name.endswith(("_test.cc", "_fuzzer.cc")):
                 shutil.copy2(cc_file, src_dir / f"{mod}_{cc_file.name}")
 
-    # Fuchsia stdcompat dependency
-    fuchsia_include = PW_ROOT / "third_party" / "fuchsia" / "repo" / "sdk" / "lib" / "stdcompat" / "include"
-    if fuchsia_include.exists():
-        shutil.copytree(fuchsia_include, src_dir, dirs_exist_ok=True)
+    # Fuchsia stdcompat and fit dependencies (required by pw_function)
+    for fuchsia_lib in ["stdcompat", "fit"]:
+        fuchsia_include = PW_ROOT / "third_party" / "fuchsia" / "repo" / "sdk" / "lib" / fuchsia_lib / "include"
+        if fuchsia_include.exists():
+            shutil.copytree(fuchsia_include, src_dir, dirs_exist_ok=True)
 
     # Copy avr-libstdcpp versioned trees
     for gcc_ver in ["gcc10", "gcc12", "gcc13", "gcc15", "gcc16"]:
