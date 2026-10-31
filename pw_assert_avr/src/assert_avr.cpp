@@ -1,16 +1,29 @@
 // File: pw_assert_avr/src/assert_avr.cpp
 #include "pw_assert_avr/assert_avr.h"
 
+#include <stdint.h>
+
+#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
 #include <avr/interrupt.h>
 #include <avr/io.h>
 #include <avr/pgmspace.h>
-#include <stdint.h>
+#else
+#include <stdio.h>
+#include <stdlib.h>
+#ifndef PROGMEM
+#define PROGMEM
+#endif
+#ifndef pgm_read_byte
+#define pgm_read_byte(addr) (*(const uint8_t*)(addr))
+#endif
+#endif
 
 namespace {
 
 pw_assert_avr_PanicHook g_panic_hook = nullptr;
 
 void TxChar(char c) {
+#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
 #if defined(UDR0)
   while (!(UCSR0A & (1 << UDRE0))) {}
   UDR0 = static_cast<uint8_t>(c);
@@ -19,6 +32,9 @@ void TxChar(char c) {
   UDR1 = static_cast<uint8_t>(c);
 #else
   (void)c;
+#endif
+#else
+  putchar(c);
 #endif
 }
 
@@ -62,7 +78,9 @@ void pw_assert_avr_SetPanicHook(pw_assert_avr_PanicHook hook) {
 }
 
 void pw_assert_avr_HandleFailure(int line) {
+#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
   cli();
+#endif
 
   if (g_panic_hook != nullptr) {
     g_panic_hook(line);
@@ -76,6 +94,10 @@ void pw_assert_avr_HandleFailure(int line) {
   while (true) {
 #if defined(__GNUC__)
     __builtin_trap();
+#elif defined(_MSC_VER)
+    __debugbreak();
+#else
+    abort();
 #endif
   }
 }

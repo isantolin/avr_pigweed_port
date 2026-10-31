@@ -10,7 +10,14 @@
 #include <avr/io.h>
 #endif
 
+#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
 #include <util/atomic.h>
+#else
+#ifndef ATOMIC_BLOCK
+#define ATOMIC_BLOCK(type) for (int _i = 1; _i--; )
+#define ATOMIC_RESTORESTATE
+#endif
+#endif
 
 namespace {
 
