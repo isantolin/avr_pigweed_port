@@ -1,14 +1,74 @@
 // File: pw_chrono_avr/src/system_clock_avr.cpp
+#include "pw_chrono_avr/system_clock_avr.h"
+
 #include <stdint.h>
+
+#if defined(ARDUINO) || __has_include(<Arduino.h>)
+#include <Arduino.h>
+#else
+#include <avr/interrupt.h>
+#include <avr/io.h>
+#endif
+
+#include <util/atomic.h>
+
+namespace {
+
+volatile uint32_t g_system_clock_millis = 0;
+
+}  // namespace
+
+#if !defined(ARDUINO) && !__has_include(<Arduino.h>)
+#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega2560__)
+ISR(TIMER0_COMPA_vect) {
+  g_system_clock_millis++;
+}
+#endif
+#endif
+
+extern "C" {
+
+void pw_chrono_avr_InitTimer0(void) {
+#if defined(ARDUINO) || __has_include(<Arduino.h>)
+  // Arduino Core initializes Timer0 at startup for millis() and micros()
+#else
+#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega2560__)
+  // Timer0 CTC mode (WGM01 = 1), Prescaler 64 (CS01=1, CS00=1)
+  // At 16 MHz: 16000000 / 64 = 250000 ticks/sec -> 250 ticks = 1 ms (OCR0A = 249)
+  TCCR0A = (1 << WGM01);
+  OCR0A = 249;
+  TIMSK0 |= (1 << OCIE0A);
+  TCCR0B = (1 << CS01) | (1 << CS00);
+#endif
+#endif
+}
+
+void pw_chrono_avr_StepMillis(uint32_t ms) {
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    g_system_clock_millis += ms;
+  }
+}
+
+uint32_t pw_chrono_avr_GetMillis(void) {
+  uint32_t current_ms = 0;
+#if defined(ARDUINO) || __has_include(<Arduino.h>)
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    current_ms = static_cast<uint32_t>(millis());
+  }
+#else
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    current_ms = g_system_clock_millis;
+  }
+#endif
+  return current_ms;
+}
+
+}  // extern "C"
 
 namespace pw::chrono::backend {
 
-namespace {
-int64_t g_current_ticks = 0;
-}  // namespace
-
 int64_t GetSystemClockTickCount() {
-  return ++g_current_ticks;
+  return static_cast<int64_t>(pw_chrono_avr_GetMillis());
 }
 
 }  // namespace pw::chrono::backend

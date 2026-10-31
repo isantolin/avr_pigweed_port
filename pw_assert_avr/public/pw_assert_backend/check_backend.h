@@ -1,13 +1,14 @@
 // File: pw_assert_avr/public/pw_assert_backend/check_backend.h
 #pragma once
 
-#include "pw_preprocessor/compiler.h"
+#include "pw_assert_avr/assert_avr.h"
 
-// Halts execution deterministically without storing strings in SRAM
-#define PW_HANDLE_CRASH(...) __builtin_trap()
+// Halts execution with line diagnostics without consuming any SRAM for strings
+#define PW_HANDLE_CRASH(...) \
+  pw_assert_avr_HandleFailure(__LINE__)
 
 #define PW_HANDLE_ASSERT_FAILURE(condition_string, message, ...) \
-  __builtin_trap()
+  pw_assert_avr_HandleFailure(__LINE__)
 
 #define PW_HANDLE_ASSERT_BINARY_COMPARE_FAILURE(arg_a_str,         \
                                                 arg_a_val,         \
@@ -17,4 +18,4 @@
                                                 type_fmt,          \
                                                 message,           \
                                                 ...)               \
-  __builtin_trap()
+  pw_assert_avr_HandleFailure(__LINE__)

@@ -44,10 +44,11 @@ jobs:
         run: |
           cmake --build build --target run_tests
 
-      - name: Verify Python Host Tools
+      - name: Verify Python Host Tools & Arduino Export
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: |
           python3 -m py_compile tools/receive_telemetry.py
+          python3 tools/export_arduino_library.py
 
       - name: Upload Build Artifacts
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'

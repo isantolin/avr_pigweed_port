@@ -20,17 +20,30 @@ add_compile_definitions(__cpp_lib_endian=201907L)
 # 2. Locate Pigweed root and import its CMake utilities
 set(PW_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/pigweed")
 set(ENV{PW_ROOT} "${PW_ROOT}")
+
+# Architectural patch for 16-bit integer architectures (AVR: sizeof(int) == 2, sizeof(long) == 4)
+set(_ARG_TYPES_FILE "${PW_ROOT}/pw_tokenizer/public/pw_tokenizer/internal/argument_types.h")
+if(EXISTS "${_ARG_TYPES_FILE}")
+  file(READ "${_ARG_TYPES_FILE}" _ARG_TYPES_CONTENT)
+  if(_ARG_TYPES_CONTENT MATCHES "sizeof\\(ArgType\\) == sizeof\\(int64_t\\)")
+    string(REPLACE
+      "} else if constexpr (sizeof(ArgType) == sizeof(int64_t)) {"
+      "} else if constexpr (sizeof(ArgType) > sizeof(int)) {\n    static_assert(sizeof(ArgType) <= sizeof(int64_t));"
+      _ARG_TYPES_CONTENT "${_ARG_TYPES_CONTENT}")
+    file(WRITE "${_ARG_TYPES_FILE}" "${_ARG_TYPES_CONTENT}")
+  endif()
+endif()
 set(pw_unit_test_ENABLE_PW_ADD_TEST OFF CACHE BOOL "" FORCE)
 include("${PW_ROOT}/pw_build/pigweed.cmake")
 include("${PW_ROOT}/pw_assert/backend.cmake")
-# Null logging support (zero-cost for 8-bit AVR)
+# Tokenized logging support for 8-bit AVR
 add_library(pw_log INTERFACE)
 target_include_directories(pw_log INTERFACE
-  "${PW_ROOT}/pw_log_null/public_overrides"
-  "${PW_ROOT}/pw_log_null/public"
+  "${CMAKE_CURRENT_SOURCE_DIR}/pw_log_avr/public_overrides"
+  "${CMAKE_CURRENT_SOURCE_DIR}/pw_log_avr/public"
   "${PW_ROOT}/pw_log/public"
 )
-target_link_libraries(pw_log INTERFACE pw_preprocessor)
+target_link_libraries(pw_log INTERFACE pw_tokenizer pw_preprocessor)
 
 # Disable -Wconversion for 8/16-bit AVR architecture (avoids false positives with 16-bit size_t)
 # and disable -Wpedantic to allow standard-compliant Pigweed C++17 compilation under GCC 14/15
@@ -52,8 +65,10 @@ endfunction()
 
 add_subdirectory("${PW_ROOT}/pw_build" pw_build EXCLUDE_FROM_ALL)
 
-# 3. Declare the minimalist pw_assert backend for AVR
-pw_add_library(pw_assert_avr INTERFACE
+# 3. Declare the diagnostic pw_assert backend for AVR
+pw_add_library(pw_assert_avr STATIC
+  SOURCES
+    pw_assert_avr/src/assert_avr.cpp
   PUBLIC_INCLUDES
     pw_assert_avr/public
     pw_assert_avr/public_overrides
@@ -71,6 +86,7 @@ pw_add_library(pw_chrono_avr.system_clock STATIC
   SOURCES
     pw_chrono_avr/src/system_clock_avr.cpp
   PUBLIC_INCLUDES
+    pw_chrono_avr/public
     pw_chrono_avr/public_overrides
     ${PW_ROOT}/pw_chrono/public
   PUBLIC_DEPS
@@ -103,7 +119,34 @@ add_subdirectory("${PW_ROOT}/pw_tokenizer" pw_tokenizer EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_chrono" pw_chrono EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_stream" pw_stream EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_checksum" pw_checksum EXCLUDE_FROM_ALL)
+# Enable pw_sync interfaces
+add_subdirectory("${PW_ROOT}/pw_sync" pw_sync EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_hdlc" pw_hdlc EXCLUDE_FROM_ALL)
+
+# pw_log_avr (Tokenized logging backend for AVR)
+pw_add_library(pw_log_avr STATIC
+  SOURCES
+    pw_log_avr/src/log_avr.cpp
+  PUBLIC_INCLUDES
+    pw_log_avr/public
+  PUBLIC_DEPS
+    pw_preprocessor
+)
+target_link_libraries(pw_log INTERFACE pw_log_avr)
+
+# pw_rpc_avr (Lightweight Pigweed RPC Server for 8-bit AVR)
+pw_add_library(pw_rpc_avr STATIC
+  SOURCES
+    pw_rpc_avr/src/rpc_server.cpp
+  PUBLIC_INCLUDES
+    pw_rpc_avr/public
+  PUBLIC_DEPS
+    pw_bytes
+    pw_varint
+    pw_containers
+    pw_status
+    pw_result
+)
 
 # pw_cobs (Consistent Overhead Byte Stuffing)
 pw_add_library(pw_cobs STATIC
@@ -222,6 +265,8 @@ target_link_libraries(test_runner.elf PRIVATE
   pw_base64
   pw_tokenizer
   pw_chrono.system_clock
+  pw_log
+  pw_rpc_avr
 )
 
 add_custom_command(TARGET test_runner.elf POST_BUILD
