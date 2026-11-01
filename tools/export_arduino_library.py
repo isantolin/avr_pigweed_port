@@ -172,6 +172,16 @@ def export_library(dest_dir: Path):
                 else:
                     shutil.copy2(src_file, dst_file)
 
+    # 4.2 Patch cstdio to provide std::snprintf and std::vsnprintf on AVR
+    for cstdio_path in dest_dir.glob("**/cstdio"):
+        content = cstdio_path.read_text(encoding="utf-8", errors="replace")
+        if "using ::vsprintf;\n}" in content and "using ::vsnprintf;\n}" not in content:
+            content = content.replace(
+                "  using ::vsprintf;\n}",
+                "  using ::vsprintf;\n  using ::snprintf;\n  using ::vsnprintf;\n}",
+            )
+            cstdio_path.write_text(content, encoding="utf-8")
+
     # 5. Create an example sketch for Arduino Yún
     examples_dir = dest_dir / "examples" / "YunBridgeRpc"
     examples_dir.mkdir(parents=True, exist_ok=True)
