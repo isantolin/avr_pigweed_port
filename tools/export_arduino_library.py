@@ -76,13 +76,51 @@ def export_library(dest_dir: Path):
             if p.exists():
                 shutil.copytree(p, src_dir, dirs_exist_ok=True)
 
+        EXCLUDED_SOURCES = {
+            "pw_assert_examples.cc",
+            "pw_assert_fake_backend.cc",
+            "pw_polyfill_test.cc",
+            "pw_containers_test_helpers.cc",
+            "pw_tokenizer_generate_decoding_test_data.cc",
+            "pw_tokenizer_tokenize_c99_test_entry_point.cc",
+            "pw_tokenizer_base64.cc",
+            "pw_tokenizer_csv.cc",
+            "pw_tokenizer_detokenize.cc",
+            "pw_tokenizer_detokenize_from_this_program.cc",
+            "pw_tokenizer_token_database.cc",
+            "pw_tokenizer_decode.cc",
+            "pw_containers_aa_tree.cc",
+            "pw_containers_intrusive_map.cc",
+            "pw_stream_socket_stream.cc",
+            "pw_stream_std_file_stream.cc",
+            "pw_stream_interval_reader.cc",
+            "pw_hdlc_hdlc_sys_io_system_server.cc",
+            "pw_hdlc_router.cc",
+            "pw_hdlc_wire_packet_parser.cc",
+            "pw_chrono_wrap_time_build_time.cc",
+            "pw_chrono_wrap_time_system_clock.cc",
+            "pw_chrono_system_clock.cc",
+            "pw_log_proto_utils.cc",
+            "pw_crypto_aes_boringssl.cc",
+            "pw_crypto_aes_mbedtls.cc",
+            "pw_crypto_chacha20_boringssl.cc",
+            "pw_crypto_chacha20_mbedtls.cc",
+            "pw_crypto_ecdh_boringssl.cc",
+            "pw_crypto_ecdh_mbedtls.cc",
+            "pw_crypto_ecdsa_mbedtls.cc",
+            "pw_crypto_sha256_mbedtls.cc",
+            "pw_crypto_sha256_mock.cc",
+        }
+
         # Copy .cc sources for compilation
         for cc_file in mod_path.glob("*.cc"):
-            if not cc_file.name.endswith(("_test.cc", "_fuzzer.cc", "_perf_test.cc")):
-                shutil.copy2(cc_file, src_dir / f"{mod}_{cc_file.name}")
+            target_name = f"{mod}_{cc_file.name}"
+            if not cc_file.name.endswith(("_test.cc", "_fuzzer.cc", "_perf_test.cc")) and target_name not in EXCLUDED_SOURCES:
+                shutil.copy2(cc_file, src_dir / target_name)
         for cc_file in (mod_path / "cpp").glob("*.cc"):
-            if not cc_file.name.endswith(("_test.cc", "_fuzzer.cc")):
-                shutil.copy2(cc_file, src_dir / f"{mod}_{cc_file.name}")
+            target_name = f"{mod}_{cc_file.name}"
+            if not cc_file.name.endswith(("_test.cc", "_fuzzer.cc")) and target_name not in EXCLUDED_SOURCES:
+                shutil.copy2(cc_file, src_dir / target_name)
 
     # Fuchsia stdcompat and fit dependencies (required by pw_function)
     for fuchsia_lib in ["stdcompat", "fit"]:
