@@ -90,6 +90,7 @@ def export_library(dest_dir: Path):
             "pw_tokenizer_token_database.cc",
             "pw_tokenizer_decode.cc",
             "pw_containers_aa_tree.cc",
+            "pw_containers_aa_tree_item.cc",
             "pw_containers_intrusive_map.cc",
             "pw_stream_socket_stream.cc",
             "pw_stream_std_file_stream.cc",
