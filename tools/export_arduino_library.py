@@ -129,6 +129,17 @@ def export_library(dest_dir: Path):
         if fuchsia_include.exists():
             shutil.copytree(fuchsia_include, src_dir, dirs_exist_ok=True)
 
+    # 4.1 Patch pw_tokenizer for 16-bit integer architectures (AVR: sizeof(int) == 2, sizeof(long) == 4)
+    arg_types_file = src_dir / "pw_tokenizer" / "internal" / "argument_types.h"
+    if arg_types_file.exists():
+        content = arg_types_file.read_text()
+        if "sizeof(ArgType) == sizeof(int64_t)" in content:
+            content = content.replace(
+                "} else if constexpr (sizeof(ArgType) == sizeof(int64_t)) {",
+                "} else if constexpr (sizeof(ArgType) > sizeof(int)) {\n    static_assert(sizeof(ArgType) <= sizeof(int64_t));",
+            )
+            arg_types_file.write_text(content)
+
     # Copy avr-libstdcpp versioned trees
     for gcc_ver in ["gcc10", "gcc12", "gcc13", "gcc15", "gcc16"]:
         gcc_path = REPO_ROOT / "third_party" / "avr-libstdcpp" / gcc_ver

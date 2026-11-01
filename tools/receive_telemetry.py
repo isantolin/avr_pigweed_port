@@ -7,11 +7,13 @@ import serial
 from pw_hdlc import decode
 from pw_varint import decode as varint_decode
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Pigweed HDLC telemetry receiver for AVR")
     parser.add_argument("-p", "--port", default="/dev/ttyACM0", help="Serial port (default: /dev/ttyACM0)")
     parser.add_argument("-b", "--baud", type=int, default=115200, help="Baud rate (default: 115200)")
     return parser.parse_args()
+
 
 def main():
     args = parse_args()
@@ -42,6 +44,7 @@ def main():
         print("\nTerminated by user.")
     finally:
         ser.close()
+
 
 if __name__ == "__main__":
     main()
