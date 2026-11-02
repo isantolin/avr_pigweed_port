@@ -1,20 +1,22 @@
 // File: pw_crypto_avr/src/sha256_avr.cpp
 #include "pw_crypto/sha256.h"
 
-#include <avr/pgmspace.h>
 #include <string.h>
+
+#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
+#include <avr/pgmspace.h>
+#define READ_K(idx) pgm_read_dword(&kSha256K[idx])
+#define SHA256_PROGMEM PROGMEM
+#else
+#define READ_K(idx) kSha256K[idx]
+#define SHA256_PROGMEM
+#endif
 
 namespace pw::crypto::sha256::backend {
 
 namespace {
 
-#if defined(__AVR__)
-#define READ_K(idx) pgm_read_dword(&kSha256K[idx])
-const uint32_t kSha256K[64] PROGMEM = {
-#else
-#define READ_K(idx) kSha256K[idx]
-const uint32_t kSha256K[64] = {
-#endif
+const uint32_t kSha256K[64] SHA256_PROGMEM = {
     0x428a2f98UL, 0x71374491UL, 0xb5c0fbcfUL, 0xe9b5dba5UL,
     0x3956c25bUL, 0x59f111f1UL, 0x923f82a4UL, 0xab1c5ed5UL,
     0xd807aa98UL, 0x12835b01UL, 0x243185beUL, 0x550c7dc3UL,

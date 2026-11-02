@@ -7,12 +7,41 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
+#ifdef abs
+#undef abs
+#endif
+#ifdef round
+#undef round
+#endif
+
+#include <type_traits>
+
+#if defined(__GNUC__) && (__GNUC__ < 8)
+#ifndef _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
+#define _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
+namespace std {
+template <typename T>
+constexpr bool has_unique_object_representations_v = is_trivially_copyable<T>::value;
+} // namespace std
+#endif
+#endif
+
 // 1. Foundation and Error Handling
 #include "pw_status/status.h"
 #include "pw_status/try.h"
 #include "pw_result/result.h"
 #include "pw_span/span.h"
 #include "pw_bytes/span.h"
+
+namespace pw {
+using byte = std::byte;
+}
 #include "pw_varint/varint.h"
 #include "pw_containers/vector.h"
 #include "pw_function/function.h"

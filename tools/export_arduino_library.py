@@ -111,6 +111,21 @@ def export_library(dest_dir: Path):
             "pw_crypto_ecdsa_mbedtls.cc",
             "pw_crypto_sha256_mbedtls.cc",
             "pw_crypto_sha256_mock.cc",
+            "pw_ring_buffer_prefixed_entry_ring_buffer.cc",
+            "pw_string_string_builder.cc",
+            "pw_string_type_to_string.cc",
+            "pw_string_format.cc",
+            "pw_string_utf_codecs.cc",
+            "pw_bytes_byte_builder.cc",
+            "pw_bytes_alignment.cc",
+            "pw_containers_inline_var_len_entry_queue.cc",
+            "pw_containers_intrusive_item.cc",
+            "pw_containers_intrusive_queue.cc",
+            "pw_containers_var_len_entry.cc",
+            "pw_containers_var_len_entry_queue_iterator.cc",
+            "pw_varint_stream.cc",
+            "pw_stream_memory_stream.cc",
+            "pw_log_rate_limited.cc",
         }
 
         # Copy .cc sources for compilation
@@ -139,6 +154,24 @@ def export_library(dest_dir: Path):
                 "} else if constexpr (sizeof(ArgType) > sizeof(int)) {\n    static_assert(sizeof(ArgType) <= sizeof(int64_t));",
             )
             arg_types_file.write_text(content)
+
+    # 4.2 Patch pw_containers/vector.h for GCC 7 compatibility (defaulted constructor noexcept mismatch)
+    vec_file = src_dir / "pw_containers" / "vector.h"
+    if vec_file.exists():
+        c = vec_file.read_text(encoding="utf-8")
+        c = c.replace("Vector() noexcept = default;", "Vector() = default;")
+        c = c.replace("VectorStorage() : Base(kMaxSize) {}", "VectorStorage() noexcept : Base(kMaxSize) {}")
+        vec_file.write_text(c, encoding="utf-8")
+
+    # 4.3 Patch pw_tokenizer/encode_args.h for GCC 7 (non-constant static_assert condition)
+    enc_args = src_dir / "pw_tokenizer" / "encode_args.h"
+    if enc_args.exists():
+        c = enc_args.read_text(encoding="utf-8")
+        c = c.replace(
+            "static_assert(token_bytes.size() == sizeof(pw_tokenizer_Token));",
+            "static_assert(sizeof(token_bytes) == sizeof(pw_tokenizer_Token));",
+        )
+        enc_args.write_text(c, encoding="utf-8")
 
     # Copy avr-libstdcpp versioned trees
     for gcc_ver in ["gcc10", "gcc12", "gcc13", "gcc15", "gcc16"]:
@@ -181,6 +214,25 @@ def export_library(dest_dir: Path):
                 "  using ::vsprintf;\n  using ::snprintf;\n  using ::vsnprintf;\n}",
             )
             cstdio_path.write_text(content, encoding="utf-8")
+
+    # 4.3 Patch std::has_unique_object_representations_v for GCC < 8 compatibility
+    poly = """
+#if defined(__GNUC__) && (__GNUC__ < 8)
+#ifndef _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
+#define _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
+namespace std {
+template <typename T>
+constexpr bool has_unique_object_representations_v = is_trivially_copyable<T>::value;
+} // namespace std
+#endif
+#endif
+"""
+    for hdr in [src_dir / "pw_bytes" / "span.h", src_dir / "lib" / "stdcompat" / "bit.h"]:
+        if hdr.exists():
+            c = hdr.read_text(encoding="utf-8", errors="replace")
+            if "has_unique_object_representations_v" in c and "_PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED" not in c:
+                c = c.replace("#include <type_traits>", "#include <type_traits>" + poly, 1)
+                hdr.write_text(c, encoding="utf-8")
 
     # 5. Create an example sketch for Arduino Yún
     examples_dir = dest_dir / "examples" / "YunBridgeRpc"
