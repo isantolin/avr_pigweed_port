@@ -22,7 +22,7 @@
 
 #include <type_traits>
 
-#if !defined(__cpp_lib_has_unique_object_representations) && !defined(__clang__) && defined(__GNUC__) && (__GNUC__ < 8)
+#if !defined(__clang__) && defined(__GNUC__) && (__GNUC__ < 8)
 #ifndef _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
 #define _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
 namespace std {

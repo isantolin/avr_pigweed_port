@@ -224,7 +224,7 @@ def export_library(dest_dir: Path):
 
     # 4.3 Patch std::has_unique_object_representations_v for GCC < 8 compatibility
     poly = """
-#if !defined(__cpp_lib_has_unique_object_representations) && !defined(__clang__) && defined(__GNUC__) && (__GNUC__ < 8)
+#if !defined(__clang__) && defined(__GNUC__) && (__GNUC__ < 8)
 #ifndef _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
 #define _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
 namespace std {
