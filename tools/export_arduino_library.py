@@ -124,7 +124,6 @@ def export_library(dest_dir: Path):
             "pw_containers_var_len_entry.cc",
             "pw_containers_var_len_entry_queue_iterator.cc",
             "pw_varint_stream.cc",
-            "pw_stream_memory_stream.cc",
             "pw_log_rate_limited.cc",
         }
 
@@ -172,6 +171,14 @@ def export_library(dest_dir: Path):
             "static_assert(sizeof(token_bytes) == sizeof(pw_tokenizer_Token));",
         )
         enc_args.write_text(c, encoding="utf-8")
+
+    # 4.4 Patch pw_stream_memory_stream.cc for Arduino min macro collision
+    mem_stream = src_dir / "pw_stream_memory_stream.cc"
+    if mem_stream.exists():
+        c = mem_stream.read_text(encoding="utf-8")
+        if "#include <algorithm>" not in c:
+            c = "#include <algorithm>\n#ifdef min\n#undef min\n#endif\n" + c
+            mem_stream.write_text(c, encoding="utf-8")
 
     # Copy avr-libstdcpp versioned trees
     for gcc_ver in ["gcc10", "gcc12", "gcc13", "gcc15", "gcc16"]:
