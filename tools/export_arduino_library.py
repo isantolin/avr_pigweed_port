@@ -423,6 +423,17 @@ def export_library(dest_dir: Path):
         "template <typename, typename>\n"
         "class Incrementable;\n",
     )
+    replace_in_export(
+        "pw_rpc_packet.cc",
+        "namespace RpcPacket = pwpb::RpcPacket;",
+        "namespace RpcPacketProto = ::pw::rpc::internal::pwpb::RpcPacket;",
+    )
+    packet_source = src_dir / "pw_rpc_packet.cc"
+    packet_content = packet_source.read_text(encoding="utf-8")
+    packet_source.write_text(
+        packet_content.replace("RpcPacket::", "RpcPacketProto::"),
+        encoding="utf-8",
+    )
 
     # Fuchsia stdcompat and fit dependencies (required by pw_function)
     for fuchsia_lib in ["stdcompat", "fit"]:
