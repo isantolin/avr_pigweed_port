@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+PARENT_ROOT = REPO_ROOT.parent.parent
 PW_ROOT = REPO_ROOT / "third_party" / "pigweed"
 STDCPP_ROOT = REPO_ROOT / "third_party" / "avr-libstdcpp" / "include"
 
@@ -25,11 +26,23 @@ def export_library(dest_dir: Path):
     shutil.copy2(REPO_ROOT / "library.properties", dest_dir / "library.properties")
 
     # 2. Copy root header and hardware adapters
-    for f in ["PigweedAVR.h", "arduino_stream.h", "avr_uart_stream.h", "avr_stdio_compat.h", "cxx_abi_stubs.cpp"]:
+    for f in [
+        "PigweedAVR.h",
+        "arduino_stream.h",
+        "avr_uart_stream.h",
+        "avr_stdio_compat.h",
+        "cxx_abi_stubs.cpp",
+    ]:
         shutil.copy2(REPO_ROOT / "src" / f, src_dir / f)
 
     # 3. Copy custom AVR backends
-    backends = ["pw_assert_avr", "pw_chrono_avr", "pw_crypto_avr", "pw_log_avr", "pw_rpc_avr"]
+    backends = [
+        "pw_assert_avr",
+        "pw_chrono_avr",
+        "pw_crypto_avr",
+        "pw_log_avr",
+        "pw_rpc_avr",
+    ]
     for backend in backends:
         b_path = REPO_ROOT / backend
         if (b_path / "public").exists():
@@ -57,12 +70,15 @@ def export_library(dest_dir: Path):
         "pw_base64",
         "pw_tokenizer",
         "pw_chrono",
+        "pw_sync",
         "pw_preprocessor",
         "pw_numeric",
         "pw_enum",
         "pw_memory",
         "pw_polyfill",
+        "pw_protobuf",
         "pw_assert",
+        "pw_rpc",
         "pw_crypto",
         "pw_ring_buffer",
         "pw_log",
@@ -75,6 +91,9 @@ def export_library(dest_dir: Path):
         for p in pub_dirs:
             if p.exists():
                 shutil.copytree(p, src_dir, dirs_exist_ok=True)
+
+        if mod == "pw_sync":
+            continue
 
         EXCLUDED_SOURCES = {
             "pw_assert_examples.cc",
@@ -94,7 +113,6 @@ def export_library(dest_dir: Path):
             "pw_containers_intrusive_map.cc",
             "pw_stream_socket_stream.cc",
             "pw_stream_std_file_stream.cc",
-            "pw_stream_interval_reader.cc",
             "pw_hdlc_hdlc_sys_io_system_server.cc",
             "pw_hdlc_router.cc",
             "pw_hdlc_wire_packet_parser.cc",
@@ -119,27 +137,305 @@ def export_library(dest_dir: Path):
             "pw_bytes_byte_builder.cc",
             "pw_bytes_alignment.cc",
             "pw_containers_inline_var_len_entry_queue.cc",
-            "pw_containers_intrusive_item.cc",
             "pw_containers_intrusive_queue.cc",
             "pw_containers_var_len_entry.cc",
             "pw_containers_var_len_entry_queue_iterator.cc",
-            "pw_varint_stream.cc",
             "pw_log_rate_limited.cc",
         }
 
         # Copy .cc sources for compilation
         for cc_file in mod_path.glob("*.cc"):
+            if mod == "pw_rpc" and cc_file.name not in {
+                "call.cc",
+                "channel.cc",
+                "channel_list.cc",
+                "endpoint.cc",
+                "packet.cc",
+                "packet_meta.cc",
+                "server.cc",
+                "server_call.cc",
+                "service.cc",
+            }:
+                continue
             target_name = f"{mod}_{cc_file.name}"
-            if not cc_file.name.endswith(("_test.cc", "_fuzzer.cc", "_perf_test.cc")) and target_name not in EXCLUDED_SOURCES:
+            if (
+                not cc_file.name.endswith(("_test.cc", "_fuzzer.cc", "_perf_test.cc"))
+                and target_name not in EXCLUDED_SOURCES
+            ):
                 shutil.copy2(cc_file, src_dir / target_name)
         for cc_file in (mod_path / "cpp").glob("*.cc"):
             target_name = f"{mod}_{cc_file.name}"
-            if not cc_file.name.endswith(("_test.cc", "_fuzzer.cc")) and target_name not in EXCLUDED_SOURCES:
+            if (
+                not cc_file.name.endswith(("_test.cc", "_fuzzer.cc"))
+                and target_name not in EXCLUDED_SOURCES
+            ):
                 shutil.copy2(cc_file, src_dir / target_name)
+
+    nanopb_rpc_path = PW_ROOT / "pw_rpc" / "nanopb"
+    shutil.copytree(nanopb_rpc_path / "public", src_dir, dirs_exist_ok=True)
+    for cc_file in nanopb_rpc_path.glob("*.cc"):
+        if cc_file.name in {"common.cc", "method.cc", "server_reader_writer.cc"}:
+            shutil.copy2(cc_file, src_dir / f"pw_rpc_nanopb_{cc_file.name}")
+    raw_rpc_path = PW_ROOT / "pw_rpc" / "raw"
+    shutil.copytree(raw_rpc_path / "public", src_dir, dirs_exist_ok=True)
+    shutil.copy2(raw_rpc_path / "method.cc", src_dir / "pw_rpc_raw_method.cc")
+
+    packet_header = (
+        PARENT_ROOT
+        / "mcubridge-library-arduino"
+        / "src"
+        / "pw_rpc"
+        / "internal"
+        / "packet.pwpb.h"
+    )
+    if not packet_header.is_file():
+        raise FileNotFoundError(
+            f"Missing generated pw_rpc packet header: {packet_header}. "
+            "Run tools/protocol/generate.py first."
+        )
+    shutil.copy2(packet_header, src_dir / "pw_rpc" / "internal" / "packet.pwpb.h")
+
+    rpc_config = src_dir / "pw_rpc" / "internal" / "config.h"
+    if rpc_config.is_file():
+        content = rpc_config.read_text(encoding="utf-8")
+        content = content.replace(
+            "#define PW_RPC_USE_GLOBAL_MUTEX 1",
+            "#define PW_RPC_USE_GLOBAL_MUTEX 0",
+            1,
+        )
+        content = content.replace(
+            "#define PW_RPC_ENCODING_BUFFER_SIZE_BYTES 512",
+            "#define PW_RPC_ENCODING_BUFFER_SIZE_BYTES 256",
+            1,
+        )
+        rpc_config.write_text(content, encoding="utf-8")
+
+    def replace_in_export(relative_path: str, old: str, new: str) -> None:
+        path = src_dir / relative_path
+        content = path.read_text(encoding="utf-8")
+        if old not in content:
+            raise RuntimeError(
+                f"Pigweed compatibility patch did not match {relative_path}"
+            )
+        path.write_text(content.replace(old, new, 1), encoding="utf-8")
+
+    replace_in_export(
+        "pw_protobuf/wire_format.h",
+        "kMaxFieldNumber = (1u << 29) - 1;",
+        "kMaxFieldNumber = (uint32_t{1} << 29) - 1;",
+    )
+    replace_in_export(
+        "pw_protobuf/internal/codegen.h",
+        "static constexpr unsigned int kMaxFieldSize = (1u << 16) - 1;",
+        "static constexpr uint32_t kMaxFieldSize = (uint32_t{1} << 16) - 1;",
+    )
+    replace_in_export(
+        "pw_protobuf/internal/codegen.h",
+        "static_assert(sizeof(MessageField) <= sizeof(size_t) * 4,\n"
+        '              "MessageField should be four words or less");',
+        "static_assert(sizeof(MessageField) <=\n"
+        "                  (sizeof(size_t) == 2 ? 12 : sizeof(size_t) * 4),\n"
+        '              "MessageField exceeds the target-specific size budget");',
+    )
+
+    encoder_path = "pw_protobuf/encoder.h"
+    replace_in_export(
+        encoder_path,
+        '#include "pw_memory/internal/sibling_cast.h"',
+        '#include "pw_memory/internal/sibling_cast.h"\n'
+        '#include "pw_polyfill/language_feature_macros.h"',
+    )
+    replace_in_export(
+        encoder_path,
+        "constexpr StreamEncoder(stream::Writer& writer, ByteSpan scratch_buffer)",
+        "PW_CONSTEXPR_CPP20 StreamEncoder(stream::Writer& writer,\n"
+        "                                   ByteSpan scratch_buffer)",
+    )
+    replace_in_export(
+        encoder_path,
+        "constexpr explicit StreamEncoder(ByteSpan dest)",
+        "PW_CONSTEXPR_CPP20 explicit StreamEncoder(ByteSpan dest)",
+    )
+    replace_in_export(
+        encoder_path,
+        "constexpr StreamEncoder(StreamEncoder& parent,\n"
+        "                          ByteSpan scratch_buffer,\n"
+        "                          bool write_when_empty = true)",
+        "PW_CONSTEXPR_CPP20 StreamEncoder(StreamEncoder& parent,\n"
+        "                                   ByteSpan scratch_buffer,\n"
+        "                                   bool write_when_empty = true)",
+    )
+    replace_in_export(
+        encoder_path,
+        "constexpr MemoryEncoder(ByteSpan dest) : StreamEncoder(dest) {}",
+        "PW_CONSTEXPR_CPP20 MemoryEncoder(ByteSpan dest) : StreamEncoder(dest) {}",
+    )
+    replace_in_export(
+        encoder_path,
+        "  Status WriteDouble(uint32_t field_number, double value) {\n"
+        "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
+        '                  "Double and uint64_t are not the same size");\n'
+        "    uint64_t integral_value;\n"
+        "    std::memcpy(&integral_value, &value, sizeof(value));\n"
+        "    std::array<std::byte, sizeof(value)> data =\n"
+        "        bytes::CopyInOrder(endian::little, integral_value);\n"
+        "    return WriteFixed(field_number, data);\n"
+        "  }",
+        "  Status WriteDouble(uint32_t field_number, double value) {\n"
+        "#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8\n"
+        "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
+        '                  "Double and uint64_t are not the same size");\n'
+        "    uint64_t integral_value;\n"
+        "    std::memcpy(&integral_value, &value, sizeof(value));\n"
+        "    std::array<std::byte, sizeof(value)> data =\n"
+        "        bytes::CopyInOrder(endian::little, integral_value);\n"
+        "    return WriteFixed(field_number, data);\n"
+        "#else\n"
+        "    (void)field_number;\n"
+        "    (void)value;\n"
+        "    return Status::Unimplemented();\n"
+        "#endif\n"
+        "  }",
+    )
+    replace_in_export(
+        encoder_path,
+        "  Status WritePackedDouble(uint32_t field_number, span<const double> values) {\n"
+        "    return WritePackedFixed(field_number, as_bytes(values), sizeof(double));\n"
+        "  }",
+        "  Status WritePackedDouble(uint32_t field_number, span<const double> values) {\n"
+        "#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8\n"
+        "    return WritePackedFixed(field_number, as_bytes(values), sizeof(double));\n"
+        "#else\n"
+        "    (void)field_number;\n"
+        "    (void)values;\n"
+        "    return Status::Unimplemented();\n"
+        "#endif\n"
+        "  }",
+    )
+    replace_in_export(
+        encoder_path,
+        "  Status WriteRepeatedDouble(uint32_t field_number,\n"
+        "                             const pw::Vector<double>& values) {\n"
+        "    return WritePackedFixed(field_number,\n"
+        "                            as_bytes(span(values.data(), values.size())),\n"
+        "                            sizeof(double));\n"
+        "  }",
+        "  Status WriteRepeatedDouble(uint32_t field_number,\n"
+        "                             const pw::Vector<double>& values) {\n"
+        "#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8\n"
+        "    return WritePackedFixed(field_number,\n"
+        "                            as_bytes(span(values.data(), values.size())),\n"
+        "                            sizeof(double));\n"
+        "#else\n"
+        "    (void)field_number;\n"
+        "    (void)values;\n"
+        "    return Status::Unimplemented();\n"
+        "#endif\n"
+        "  }",
+    )
+
+    for decoder_path, old, new in [
+        (
+            "pw_protobuf/decoder.h",
+            "  Status ReadDouble(double* out) {\n"
+            "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
+            '                  "Double and uint64_t must be the same size for protobufs");\n'
+            "    return ReadFixed(out);\n"
+            "  }",
+            "  Status ReadDouble(double* out) {\n"
+            "#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8\n"
+            "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
+            '                  "Double and uint64_t must be the same size for protobufs");\n'
+            "    return ReadFixed(out);\n"
+            "#else\n"
+            "    (void)out;\n"
+            "    return Status::Unimplemented();\n"
+            "#endif\n"
+            "  }",
+        ),
+        (
+            "pw_protobuf/stream_decoder.h",
+            "  Result<double> ReadDouble() {\n"
+            "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
+            '                  "Double and uint64_t must be the same size for protobufs");\n'
+            "    return ReadFixedField<double>();\n"
+            "  }",
+            "  Result<double> ReadDouble() {\n"
+            "#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8\n"
+            "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
+            '                  "Double and uint64_t must be the same size for protobufs");\n'
+            "    return ReadFixedField<double>();\n"
+            "#else\n"
+            "    return Status::Unimplemented();\n"
+            "#endif\n"
+            "  }",
+        ),
+        (
+            "pw_protobuf/stream_decoder.h",
+            "  StatusWithSize ReadPackedDouble(span<double> out) {\n"
+            "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
+            '                  "Double and uint64_t must be the same size for protobufs");\n'
+            "    return ReadPackedFixedField(as_writable_bytes(out), sizeof(double));\n"
+            "  }",
+            "  StatusWithSize ReadPackedDouble(span<double> out) {\n"
+            "#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8\n"
+            "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
+            '                  "Double and uint64_t must be the same size for protobufs");\n'
+            "    return ReadPackedFixedField(as_writable_bytes(out), sizeof(double));\n"
+            "#else\n"
+            "    (void)out;\n"
+            "    return StatusWithSize::Unimplemented();\n"
+            "#endif\n"
+            "  }",
+        ),
+        (
+            "pw_protobuf/stream_decoder.h",
+            "  Status ReadRepeatedDouble(pw::Vector<double>& out) {\n"
+            "    return ReadRepeatedFixedField<double>(out);\n"
+            "  }",
+            "  Status ReadRepeatedDouble(pw::Vector<double>& out) {\n"
+            "#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8\n"
+            "    return ReadRepeatedFixedField<double>(out);\n"
+            "#else\n"
+            "    (void)out;\n"
+            "    return Status::Unimplemented();\n"
+            "#endif\n"
+            "  }",
+        ),
+    ]:
+        replace_in_export(decoder_path, old, new)
+
+    replace_in_export(
+        "pw_stream/null_stream.h",
+        "    PW_CONSTINIT static NullStream stream;",
+        "#if (defined(__cpp_constinit) && __cpp_constinit >= 201907L) || \\\n"
+        "    defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 10)\n"
+        "    PW_CONSTINIT static NullStream stream;\n"
+        "#else\n"
+        "    static NullStream stream;\n"
+        "#endif",
+    )
+    replace_in_export(
+        "pw_containers/internal/intrusive_list_item.h",
+        "template <typename>\n" "class GenericIntrusiveList;\n",
+        "template <typename>\n"
+        "class GenericIntrusiveList;\n\n"
+        "template <typename, typename>\n"
+        "class Incrementable;\n",
+    )
 
     # Fuchsia stdcompat and fit dependencies (required by pw_function)
     for fuchsia_lib in ["stdcompat", "fit"]:
-        fuchsia_include = PW_ROOT / "third_party" / "fuchsia" / "repo" / "sdk" / "lib" / fuchsia_lib / "include"
+        fuchsia_include = (
+            PW_ROOT
+            / "third_party"
+            / "fuchsia"
+            / "repo"
+            / "sdk"
+            / "lib"
+            / fuchsia_lib
+            / "include"
+        )
         if fuchsia_include.exists():
             shutil.copytree(fuchsia_include, src_dir, dirs_exist_ok=True)
 
@@ -159,7 +455,10 @@ def export_library(dest_dir: Path):
     if vec_file.exists():
         c = vec_file.read_text(encoding="utf-8")
         c = c.replace("Vector() noexcept = default;", "Vector() = default;")
-        c = c.replace("VectorStorage() : Base(kMaxSize) {}", "VectorStorage() noexcept : Base(kMaxSize) {}")
+        c = c.replace(
+            "VectorStorage() : Base(kMaxSize) {}",
+            "VectorStorage() noexcept : Base(kMaxSize) {}",
+        )
         vec_file.write_text(c, encoding="utf-8")
 
     # 4.3 Patch pw_tokenizer/encode_args.h for GCC 7 (non-constant static_assert condition)
@@ -234,11 +533,19 @@ constexpr bool has_unique_object_representations_v = is_trivially_copyable<T>::v
 #endif
 #endif
 """
-    for hdr in [src_dir / "pw_bytes" / "span.h", src_dir / "lib" / "stdcompat" / "bit.h"]:
+    for hdr in [
+        src_dir / "pw_bytes" / "span.h",
+        src_dir / "lib" / "stdcompat" / "bit.h",
+    ]:
         if hdr.exists():
             c = hdr.read_text(encoding="utf-8", errors="replace")
-            if "has_unique_object_representations_v" in c and "_PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED" not in c:
-                c = c.replace("#include <type_traits>", "#include <type_traits>" + poly, 1)
+            if (
+                "has_unique_object_representations_v" in c
+                and "_PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED" not in c
+            ):
+                c = c.replace(
+                    "#include <type_traits>", "#include <type_traits>" + poly, 1
+                )
                 hdr.write_text(c, encoding="utf-8")
 
     # 5. Create an example sketch for Arduino Yún
@@ -300,9 +607,13 @@ void loop() {
 """
     (examples_dir / "YunBridgeRpc.ino").write_text(example_ino)
 
-    print(f"[+] Successfully exported Arduino Library ({len(list(src_dir.glob('*')))} components).")
+    print(
+        f"[+] Successfully exported Arduino Library ({len(list(src_dir.glob('*')))} components)."
+    )
 
 
 if __name__ == "__main__":
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else (REPO_ROOT / "dist" / "PigweedAVR")
+    out = (
+        Path(sys.argv[1]) if len(sys.argv) > 1 else (REPO_ROOT / "dist" / "PigweedAVR")
+    )
     export_library(out)
