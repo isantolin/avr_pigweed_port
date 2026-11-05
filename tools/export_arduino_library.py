@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -28,40 +29,98 @@ def generate_pw_rpc_packet_header(output_dir: Path) -> Path:
             "protoc is required to export upstream pw_rpc; install protobuf-compiler"
         )
 
-    python_paths = (
-        PW_ROOT / "pw_protobuf" / "py",
-        PW_ROOT / "pw_rpc" / "py",
-        PW_ROOT / "pw_codegen" / "py",
-        PW_ROOT / "pw_cli" / "py",
+    protobuf_proto_dir = PW_ROOT / "pw_protobuf" / "pw_protobuf_protos"
+    codegen_proto_dir = PW_ROOT / "pw_protobuf" / "pw_protobuf_codegen_protos"
+    required_protos = (
+        protobuf_proto_dir / "common.proto",
+        protobuf_proto_dir / "field_options.proto",
+        protobuf_proto_dir / "status.proto",
+        codegen_proto_dir / "codegen_options.proto",
     )
-    env = os.environ.copy()
-    existing_pythonpath = env.get("PYTHONPATH")
-    python_path_entries = [str(path) for path in python_paths]
-    if existing_pythonpath:
-        python_path_entries.append(existing_pythonpath)
-    env["PYTHONPATH"] = os.pathsep.join(python_path_entries)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    command = [
-        protoc,
-        f"-I{PW_ROOT}",
-        f"--plugin=protoc-gen-pwpb={plugin_path}",
-        f"--pwpb_out={output_dir}",
-        "pw_rpc/internal/packet.proto",
-    ]
-    try:
-        subprocess.run(
-            command,
-            check=True,
-            capture_output=True,
-            text=True,
-            cwd=PW_ROOT,
-            env=env,
+    missing_protos = [path for path in required_protos if not path.is_file()]
+    if missing_protos:
+        raise FileNotFoundError(
+            "Pigweed Python code-generation protos are missing: "
+            + ", ".join(str(path) for path in missing_protos)
         )
-    except subprocess.CalledProcessError as exc:
-        raise RuntimeError(
-            "Pigweed pw_rpc PWPB packet generation failed:\n"
-            f"{exc.stderr or exc.stdout}"
-        ) from exc
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="pigweed-pwpb-codegen-") as tmp:
+        generated_python_root = Path(tmp) / "py"
+        protobuf_python_dir = generated_python_root / "pw_protobuf_protos"
+        codegen_python_dir = generated_python_root / "pw_protobuf_codegen_protos"
+        protobuf_python_dir.mkdir(parents=True)
+        codegen_python_dir.mkdir(parents=True)
+
+        for package_dir in (protobuf_python_dir, codegen_python_dir):
+            (package_dir / "__init__.py").write_text("", encoding="utf-8")
+
+        generation_commands = (
+            (
+                f"-I{protobuf_proto_dir}",
+                f"--python_out={protobuf_python_dir}",
+                "common.proto",
+                "field_options.proto",
+                "status.proto",
+            ),
+            (
+                f"-I{codegen_proto_dir}",
+                f"--python_out={codegen_python_dir}",
+                "codegen_options.proto",
+            ),
+        )
+        for arguments in generation_commands:
+            try:
+                subprocess.run(
+                    [protoc, "--experimental_allow_proto3_optional", *arguments],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    cwd=protobuf_proto_dir if "common.proto" in arguments else codegen_proto_dir,
+                )
+            except subprocess.CalledProcessError as exc:
+                raise RuntimeError(
+                    "Pigweed Python code-generation proto compilation failed:\n"
+                    f"{exc.stderr or exc.stdout}"
+                ) from exc
+
+        python_paths = (
+            generated_python_root,
+            PW_ROOT / "pw_status" / "py",
+            PW_ROOT / "pw_protobuf" / "py",
+            PW_ROOT / "pw_protobuf_compiler" / "py",
+            PW_ROOT / "pw_rpc" / "py",
+            PW_ROOT / "pw_codegen" / "py",
+            PW_ROOT / "pw_cli" / "py",
+        )
+        env = os.environ.copy()
+        existing_pythonpath = env.get("PYTHONPATH")
+        python_path_entries = [str(path) for path in python_paths]
+        if existing_pythonpath:
+            python_path_entries.append(existing_pythonpath)
+        env["PYTHONPATH"] = os.pathsep.join(python_path_entries)
+
+        command = [
+            protoc,
+            f"-I{PW_ROOT}",
+            f"--plugin=protoc-gen-pwpb={plugin_path}",
+            f"--pwpb_out={output_dir}",
+            "pw_rpc/internal/packet.proto",
+        ]
+        try:
+            subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+                cwd=PW_ROOT,
+                env=env,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(
+                "Pigweed pw_rpc PWPB packet generation failed:\n"
+                f"{exc.stderr or exc.stdout}"
+            ) from exc
 
     packet_header = output_dir / "pw_rpc" / "internal" / "packet.pwpb.h"
     if not packet_header.is_file():
