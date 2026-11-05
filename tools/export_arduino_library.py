@@ -220,6 +220,20 @@ def export_library(dest_dir: Path):
         path.write_text(content.replace(old, new, 1), encoding="utf-8")
 
     replace_in_export(
+        "pw_checksum/internal/config.h",
+        "#ifndef PW_CHECKSUM_CRC32_DEFAULT_IMPL\n"
+        "#define PW_CHECKSUM_CRC32_DEFAULT_IMPL PW_CHECKSUM_CRC32_8BITS\n"
+        "#endif  // PW_CHECKSUM_CRC32_DEFAULT_IMPL",
+        "#ifndef PW_CHECKSUM_CRC32_DEFAULT_IMPL\n"
+        "#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)\n"
+        "#define PW_CHECKSUM_CRC32_DEFAULT_IMPL PW_CHECKSUM_CRC32_4BITS\n"
+        "#else\n"
+        "#define PW_CHECKSUM_CRC32_DEFAULT_IMPL PW_CHECKSUM_CRC32_8BITS\n"
+        "#endif\n"
+        "#endif  // PW_CHECKSUM_CRC32_DEFAULT_IMPL",
+    )
+
+    replace_in_export(
         "pw_protobuf/wire_format.h",
         "kMaxFieldNumber = (1u << 29) - 1;",
         "kMaxFieldNumber = (uint32_t{1} << 29) - 1;",
