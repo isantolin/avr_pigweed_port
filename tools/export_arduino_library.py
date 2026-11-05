@@ -4,13 +4,70 @@
 
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PARENT_ROOT = REPO_ROOT.parent.parent
 PW_ROOT = REPO_ROOT / "third_party" / "pigweed"
 STDCPP_ROOT = REPO_ROOT / "third_party" / "avr-libstdcpp" / "include"
+
+
+def generate_pw_rpc_packet_header(output_dir: Path) -> Path:
+    """Generate Pigweed's PWPB RPC packet header into an export directory."""
+    proto_path = PW_ROOT / "pw_rpc" / "internal" / "packet.proto"
+    plugin_path = PW_ROOT / "pw_protobuf" / "py" / "pw_protobuf" / "plugin.py"
+    protoc = shutil.which("protoc")
+    if not proto_path.is_file() or not plugin_path.is_file():
+        raise FileNotFoundError(
+            "Pigweed pw_rpc packet.proto or PWPB plugin is missing; "
+            "initialize the Pigweed submodule recursively"
+        )
+    if protoc is None:
+        raise FileNotFoundError(
+            "protoc is required to export upstream pw_rpc; install protobuf-compiler"
+        )
+
+    python_paths = (
+        PW_ROOT / "pw_protobuf" / "py",
+        PW_ROOT / "pw_rpc" / "py",
+        PW_ROOT / "pw_codegen" / "py",
+        PW_ROOT / "pw_cli" / "py",
+    )
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = os.pathsep.join(
+        [*(str(path) for path in python_paths), *([existing_pythonpath] if existing_pythonpath else [])]
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    command = [
+        protoc,
+        f"-I{PW_ROOT}",
+        f"--plugin=protoc-gen-pwpb={plugin_path}",
+        f"--pwpb_out={output_dir}",
+        "pw_rpc/internal/packet.proto",
+    ]
+    try:
+        subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=PW_ROOT,
+            env=env,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            "Pigweed pw_rpc PWPB packet generation failed:\\n"
+            f"{exc.stderr or exc.stdout}"
+        ) from exc
+
+    packet_header = output_dir / "pw_rpc" / "internal" / "packet.pwpb.h"
+    if not packet_header.is_file():
+        raise FileNotFoundError(
+            f"PWPB generator did not create the expected header: {packet_header}"
+        )
+    return packet_header
 
 
 def export_library(dest_dir: Path):
@@ -180,20 +237,7 @@ def export_library(dest_dir: Path):
     shutil.copytree(raw_rpc_path / "public", src_dir, dirs_exist_ok=True)
     shutil.copy2(raw_rpc_path / "method.cc", src_dir / "pw_rpc_raw_method.cc")
 
-    packet_header = (
-        PARENT_ROOT
-        / "mcubridge-library-arduino"
-        / "src"
-        / "pw_rpc"
-        / "internal"
-        / "packet.pwpb.h"
-    )
-    if not packet_header.is_file():
-        raise FileNotFoundError(
-            f"Missing generated pw_rpc packet header: {packet_header}. "
-            "Run tools/protocol/generate.py first."
-        )
-    shutil.copy2(packet_header, src_dir / "pw_rpc" / "internal" / "packet.pwpb.h")
+    generate_pw_rpc_packet_header(src_dir)
 
     rpc_config = src_dir / "pw_rpc" / "internal" / "config.h"
     if rpc_config.is_file():
