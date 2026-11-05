@@ -625,6 +625,27 @@ The 4-bit and 1-bit implementations produce standard IEEE 802.3 CRC-32 matching 
    python3 tools/receive_telemetry.py -p /dev/ttyACM0 -b 115200
    ```
 
+### Step 6: Exporting the standalone Arduino library with upstream `pw_rpc`
+
+The Arduino library exporter generates Pigweed's PWPB RPC packet header from the pinned
+Pigweed submodule. It does not require a checkout of `arduino-yun-bridge2` or previously
+generated files in a parent repository.
+
+Install the host-side generator dependencies (Debian/Ubuntu):
+
+```bash
+sudo apt-get install -y protobuf-compiler python3-protobuf python3-jinja2
+```
+
+Then run the exporter from the root of this repository:
+
+```bash
+python3 tools/export_arduino_library.py
+```
+
+The standalone library is written to `dist/PigweedAVR/`. The generated
+`pw_rpc/internal/packet.pwpb.h` is included in that export.
+
 ---
 
 ## 5. Automated Test Suite & Simulation Verification (100% Module Support)
