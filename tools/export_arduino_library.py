@@ -36,9 +36,10 @@ def generate_pw_rpc_packet_header(output_dir: Path) -> Path:
     )
     env = os.environ.copy()
     existing_pythonpath = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = os.pathsep.join(
-        [*(str(path) for path in python_paths), *([existing_pythonpath] if existing_pythonpath else [])]
-    )
+    python_path_entries = [str(path) for path in python_paths]
+    if existing_pythonpath:
+        python_path_entries.append(existing_pythonpath)
+    env["PYTHONPATH"] = os.pathsep.join(python_path_entries)
     output_dir.mkdir(parents=True, exist_ok=True)
     command = [
         protoc,
@@ -58,7 +59,7 @@ def generate_pw_rpc_packet_header(output_dir: Path) -> Path:
         )
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(
-            "Pigweed pw_rpc PWPB packet generation failed:\\n"
+            "Pigweed pw_rpc PWPB packet generation failed:\n"
             f"{exc.stderr or exc.stdout}"
         ) from exc
 
@@ -240,19 +241,26 @@ def export_library(dest_dir: Path):
     generate_pw_rpc_packet_header(src_dir)
 
     rpc_config = src_dir / "pw_rpc" / "internal" / "config.h"
-    if rpc_config.is_file():
-        content = rpc_config.read_text(encoding="utf-8")
-        content = content.replace(
+    if not rpc_config.is_file():
+        raise FileNotFoundError(f"Missing upstream pw_rpc configuration: {rpc_config}")
+
+    content = rpc_config.read_text(encoding="utf-8")
+    for original, replacement in (
+        (
             "#define PW_RPC_USE_GLOBAL_MUTEX 1",
             "#define PW_RPC_USE_GLOBAL_MUTEX 0",
-            1,
-        )
-        content = content.replace(
+        ),
+        (
             "#define PW_RPC_ENCODING_BUFFER_SIZE_BYTES 512",
             "#define PW_RPC_ENCODING_BUFFER_SIZE_BYTES 256",
-            1,
-        )
-        rpc_config.write_text(content, encoding="utf-8")
+        ),
+    ):
+        if original not in content:
+            raise RuntimeError(
+                f"Upstream pw_rpc configuration no longer matches the AVR patch: {original}"
+            )
+        content = content.replace(original, replacement, 1)
+    rpc_config.write_text(content, encoding="utf-8")
 
     def replace_in_export(relative_path: str, old: str, new: str) -> None:
         path = src_dir / relative_path
