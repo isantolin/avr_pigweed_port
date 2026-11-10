@@ -53,25 +53,15 @@ using byte = std::byte;
 #include "pw_checksum/crc16_ccitt.h"
 #include "pw_hdlc/encoder.h"
 #include "pw_hdlc/decoder.h"
-#include "pw_cobs/cobs.h"
-#include "pw_ring_buffer/prefixed_entry_ring_buffer.h"
-
-// 3. Hardware Adapters for Arduino
 #include "arduino_stream.h"
-#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
-#include "avr_uart_stream.h"
-#endif
 
-// 4. Crypto and Tokenization
-#include "pw_crypto/sha256.h"
+// 3. Tokenization and Utilities
 #include "pw_tokenizer/hash.h"
 #include "pw_string/string.h"
 #include "pw_base64/base64.h"
 
-// 5. Diagnostics, Chrono and RPC
+// 4. Diagnostics and Logging
 #include "pw_chrono/system_clock.h"
 #include "pw_chrono_avr/system_clock_avr.h"
-#include "pw_assert_avr/assert_avr.h"
 #include "pw_log/log.h"
 #include "pw_log_avr/log_avr.h"
-#include "pw_rpc_avr/rpc_server.h"

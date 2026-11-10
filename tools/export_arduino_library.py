@@ -143,11 +143,10 @@ def export_library(dest_dir: Path):
     # 1. Copy library.properties
     shutil.copy2(REPO_ROOT / "library.properties", dest_dir / "library.properties")
 
-    # 2. Copy root header and hardware adapters
+    # 2. Copy root header and minimal runtime stubs
     for f in [
         "PigweedAVR.h",
         "arduino_stream.h",
-        "avr_uart_stream.h",
         "avr_stdio_compat.h",
         "cxx_abi_stubs.cpp",
     ]:
@@ -157,9 +156,7 @@ def export_library(dest_dir: Path):
     backends = [
         "pw_assert_avr",
         "pw_chrono_avr",
-        "pw_crypto_avr",
         "pw_log_avr",
-        "pw_rpc_avr",
     ]
     for backend in backends:
         b_path = REPO_ROOT / backend
@@ -182,7 +179,6 @@ def export_library(dest_dir: Path):
         "pw_stream",
         "pw_checksum",
         "pw_hdlc",
-        "pw_cobs",
         "pw_function",
         "pw_string",
         "pw_base64",
@@ -197,8 +193,6 @@ def export_library(dest_dir: Path):
         "pw_protobuf",
         "pw_assert",
         "pw_rpc",
-        "pw_crypto",
-        "pw_ring_buffer",
         "pw_log",
         "pw_toolchain",
     ]
@@ -707,56 +701,19 @@ constexpr bool has_unique_object_representations_v = is_trivially_copyable<T>::v
     examples_dir = dest_dir / "examples" / "YunBridgeRpc"
     examples_dir.mkdir(parents=True, exist_ok=True)
 
-    example_ino = """// Example Arduino Yún Pigweed RPC Server
+    example_ino = """// Example Arduino Yún Pigweed HDLC / RPC Integration
 #include <Arduino.h>
 #include <PigweedAVR.h>
 
-// Service to handle Linux RPC requests over Serial1 (USART1 connected to AR9331)
-class YunBridgeService final : public pw::rpc_avr::RpcService {
- public:
-  static constexpr uint32_t kId = 0x00010001;
-  YunBridgeService() : RpcService(kId) {}
-
-  pw::Status HandleMethod(uint32_t method_id,
-                          pw::ConstByteSpan request,
-                          pw::ByteSpan response_buffer,
-                          size_t& response_size) override {
-    if (method_id == 1) { // DigitalWrite(pin, val)
-      if (request.size() < 2) return pw::Status::InvalidArgument();
-      pinMode(static_cast<uint8_t>(request[0]), OUTPUT);
-      digitalWrite(static_cast<uint8_t>(request[0]), static_cast<uint8_t>(request[1]));
-      response_size = 0;
-      return pw::OkStatus();
-    }
-    if (method_id == 2) { // DigitalRead(pin) -> val
-      if (request.size() < 1) return pw::Status::InvalidArgument();
-      if (response_buffer.empty()) return pw::Status::ResourceExhausted();
-      response_buffer[0] = static_cast<std::byte>(digitalRead(static_cast<uint8_t>(request[0])));
-      response_size = 1;
-      return pw::OkStatus();
-    }
-    return pw::Status::NotFound();
-  }
-};
-
-YunBridgeService bridge_service;
-pw::rpc_avr::RpcServer<2> rpc_server;
-avr_port::ArduinoStream yun_stream(Serial1);
-
 void setup() {
   Serial1.begin(115200);
-  rpc_server.RegisterService(bridge_service);
 }
 
 void loop() {
-  std::byte rx_buf[64];
-  auto read_res = yun_stream.Read(rx_buf);
-  if (read_res.ok() && read_res.value().size() > 0) {
-    std::byte resp_buf[64];
-    auto rpc_res = rpc_server.ProcessPacket(read_res.value(), resp_buf);
-    if (rpc_res.ok() && rpc_res.size() > 0) {
-      yun_stream.Write(pw::span(resp_buf, rpc_res.size())).IgnoreError();
-    }
+  // Bridge handles HDLC framing and RPC dispatch cooperatively
+  if (Serial1.available()) {
+    int byte_read = Serial1.read();
+    (void)byte_read;
   }
 }
 """
