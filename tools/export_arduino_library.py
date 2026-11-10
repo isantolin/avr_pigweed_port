@@ -549,6 +549,24 @@ def export_library(dest_dir: Path):
         "class Incrementable;\n",
     )
     replace_in_export(
+        "pw_rpc/internal/call.h",
+        "        proto_on_next_local = std::move(proto_on_next);\n\n"
+        "        rpc_lock().unlock();\n"
+        "        proto_on_next_local(proto_struct);\n"
+        "        rpc_lock().lock();\n\n"
+        "        // Restore the original callback if the original call is still active\n"
+        "        // and the callback has not been replaced.\n"
+        "        // NOLINTNEXTLINE(bugprone-use-after-move)\n"
+        "        const bool callback_replaced = proto_on_next != nullptr;",
+        "        proto_on_next_local = std::exchange(proto_on_next, nullptr);\n\n"
+        "        rpc_lock().unlock();\n"
+        "        proto_on_next_local(proto_struct);\n"
+        "        rpc_lock().lock();\n\n"
+        "        // Restore the original callback if the original call is still active\n"
+        "        // and the callback has not been replaced.\n"
+        "        const bool callback_replaced = proto_on_next != nullptr;",
+    )
+    replace_in_export(
         "pw_rpc_packet.cc",
         "namespace RpcPacket = pwpb::RpcPacket;",
         "namespace RpcPacketProto = ::pw::rpc::internal::pwpb::RpcPacket;",
