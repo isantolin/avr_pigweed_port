@@ -16,6 +16,7 @@ STDCPP_ROOT = REPO_ROOT / "third_party" / "avr-libstdcpp" / "include"
 
 def generate_pw_rpc_packet_header(output_dir: Path) -> Path:
     """Generate Pigweed's PWPB RPC packet header into an export directory."""
+    output_dir = output_dir.resolve()
     proto_path = PW_ROOT / "pw_rpc" / "internal" / "packet.proto"
     plugin_path = PW_ROOT / "pw_protobuf" / "py" / "pw_protobuf" / "plugin.py"
     protoc = shutil.which("protoc")
