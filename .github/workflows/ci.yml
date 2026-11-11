@@ -54,6 +54,7 @@ jobs:
               libsimavr-dev protobuf-compiler libprotobuf-dev python3-protobuf python3-jinja2 ccache
 
           avr-gcc --version
+          protoc --version
           simavr --help >/dev/null 2>&1 || test "$?" -eq 1
           ccache --set-config=max_size=500M
 

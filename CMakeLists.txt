@@ -119,6 +119,10 @@ add_subdirectory("${PW_ROOT}/pw_base64" pw_base64 EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_tokenizer" pw_tokenizer EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_chrono" pw_chrono EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_stream" pw_stream EXCLUDE_FROM_ALL)
+# The pinned Pigweed proto sources use proto2/proto3, not Editions. Keep
+# the generator compatible with the distro protoc (3.21) by disabling the
+# optional Editions flag; proto3 optional remains enabled by Pigweed.
+set(pw_protobuf_compiler_GENERATE_PROTOS_ARGS "--no-experimental-editions" CACHE STRING "Extra args for Pigweed proto generation" FORCE)
 add_subdirectory("${PW_ROOT}/pw_protobuf" pw_protobuf EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_checksum" pw_checksum EXCLUDE_FROM_ALL)
 # Enable pw_sync interfaces
