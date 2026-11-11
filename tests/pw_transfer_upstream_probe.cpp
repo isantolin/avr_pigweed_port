@@ -1,4 +1,3 @@
-#define PW_TRANSFER_COOPERATIVE_TEST 1
 #include <array>
 #include <chrono>
 #include <cstddef>
