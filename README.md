@@ -1,6 +1,6 @@
 # Pigweed port for 8-bit AVR
 
-A CMake-based port of selected upstream Pigweed modules for bare-metal AVR MCUs, including ATmega328P, ATmega32U4, and ATmega2560.
+A CMake-based port of selected upstream Pigweed modules for bare-metal AVR MCUs, including ATmega328P and ATmega2560; Arduino Mega 2560 is the minimum supported application target.
 
 The port uses upstream **`pw_rpc`** and **`pw_transfer`**. The former custom `pw_rpc_avr` dispatcher has been removed; there is no parallel or fallback RPC implementation.
 
@@ -92,22 +92,6 @@ simavr -m atmega2560 build-transfer/pw_transfer_upstream_probe.elf
 
 The probe exercises read/write transfers, cancellation, recovery after a dropped response, retry exhaustion/deadline handling, and sequential client/server role reversal on the same two transfer-thread objects.
 
-### ATmega32U4 footprint
-
-The shared-thread footprint probe measures the production arrangement—one RPC channel, upstream RPC client and server, and both transfer service/client objects sharing one `Thread<1, 1>`:
-
-```sh
-cmake -B build-transfer-32u4 -G Ninja \
-  -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
-  -DAVR_MCU=atmega32u4 \
-  -DAVR_F_CPU=16000000UL \
-  -DAVR_CRC32_IMPL=PW_CHECKSUM_CRC32_4BITS
-
-cmake --build build-transfer-32u4 --target pw_transfer_avr_footprint_probe.elf
-```
-
-The linker reports program and static data usage. This isolated probe is not a substitute for measuring the complete Bridge firmware and worst-case stack.
-
 ## Arduino library export
 
 The exporter packages upstream RPC client/server sources and cooperative transfer sources and generated protocol headers:
@@ -138,6 +122,6 @@ See [tools/pw_emu_avr/README.md](tools/pw_emu_avr/README.md) for setup and usage
 
 ## Current validation boundary
 
-The port's CI is intended to validate both CRC32 configurations, the ATmega328P RPC runtime probe, the ATmega2560 transfer runtime probe, the ATmega32U4 shared-thread footprint, and Arduino export contents.
+The port's CI is intended to validate both CRC32 configurations, the ATmega328P RPC runtime probe, the ATmega2560 transfer runtime probe, the Arduino Mega 2560 export syntax check, and Arduino export contents.
 
 Physical UART/HDLC interoperability on the Bridge hardware, complete Bridge firmware memory/stack measurements, and application-level migration of the Bridge's file operations remain separate integration gates. Do not treat the isolated probes as proof that the complete Bridge firmware is production-ready.
