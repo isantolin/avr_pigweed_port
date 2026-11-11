@@ -490,15 +490,34 @@ bool TestPwBase64() {
     return false;
   }
 
-  std::byte decoded[16];
+  std::byte decoded[16]{};
+  // Check the C entry point separately from the C++ span/string_view wrapper.
+  const size_t c_decoded_len = pw_Base64Decode(encoded, encoded_len, decoded);
+  if (c_decoded_len != 7 ||
+      std::memcmp(decoded, plain, 7) != 0) {
+    uart::Puts_P(PSTR("Base64: C decoder mismatch: "));
+    for (size_t i = 0; i < c_decoded_len && i < sizeof(decoded); ++i) {
+      uart::PutInt(std::to_integer<uint8_t>(decoded[i]));
+      uart::Putc(' ');
+    }
+    uart::Puts_P(PSTR("\\r\\n"));
+    return false;
+  }
+
+  std::memset(decoded, 0, sizeof(decoded));
   const size_t decoded_len = pw::base64::Decode(
       std::string_view(encoded, encoded_len), pw::span(decoded));
   if (decoded_len != 7) {
-    uart::Puts_P(PSTR("Base64: decoded length mismatch\\r\\n"));
+    uart::Puts_P(PSTR("Base64: C++ decoded length mismatch\\r\\n"));
     return false;
   }
   if (std::memcmp(decoded, plain, 7) != 0) {
-    uart::Puts_P(PSTR("Base64: decoded payload mismatch\\r\\n"));
+    uart::Puts_P(PSTR("Base64: C++ decoded payload mismatch: "));
+    for (size_t i = 0; i < decoded_len; ++i) {
+      uart::PutInt(std::to_integer<uint8_t>(decoded[i]));
+      uart::Putc(' ');
+    }
+    uart::Puts_P(PSTR("\\r\\n"));
     return false;
   }
 
