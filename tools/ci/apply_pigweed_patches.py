@@ -377,6 +377,22 @@ from pw_rpc.client import Client""",
   // Unavailable means more events remain; ResourceExhausted means the bounded
   // queue overflowed and active transfers were aborted rather than corrupted.
   Status Poll(size_t budget = 1);
+#if defined(PW_TRANSFER_COOPERATIVE_TEST)
+  // Test-only event injector for deterministic bounded-queue overflow tests.
+  void EnqueueTestEvent() {
+    if (!TryWaitForEventToProcess()) {
+      event_overflowed_ = true;
+      return;
+    }
+    next_event_ = {};
+    next_event_.type = EventType::kClientEndTransfer;
+    next_event_.end_transfer.id_type = IdentifierType::Session;
+    next_event_.end_transfer.id = 0;
+    next_event_.end_transfer.status = Status::Cancelled().code();
+    next_event_.end_transfer.send_status_chunk = false;
+    NotifyEvent();
+  }
+#endif
 #endif
 
   // For testing only: terminates the transfer thread with a kTerminate event.
