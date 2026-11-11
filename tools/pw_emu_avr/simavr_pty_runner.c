@@ -283,6 +283,16 @@ int main(int argc, char **argv) {
             (g_tx_head + sizeof(g_tx_queue) - g_tx_tail) % sizeof(g_tx_queue));
   }
 
+  if (strcmp(mcu, "atmega328p") == 0) {
+    fprintf(stderr,
+            "simavr final AVR state=%d pc=0x%08x cycles=%llu "
+            "UCSR0A=0x%02x UCSR0B=0x%02x\n",
+            (int)avr->state,
+            (unsigned)avr->pc,
+            (unsigned long long)avr->cycle,
+            (unsigned)avr->data[0xC0],
+            (unsigned)avr->data[0xC1]);
+  }
   close(g_pty_master);
   g_pty_master = -1;
   if (avr->state == cpu_Crashed) {
