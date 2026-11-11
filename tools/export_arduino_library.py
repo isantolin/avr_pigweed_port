@@ -726,7 +726,7 @@ namespace {
 constexpr uint64_t kHdlcAddress = 1;
 constexpr uint32_t kRpcChannelId = 1;
 
-avr_port::AvrUartStream uart(115200);
+avr_port::AvrUartStream uart(115200, avr_port::UartPort::kUsart1);
 pw::hdlc::RpcChannelOutput output(uart, kHdlcAddress, "yun-rpc");
 std::array<pw::rpc::Channel, 1> channels = {
     pw::rpc::Channel::Create<kRpcChannelId>(&output)};
