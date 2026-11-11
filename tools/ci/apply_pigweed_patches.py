@@ -781,6 +781,55 @@ from pw_rpc.client import Client""",
             raise RuntimeError("could not find unique context event dispatch")
         transfer_content = transfer_content.replace(context_marker, context_replacement, 1)
 
+    # Resource-status requests originate inside the RPC server packet
+    # callback. In the cooperative build that callback already runs on the
+    # transfer owner loop, so dispatch the upstream resource lookup inline.
+    # Queuing it would defer the RPC responder while the same owner loop is
+    # waiting for that response, creating a cooperative progress deadlock.
+    replace_once(
+        "pw_transfer/transfer_thread.cc",
+        """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
+                                          ResourceStatusCallback&& callback) {
+  if (!TryWaitForEventToProcess()) {
+    internal::ResourceStatus stats;
+    callback(Status::Unavailable(), stats);
+    return;
+  }
+
+  next_event_.type = EventType::kGetResourceStatus;
+
+  resource_status_callback_ = std::move(callback);
+
+  next_event_.resource_status.resource_id = resource_id;
+
+  NotifyEvent();
+}""",
+        """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
+                                          ResourceStatusCallback&& callback) {
+#if defined(PW_TRANSFER_COOPERATIVE)
+  if (resource_status_pending_) {
+    internal::ResourceStatus stats{};
+    callback(Status::Unavailable(), stats);
+    return;
+  }
+  resource_status_callback_ = std::move(callback);
+  resource_status_pending_ = true;
+  GetResourceState(resource_id);
+#else
+  if (!TryWaitForEventToProcess()) {
+    internal::ResourceStatus stats;
+    callback(Status::Unavailable(), stats);
+    return;
+  }
+
+  next_event_.type = EventType::kGetResourceStatus;
+  resource_status_callback_ = std::move(callback);
+  next_event_.resource_status.resource_id = resource_id;
+  NotifyEvent();
+#endif
+}""",
+    )
+
     # The upstream resource-status callback is a single staged member. Keep
     # its original single-in-flight contract despite the bounded event queue.
     resource_start = transfer_content.index(
