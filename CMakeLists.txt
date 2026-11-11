@@ -380,7 +380,10 @@ add_executable(pw_transfer_avr_footprint_probe.elf EXCLUDE_FROM_ALL
   tests/pw_transfer_avr_footprint_probe.cpp
   src/cxx_abi_stubs.cpp
 )
-target_include_directories(pw_transfer_avr_footprint_probe.elf PRIVATE src)
+target_include_directories(pw_transfer_avr_footprint_probe.elf PRIVATE
+  src
+  "${PW_ROOT}/pw_tokenizer/public"
+)
 target_link_libraries(pw_transfer_avr_footprint_probe.elf PRIVATE
   pw_transfer
   pw_tokenizer
