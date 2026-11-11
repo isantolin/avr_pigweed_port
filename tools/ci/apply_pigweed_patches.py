@@ -70,6 +70,39 @@ from pw_rpc.client import Client""",
     return static_cast<unsigned long>(session_id_);
   }""",
     )
+
+    # AVR's unsigned is 16-bit while transfer session IDs are 32-bit. Keep the
+    # full value and use the matching %lu format in every log call.
+    context_cc = PW_ROOT / "pw_transfer" / "context.cc"
+    context_content = context_cc.read_text()
+    cursor = 0
+    patched_log_formats = 0
+    while True:
+        id_position = context_content.find("id_for_log()", cursor)
+        if id_position < 0:
+            break
+        macro_start = context_content.rfind("PW_LOG_", 0, id_position)
+        macro_end = context_content.find(");", id_position)
+        if macro_start < 0 or macro_end < 0:
+            raise RuntimeError("could not locate PW_LOG call for id_for_log()")
+        macro_end += 2
+        call = context_content[macro_start:macro_end]
+        id_offset = call.find("id_for_log()")
+        format_offset = call.find("%u")
+        if format_offset >= 0 and format_offset < id_offset:
+            call = call[:format_offset] + "%lu" + call[format_offset + 2:]
+            context_content = (
+                context_content[:macro_start] + call + context_content[macro_end:]
+            )
+            patched_log_formats += 1
+        elif "%lu" not in call[:id_offset]:
+            raise RuntimeError("id_for_log() log call has no matching %u format")
+        cursor = macro_start + len(call)
+    if patched_log_formats:
+        context_cc.write_text(context_content)
+        print(f"patched {patched_log_formats} transfer log format specifiers")
+    elif "id_for_log()" in context_content and "%lu" not in context_content:
+        raise RuntimeError("transfer log format patch did not match any call")
     replace_once(
         "pw_protobuf/public/pw_protobuf/wire_format.h",
         "inline constexpr static uint32_t kMaxFieldNumber = (1u << 29) - 1;",
