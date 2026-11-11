@@ -237,8 +237,43 @@ bool PumpTransfers(pw::transfer::Thread<1, 1>& client_thread,
     } else {
       g_pump_failure_reason = 7;
     }
+    return false;
   }
-  return complete;
+
+  // Completion is reported by the client before the peer necessarily handles
+  // the final acknowledgement. Drain both cooperative endpoints before
+  // allowing the next transfer to claim their single active role.
+  for (size_t i = 0; i < 256; ++i) {
+    const bool settled =
+        client_thread.PendingEventsForTest() == 0 &&
+        server_thread.PendingEventsForTest() == 0 &&
+        client_thread.ActiveClientTransfersForTest() == 0 &&
+        client_thread.ActiveServerTransfersForTest() == 0 &&
+        server_thread.ActiveClientTransfersForTest() == 0 &&
+        server_thread.ActiveServerTransfersForTest() == 0;
+    if (settled) return true;
+
+    const pw::Status client_status = client_thread.Poll(2);
+    const pw::Status server_status = server_thread.Poll(2);
+    if (client_status == pw::Status::ResourceExhausted()) {
+      g_pump_failure_reason = 21;
+      return false;
+    }
+    if (server_status == pw::Status::ResourceExhausted()) {
+      g_pump_failure_reason = 22;
+      return false;
+    }
+    if ((!client_status.ok() &&
+         client_status != pw::Status::Unavailable()) ||
+        (!server_status.ok() &&
+         server_status != pw::Status::Unavailable())) {
+      g_pump_failure_reason = 23;
+      return false;
+    }
+    _delay_ms(1);
+  }
+  g_pump_failure_reason = 24;
+  return false;
 }
 
 }  // namespace
