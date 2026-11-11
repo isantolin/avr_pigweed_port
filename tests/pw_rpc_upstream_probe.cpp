@@ -161,7 +161,7 @@ int main() {
       server_channels.data(), server_channels.size()));
 
   static ProbeService service;
-  if (!server.RegisterService(service).ok()) return 1;
+  server.RegisterService(service);
 
   static HdlcLoopbackWriter client_to_server_writer(server);
   static pw::hdlc::RpcChannelOutput client_output(
