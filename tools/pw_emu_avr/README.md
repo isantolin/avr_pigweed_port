@@ -28,10 +28,15 @@ build/pw_emu_avr/simavr_pty_runner \
   --frequency 16000000
 ```
 
+Pass `--pause` to create the PTY and wait without advancing the MCU. Send
+`SIGUSR2` to the runner PID to resume, `SIGUSR1` to reset the MCU, and
+`SIGINT`/`SIGTERM` to stop it. Reset discards pending UART TX bytes.
+
+
 The runner prints the PTY slave path on stdout. Connect a serial client to that path using the firmware's configured baud rate and framing. Diagnostics are written to stderr.
 
 ## Current scope and limitations
 
-The runner currently exposes one UART (USART0 by default), loads ELF firmware, and runs until the firmware exits or the process receives SIGINT/SIGTERM. It does not yet implement GDB, AVR reset control, multiple UARTs, simulation-time pacing, or a `pw_emu.core.Launcher`/`Connector` adapter. Those features must be added and tested before advertising a complete `pw_emu` backend.
+The runner currently exposes one UART (USART0 by default), loads ELF firmware, and runs until the firmware exits or the process receives SIGINT/SIGTERM. It does not yet implement GDB, multiple UARTs, simulation-time pacing, or a `pw_emu.core.Launcher`/`Connector` adapter. Signal-based reset/resume and initial pause are runner controls only; they are not yet wired into the `pw_emu` frontend. These features must be integrated and tested before advertising a complete `pw_emu` backend.
 
 `pw_emu` documents external emulator types through Python `Launcher` and `Connector` implementations in `pigweed.json`; it is not currently integrated as a native CMake feature. See https://pigweed.dev/pw_emu/guide.html.
