@@ -112,7 +112,7 @@ jobs:
             -DAVR_F_CPU=16000000UL \
             -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           if ! cmake --build build-transfer --target pw_transfer_upstream_probe.elf pw_rpc_upstream_probe.elf > build-transfer/transfer-build.log 2>&1; then
             tail -n 160 build-transfer/transfer-build.log
             exit 1
