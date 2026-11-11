@@ -8,14 +8,17 @@
 #include "pw_rpc/client.h"
 #include "pw_rpc/server.h"
 #include "pw_status/status.h"
+#include "pw_stream/memory_stream.h"
 #include "pw_stream/stream.h"
 #include "pw_transfer/client.h"
+#include "pw_transfer/handler.h"
 #include "pw_transfer/transfer.h"
 
 namespace {
 
 constexpr uint64_t kHdlcAddress = 1;
 constexpr uint32_t kRpcChannelId = 1;
+volatile bool g_start_transfer = false;
 
 class NullWriter final : public pw::stream::NonSeekableWriter {
  private:
@@ -63,7 +66,26 @@ int main() {
   static pw::transfer::Client transfer_client(
       rpc_client, kRpcChannelId, transfer_thread, 256);
 
-  (void)transfer_client;
+  std::array<std::byte, 32> transfer_data{};
+  std::array<std::byte, 64> transfer_output_buffer{};
+  pw::stream::MemoryReader transfer_reader{pw::ConstByteSpan(transfer_data)};
+  pw::stream::MemoryWriter transfer_writer{pw::ByteSpan(transfer_output_buffer)};
+  pw::transfer::ReadOnlyHandler read_handler(1, transfer_reader);
+  pw::transfer::WriteOnlyHandler write_handler(2, transfer_writer);
+  (void)transfer_service.RegisterHandler(read_handler);
+  (void)transfer_service.RegisterHandler(write_handler);
+
+  // Keep the real client Read/Write paths in the linked image for a realistic
+  // application footprint without starting a transfer in this probe.
+  if (g_start_transfer) {
+    (void)transfer_client.Read(
+        1, transfer_writer,
+        [](pw::Status) {});
+    (void)transfer_client.Write(
+        2, transfer_reader,
+        [](pw::Status) {});
+  }
+
   (void)transfer_thread.Poll(1);
   EmitResult();
   return 0;
