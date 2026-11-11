@@ -141,10 +141,10 @@ int main() {
   static std::array<std::byte, 128> client_encode{};
   static std::array<std::byte, 128> server_chunk{};
   static std::array<std::byte, 128> server_encode{};
-  static pw::transfer::Thread<1, 1> client_thread(
-      pw::ByteSpan(client_chunk), pw::ByteSpan(client_encode));
-  static pw::transfer::Thread<1, 1> server_thread(
-      pw::ByteSpan(server_chunk), pw::ByteSpan(server_encode));
+  static pw::transfer::Thread<1, 1> client_thread{
+      pw::ByteSpan(client_chunk), pw::ByteSpan(client_encode)};
+  static pw::transfer::Thread<1, 1> server_thread{
+      pw::ByteSpan(server_chunk), pw::ByteSpan(server_encode)};
 
   // The resource-status responder is a single staged upstream callback.
   // Verify the cooperative queue preserves that contract and honors budgets.
