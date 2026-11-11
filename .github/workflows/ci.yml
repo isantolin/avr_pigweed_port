@@ -39,15 +39,32 @@ jobs:
             -o DPkg::Lock::Timeout=120 \
             install -y --no-install-recommends \
               gcc-avr avr-libc binutils-avr cmake ninja-build simavr \
-              libsimavr-dev protobuf-compiler python3-protobuf python3-jinja2
+              libsimavr-dev protobuf-compiler python3-protobuf python3-jinja2 ccache
 
           avr-gcc --version
           simavr --help >/dev/null 2>&1 || test "$?" -eq 1
+          ccache --set-config=max_size=500M
+
+      - name: Compute compiler and dependency cache identity
+        id: cache-identity
+        run: |
+          AVR_GCC_VERSION="$(avr-g++ -dumpfullversion -dumpversion)"
+          PIGWEED_REV="$(git rev-parse HEAD:third_party/pigweed)"
+          CCACHE_VERSION="$(ccache --version | head -n1 | tr ' ' '-')"
+          echo "value=avr-gcc-${AVR_GCC_VERSION}-pigweed-${PIGWEED_REV}-${CCACHE_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore compiler cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ccache
+          key: ${{ runner.os }}-ccache-${{ matrix.crc_impl }}-${{ steps.cache-identity.outputs.value }}-${{ hashFiles('CMakeLists.txt', 'avr-toolchain.cmake', 'tools/pw_emu_avr/CMakeLists.txt', 'tools/pw_emu_avr/simavr_pty_runner.c') }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-${{ matrix.crc_impl }}-${{ steps.cache-identity.outputs.value }}-
 
       - name: Build host-side pw_emu simavr runner
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: |
-          cmake -S tools/pw_emu_avr -B build/pw_emu_avr -G Ninja
+          cmake -S tools/pw_emu_avr -B build/pw_emu_avr -G Ninja -DCMAKE_C_COMPILER_LAUNCHER=ccache
           cmake --build build/pw_emu_avr
 
       - name: Configure CMake (${{ matrix.crc_impl }})
@@ -56,7 +73,7 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
             -DAVR_MCU=atmega328p \
             -DAVR_F_CPU=16000000UL \
-            -DAVR_CRC32_IMPL=${{ matrix.crc_impl }}
+            -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \\\n            -DCMAKE_C_COMPILER_LAUNCHER=ccache \\\n            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build Firmware and Test Runner
         run: |
@@ -65,6 +82,7 @@ jobs:
       - name: Run Pigweed AVR Test Suite in simavr
         run: |
           cmake --build build --target run_tests
+          ccache --show-stats
 
       - name: Verify Python Host Tools & Arduino Export
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
