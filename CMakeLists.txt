@@ -19,6 +19,18 @@ add_compile_definitions(PW_CHECKSUM_CRC32_DEFAULT_IMPL=${AVR_CRC32_IMPL})
 add_compile_definitions(__cpp_lib_endian=201907L)
 add_compile_definitions(PW_RPC_DYNAMIC_ALLOCATION=0)
 
+option(AVR_PW_TRANSFER_FOOTPRINT_PROFILE
+  "Use bounded no-log RPC/transfer settings for the ATmega32U4 footprint probe"
+  OFF
+)
+if(AVR_PW_TRANSFER_FOOTPRINT_PROFILE)
+  add_compile_definitions(
+    PW_LOG_LEVEL_DEFAULT=8
+    PW_RPC_ENCODING_BUFFER_SIZE_BYTES=256
+    PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE=64
+  )
+endif()
+
 # 2. Locate Pigweed root and import its CMake utilities
 set(PW_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/pigweed")
 set(ENV{PW_ROOT} "${PW_ROOT}")
