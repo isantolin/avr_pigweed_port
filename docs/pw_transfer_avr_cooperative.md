@@ -351,3 +351,51 @@ verify that the AVR RPC transport invokes service/client callbacks synchronously
 from the main loop and never from an ISR or another execution context. If that
 cannot be guaranteed, use a typed bounded queue with explicit ownership for
 each event payload, not a generic memcpy queue.
+## Integration prerequisite: AVR RPC is not yet a `pw_transfer` transport
+
+Review of this repository's `CMakeLists.txt`, `pw_rpc_avr` public headers,
+and `pw_rpc_avr/src/rpc_server.cpp` shows that the existing RPC component is
+a lightweight custom dispatcher, not Pigweed's upstream `pw_rpc` server/client
+API required by `pw_transfer`.
+
+Important distinction:
+
+- The AVR `RpcPacket` fields (type, channel, service, method, payload, status,
+  call ID) match the field numbers and wire types in the pinned upstream
+  `pw_rpc/internal/packet.proto`. The packet envelope is therefore compatible
+  at the schema level for the fields it implements.
+- `pw::rpc_avr::RpcServer::ProcessPacket()` currently accepts only
+  `PacketType::kRequest`; other packet types are rejected. It dispatches to
+  `RpcService::HandleMethod()` and produces one synchronous response.
+- The AVR service interface has no `RawServerReaderWriter`, streaming call
+  object, per-call lifecycle, `set_on_next`, `Write`, `Finish`, or matching
+  client-side `RawClientReaderWriter` implementation.
+- The `pw_transfer` core target at the pinned Pigweed revision includes
+  `pw_rpc::raw` client/server reader-writer APIs and requires bidirectional
+  streaming. Its service methods are `Read(stream Chunk)` and
+  `Write(stream Chunk)`, not unary methods.
+- The current AVR `CMakeLists.txt` builds `pw_rpc_avr` but does not add
+  upstream `pw_rpc` or `pw_transfer` targets.
+
+Thus the packet format alone is not enough: the current AVR RPC component
+cannot host or call the pinned `pw_transfer` implementation. This is a
+separate prerequisite from the cooperative transfer scheduler.
+
+### Required order of work
+
+1. Specify and test the minimum streaming RPC subset needed by `pw_transfer`:
+   bidirectional calls, request/client-stream/server-stream packet handling,
+   call IDs, per-call state, completion, cancellation/error, and bounded
+   message storage.
+2. Decide whether to adapt the custom `pw_rpc_avr` to the upstream raw RPC
+   interfaces or replace it with a minimal upstream `pw_rpc` configuration.
+   Do not claim compatibility until the upstream API contract and wire
+   interoperability tests pass.
+3. Add a host test that exchanges actual Pigweed-generated `pw_rpc` packets
+   with the AVR implementation, including a multi-message bidirectional call.
+4. Only after that transport prerequisite is satisfied, integrate the
+   cooperative `pw_transfer` core and its one-role arbiter.
+
+Do not implement a fake `RawServerReaderWriter` facade over the current unary
+dispatcher: transfer depends on persistent bidirectional call state and stream
+callbacks, which a one-request/one-response wrapper cannot safely emulate.
