@@ -110,22 +110,14 @@ jobs:
           fi
           tail -n 20 build/build.log
 
-      - name: Build and measure application firmware on ATmega2560
+      - name: Measure application firmware and test runner on ATmega2560
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: |
-          cmake -B build-mega -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
-            -DAVR_MCU=atmega2560 \
-            -DAVR_F_CPU=16000000UL \
-            -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-          cmake --build build-mega --target firmware.elf test_runner.elf
           echo "=== ATmega2560 application firmware ==="
-          avr-size --format=avr --mcu=atmega2560 build-mega/firmware.elf
-          echo "=== ATmega2560 test runner (diagnostic only) ==="
-          avr-size --format=avr --mcu=atmega2560 build-mega/test_runner.elf
-          DATA_BYTES="$(avr-size -A build-mega/firmware.elf | awk '$1 == ".data" {d=$2} $1 == ".bss" {b=$2} $1 == ".noinit" {n=$2} END {print d+b+n}')"
+          avr-size --format=avr --mcu=atmega2560 build/firmware.elf
+          echo "=== ATmega2560 test runner ==="
+          avr-size --format=avr --mcu=atmega2560 build/test_runner.elf
+          DATA_BYTES="$(avr-size -A build/firmware.elf | awk '$1 == ".data" {d=$2} $1 == ".bss" {b=$2} $1 == ".noinit" {n=$2} END {print d+b+n}')"
           echo "ATmega2560 firmware static SRAM: ${DATA_BYTES} bytes / 8192 bytes"
           echo "ATmega2560 firmware static SRAM remaining before stack/heap: $((8192-DATA_BYTES)) bytes"
           test "$DATA_BYTES" -le 6144
