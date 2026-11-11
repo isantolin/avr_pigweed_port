@@ -173,7 +173,7 @@ jobs:
           test -s dist/PigweedAVR/src/pw_transfer/transfer.raw_rpc.pb.h
           test -s dist/PigweedAVR/src/pw_transfer/transfer.pwpb.h
           grep -q "define PW_TRANSFER_COOPERATIVE 1" dist/PigweedAVR/src/pw_transfer/transfer_thread.h
-          avr-g++ -mmcu=atmega32u4 -DF_CPU=16000000UL -std=gnu++17 \\
+          avr-g++ -mmcu=atmega32u4 -DF_CPU=16000000UL -std=gnu++17 \
             -fsyntax-only -Idist/PigweedAVR/src tools/ci/arduino_export_probe.cpp
 
       - name: Upload Build Artifacts
