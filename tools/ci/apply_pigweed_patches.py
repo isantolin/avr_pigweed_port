@@ -544,8 +544,8 @@ bool TransferThread::HandleTimeouts() {
 
     transfer_header = PW_ROOT / "pw_transfer" / "public" / "pw_transfer" / "transfer_thread.h"
     header_content = transfer_header.read_text()
-    if "bool Poll();" not in header_content:
-        raise RuntimeError("cooperative Poll declaration was not applied")
+    if "Status Poll();" not in header_content:
+        raise RuntimeError("cooperative Status Poll declaration was not applied")
 
     subprocess.run(
         ["git", "-C", str(PW_ROOT), "diff", "--check"],
