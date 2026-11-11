@@ -351,7 +351,15 @@ add_executable(pw_transfer_upstream_probe.elf EXCLUDE_FROM_ALL
   src/cxx_abi_stubs.cpp
 )
 target_include_directories(pw_transfer_upstream_probe.elf PRIVATE src)
-target_link_libraries(pw_transfer_upstream_probe.elf PRIVATE pw_transfer)
+target_link_libraries(pw_transfer_upstream_probe.elf PRIVATE
+  pw_transfer
+  pw_rpc.server
+  pw_rpc.client
+  pw_rpc.raw.server_api
+  pw_rpc.raw.client_api
+  pw_hdlc.rpc_channel_output
+  pw_sync.no_lock
+)
 add_custom_command(TARGET pw_transfer_upstream_probe.elf POST_BUILD
   COMMAND avr-size --format=avr --mcu=${AVR_MCU} $<TARGET_FILE:pw_transfer_upstream_probe.elf>
   COMMENT "Report upstream pw_transfer AVR probe memory usage (${AVR_MCU})"
