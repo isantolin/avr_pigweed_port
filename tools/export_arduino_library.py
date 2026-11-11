@@ -132,6 +132,15 @@ def generate_pw_rpc_packet_header(output_dir: Path) -> Path:
 
 
 def export_library(dest_dir: Path):
+    # CMake probes and Arduino packaging are separate CI steps; ensure the
+    # exact pinned upstream Pigweed source has the reviewed AVR patch applied.
+    patch_script = REPO_ROOT / "tools" / "ci" / "apply_pigweed_patches.py"
+    subprocess.run(
+        [sys.executable, str(patch_script)],
+        check=True,
+        cwd=REPO_ROOT,
+    )
+
     print(f"[*] Exporting Pigweed AVR Arduino Library to: {dest_dir}")
     if dest_dir.exists():
         shutil.rmtree(dest_dir)
