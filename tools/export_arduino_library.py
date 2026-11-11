@@ -320,7 +320,7 @@ def export_library(dest_dir: Path):
         "raw_rpc": "transfer.raw_rpc.pb.h",
     }
     generated_transfer_root = None
-    for build_root in (REPO_ROOT / "build-transfer", REPO_ROOT / "build"):
+    for build_root in (REPO_ROOT / "build-transfer-1284p", REPO_ROOT / "build-transfer", REPO_ROOT / "build"):
         if not build_root.is_dir():
             continue
         for proto_root in build_root.rglob("pw_transfer.proto"):
