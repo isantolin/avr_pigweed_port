@@ -63,39 +63,26 @@ from pw_rpc.client import Client""",
         """import sys
 from pathlib import Path as _PigweedPath
 
-# protoc may run plugins with an isolated working directory. Resolve generated
-# PWPB Python package roots from the repository's CMake build directory.
-_repo_root = _PigweedPath(__file__).resolve().parents[5]
-_build_roots = [_repo_root / "build"]
+# The protoc plugin inherits the generated Python roots through PYTHONPATH.
+# Make the generated directories regular, extendable packages before imports.
 _bootstrap_paths = []
-for _build_root in _build_roots:
-    for _target in (
-        "pw_protobuf.codegen_protos",
-        "pw_protobuf.common_proto",
-        "pw_protobuf.status_proto",
-        "pw_protobuf.field_options_proto",
+for _entry in list(sys.path):
+    _python_root = _PigweedPath(_entry)
+    if _python_root.name != "python" or not any(
+        _part.startswith("pw_protobuf.") for _part in _python_root.parts
     ):
-        _python_root = _build_root / _target / "python"
-        if not _python_root.is_dir():
-            continue
-        if str(_python_root) not in sys.path:
-            sys.path.insert(0, str(_python_root))
-        _bootstrap_paths.append(str(_python_root))
-        _package_name = (
-            "pw_protobuf_codegen_protos"
-            if _target == "pw_protobuf.codegen_protos"
-            else "pw_protobuf_protos"
-        )
+        continue
+    _bootstrap_paths.append(str(_python_root))
+    for _package_name in ("pw_protobuf_codegen_protos", "pw_protobuf_protos"):
         _package_dir = _python_root / _package_name
-        if _package_dir.is_dir():
-            _init_file = _package_dir / "__init__.py"
-            _init_file.write_text(
-                "from pkgutil import extend_path\\n"
-                "__path__ = extend_path(__path__, __name__)\\n"
-            )
-print("PWPB_PLUGIN_BOOTSTRAP", _repo_root, _bootstrap_paths, sys.path[:20], file=sys.stderr)
-""",
-    )
+        _package_dir.mkdir(parents=True, exist_ok=True)
+        _init_file = _package_dir / "__init__.py"
+        _init_file.write_text(
+            "from pkgutil import extend_path\\n"
+            "__path__ = extend_path(__path__, __name__)\\n"
+        )
+print("PWPB_PLUGIN_BOOTSTRAP", _bootstrap_paths, sys.path[:20], file=sys.stderr)
+""",    )
     replace_once(
         "pw_protobuf/public/pw_protobuf/wire_format.h",
         "inline constexpr static uint32_t kMaxFieldNumber = (1u << 29) - 1;",
