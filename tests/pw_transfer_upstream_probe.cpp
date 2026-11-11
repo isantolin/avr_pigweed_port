@@ -53,16 +53,24 @@ pw::Status cancel_completion_status = pw::Status::Unknown();
 pw::Status retry_completion_status = pw::Status::Unknown();
 pw::Status timeout_completion_status = pw::Status::Unknown();
 
-void OnFirstResourceStatus(
-    pw::Status status,
-    const pw::transfer::internal::ResourceStatus&) {
-  first_callback_called = status == pw::Status::NotFound();
-}
+pw::transfer::TransferThread* g_resource_status_thread = nullptr;
 
 void OnDuplicateResourceStatus(
     pw::Status status,
     const pw::transfer::internal::ResourceStatus&) {
   duplicate_rejected = status == pw::Status::Unavailable();
+}
+
+void OnFirstResourceStatus(
+    pw::Status status,
+    const pw::transfer::internal::ResourceStatus&) {
+  first_callback_called = status == pw::Status::NotFound();
+  // Re-enter while the first callback is still staged. The single-in-flight
+  // guard must reject this nested lookup rather than overwrite its callback.
+  if (g_resource_status_thread != nullptr) {
+    g_resource_status_thread->EnqueueResourceEvent(
+        0x999A, OnDuplicateResourceStatus);
+  }
 }
 
 void OnReadComplete(pw::Status status) {
@@ -310,8 +318,9 @@ int main() {
   // Verify the cooperative queue preserves that contract and honors budgets.
   first_callback_called = false;
   duplicate_rejected = false;
+  g_resource_status_thread = &client_thread;
   client_thread.EnqueueResourceEvent(0x9999, OnFirstResourceStatus);
-  client_thread.EnqueueResourceEvent(0x999A, OnDuplicateResourceStatus);
+  g_resource_status_thread = nullptr;
 
   if (!duplicate_rejected) MarkFailure(success, failure_code, 31);
   // Resource-status lookup is dispatched inline on the cooperative owner
