@@ -17,6 +17,9 @@ mkdir -p "$(dirname "$OUT")"
   echo "=== Protobuf AVR configuration references ==="
   grep -R -n -E 'double|DOUBLE|FLOAT|PW_PROTOBUF_' "$PW_ROOT/pw_protobuf/public/pw_protobuf" 2>/dev/null | head -n 160 || true
   echo
+  echo "=== AVR protobuf static assertions and integer-width assumptions ==="
+  grep -R -n -E 'four words|1 << (16|29)|sizeof\(double\)|sizeof\(uintptr_t\)|sizeof\(void\*)' "$PW_ROOT/pw_protobuf/public/pw_protobuf" 2>/dev/null | head -n 200 || true
+  echo
   echo "=== Relevant CMake target declarations ==="
   grep -R -n -E 'pw_add_library|pw_target_link_targets' "$PW_ROOT/pw_rpc" "$PW_ROOT/pw_transfer" 2>/dev/null || true
   echo
@@ -41,6 +44,22 @@ mkdir -p "$(dirname "$OUT")"
     pw_protobuf/public/pw_protobuf/internal/config.h \
     pw_protobuf/public/pw_protobuf/decoder.h \
     pw_protobuf/public/pw_protobuf/encoder.h \
+    pw_protobuf/public/pw_protobuf/wire_format.h \
+    pw_protobuf/public/pw_protobuf/internal/codegen.h \
+    pw_protobuf/public/pw_protobuf/stream_decoder.h \
+    pw_protobuf/public/pw_protobuf/buffer_encoder.h \
+    pw_protobuf/public/pw_protobuf/message.h \
+    pw_protobuf/public/pw_protobuf/config.h \
+    pw_protobuf/decoder.cc \
+    pw_protobuf/encoder.cc \
+    pw_protobuf/message.cc \
+    pw_protobuf/find.cc \
+    pw_protobuf/map_utils.cc \
+    pw_transfer/public/pw_transfer/internal/context.h \
+    pw_transfer/public/pw_transfer/internal/client_context.h \
+    pw_transfer/public/pw_transfer/internal/server_context.h \
+    pw_transfer/public/pw_transfer/internal/event.h \
+    pw_sync/public/pw_sync/no_lock.h \
     pw_transfer/public/pw_transfer/internal/chunk.h \
     pw_transfer/chunk.cc \
     pw_protobuf/CMakeLists.txt \
