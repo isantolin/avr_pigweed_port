@@ -25,7 +25,8 @@ static volatile sig_atomic_t g_reset = 0;
 static volatile sig_atomic_t g_continue = 0;
 static int g_failure = 0;
 static int g_pty_master = -1;
-static uint8_t g_tx_queue[4096];
+// Host-side buffering absorbs UART bursts while the PTY consumer is scheduled.
+static uint8_t g_tx_queue[65536];
 static size_t g_tx_head = 0;
 static size_t g_tx_tail = 0;
 
