@@ -5,6 +5,7 @@
 #include <cstring>
 #include <avr/interrupt.h>
 #include <avr/io.h>
+#include <util/delay.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 
@@ -169,6 +170,9 @@ bool PumpTransfers(pw::transfer::Thread<1, 1>& client_thread,
         server_status != pw::Status::Unavailable()) {
       return false;
     }
+    // Advance the AVR system clock so timeout/retry paths are deterministic
+    // under simavr rather than depending on host-side wall-clock timing.
+    _delay_ms(1);
   }
   return complete;
 }
