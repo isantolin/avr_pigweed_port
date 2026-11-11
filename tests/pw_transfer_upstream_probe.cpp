@@ -471,7 +471,7 @@ int main() {
       kTimeoutResourceId,
       timeout_output,
       OnTimeoutComplete,
-      pw::transfer::cfg::kDefaultClientTimeout,
+      pw::chrono::SystemClock::for_at_least(std::chrono::milliseconds(100)),
       pw::chrono::SystemClock::for_at_least(std::chrono::milliseconds(0)));
   if (!timeout_result.ok()) {
     MarkFailure(success, failure_code, 24);
