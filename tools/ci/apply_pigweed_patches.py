@@ -784,53 +784,54 @@ from pw_rpc.client import Client""",
     # The cooperative RPC server invokes resource-status handling from
     # its packet callback. Resolve this lookup inline on the owner loop;
     # deferring it to the event queue can strand the unary RPC responder.
-    # The upstream resource-status callback is a single staged member. Keep
-    # its original single-in-flight contract despite the bounded event queue.
-    resource_start = transfer_content.index(
-        "void TransferThread::EnqueueResourceEvent("
-    )
-    resource_brace = transfer_content.index("{", resource_start) + 1
-    resource_guard = """
-#if defined(PW_TRANSFER_COOPERATIVE)
-  if (resource_status_pending_) {
+    # Resource-status lookup is synchronous in the cooperative owner loop.
+    # Do not reserve an event slot: this path dispatches inline and must leave
+    # the bounded queue available for the subsequent transfer handshake.
+    resource_method = """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
+                                          ResourceStatusCallback&& callback) {
+  if (!TryWaitForEventToProcess()) {
     internal::ResourceStatus stats;
     callback(Status::Unavailable(), stats);
     return;
   }
-#endif
-"""
-    if resource_guard.strip() not in transfer_content[
-        resource_brace:resource_brace + 300
-    ]:
-        transfer_content = (
-            transfer_content[:resource_brace]
-            + resource_guard
-            + transfer_content[resource_brace:]
-        )
 
-    resource_set = "  resource_status_callback_ = std::move(callback);"
-    resource_set_replacement = resource_set + """
+  next_event_.type = EventType::kGetResourceStatus;
+
+  resource_status_callback_ = std::move(callback);
+
+  next_event_.resource_status.resource_id = resource_id;
+
+  NotifyEvent();
+}"""
+    cooperative_resource_method = """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
+                                          ResourceStatusCallback&& callback) {
 #if defined(PW_TRANSFER_COOPERATIVE)
+  if (resource_status_pending_) {
+    internal::ResourceStatus stats{};
+    callback(Status::Unavailable(), stats);
+    return;
+  }
+  resource_status_callback_ = std::move(callback);
   resource_status_pending_ = true;
-#endif"""
-
-    resource_id_assignment = "  next_event_.resource_status.resource_id = resource_id;"
-    inline_resource_dispatch = resource_id_assignment + """
-#if defined(PW_TRANSFER_COOPERATIVE)
   GetResourceState(resource_id);
-  return;
-#endif"""
-    if inline_resource_dispatch not in transfer_content:
-        if transfer_content.count(resource_id_assignment) != 1:
-            raise RuntimeError("could not find unique resource-status event payload")
+#else
+  if (!TryWaitForEventToProcess()) {
+    internal::ResourceStatus stats;
+    callback(Status::Unavailable(), stats);
+    return;
+  }
+
+  next_event_.type = EventType::kGetResourceStatus;
+  resource_status_callback_ = std::move(callback);
+  next_event_.resource_status.resource_id = resource_id;
+  NotifyEvent();
+#endif
+}"""
+    if cooperative_resource_method not in transfer_content:
+        if resource_method not in transfer_content:
+            raise RuntimeError("could not locate upstream EnqueueResourceEvent implementation")
         transfer_content = transfer_content.replace(
-            resource_id_assignment, inline_resource_dispatch, 1
-        )
-    if resource_set_replacement not in transfer_content:
-        if transfer_content.count(resource_set) != 1:
-            raise RuntimeError("could not find unique resource-status callback staging")
-        transfer_content = transfer_content.replace(
-            resource_set, resource_set_replacement, 1
+            resource_method, cooperative_resource_method, 1
         )
 
     resource_state_start = transfer_content.index(
