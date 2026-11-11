@@ -4,4 +4,4 @@
 #include "pw_assert_avr/assert_avr.h"
 
 #define PW_ASSERT_HANDLE_FAILURE(condition_string) \
-  pw_assert_avr_HandleFailure(__LINE__)
+  pw_assert_avr_HandleFailure(__FILE__, __LINE__, condition_string)

@@ -66,7 +66,9 @@ void TxInt(int value) {
   }
 }
 
-const char kMsgHeader[] PROGMEM = "\r\n!!! [PW_ASSERT FAILED] Line: ";
+const char kMsgHeader[] PROGMEM = "\r\n!!! [PW_ASSERT FAILED] ";
+const char kFileSeparator[] PROGMEM = " : ";
+const char kExpressionSeparator[] PROGMEM = " : ";
 const char kMsgEnd[] PROGMEM = " !!!\r\n";
 
 }  // namespace
@@ -77,7 +79,7 @@ void pw_assert_avr_SetPanicHook(pw_assert_avr_PanicHook hook) {
   g_panic_hook = hook;
 }
 
-void pw_assert_avr_HandleFailure(int line) {
+void pw_assert_avr_HandleFailure(const char* file, int line, const char* expression) {
 #if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
   cli();
 #endif
@@ -88,7 +90,11 @@ void pw_assert_avr_HandleFailure(int line) {
 
   // Diagnostic line report over hardware serial - 0 bytes of SRAM used
   TxString_P(kMsgHeader);
+  TxString_P(file);
+  TxString_P(kFileSeparator);
   TxInt(line);
+  TxString_P(kExpressionSeparator);
+  TxString_P(expression);
   TxString_P(kMsgEnd);
 
   while (true) {

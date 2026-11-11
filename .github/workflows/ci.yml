@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
+      fail-fast: false
       matrix:
         crc_impl: [PW_CHECKSUM_CRC32_4BITS, PW_CHECKSUM_CRC32_1BITS]
 
@@ -29,6 +30,18 @@ jobs:
       - name: Initialize submodules (shallow)
         run: |
           git submodule update --init --recursive --depth 1
+
+      - name: Audit exact pinned Pigweed RPC and transfer sources
+        run: |
+          bash tools/ci/audit_pigweed_rpc.sh
+
+      - name: Upload pinned Pigweed source audit
+        if: always() && matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pw-upstream-audit
+          path: build/pw-upstream-audit.txt
+          if-no-files-found: error
 
       - name: Install AVR Toolchain & simavr
         env:
@@ -45,10 +58,10 @@ jobs:
             -o DPkg::Lock::Timeout=120 \
             install -y --no-install-recommends \
               gcc-avr avr-libc binutils-avr cmake ninja-build simavr \
-              libsimavr-dev protobuf-compiler libprotobuf-dev python3-protobuf python3-jinja2 \
-              python3-psutil python3-serial python3-yaml ccache
+              libsimavr-dev protobuf-compiler libprotobuf-dev python3-protobuf python3-jinja2 python3-serial python3-psutil ccache
 
           avr-gcc --version
+          protoc --version
           simavr --help >/dev/null 2>&1 || test "$?" -eq 1
           ccache --set-config=max_size=500M
 
@@ -74,11 +87,16 @@ jobs:
           cmake -S tools/pw_emu_avr -B build/pw_emu_avr -G Ninja -DCMAKE_C_COMPILER_LAUNCHER=ccache
           cmake --build build/pw_emu_avr
 
+      - name: Test pw_emu simavr runner and UART PTY lifecycle
+        if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
+        run: |
+          PYTHONPATH="$GITHUB_WORKSPACE/tools/pw_emu_avr/python:$GITHUB_WORKSPACE/third_party/pigweed/pw_emu/py:$GITHUB_WORKSPACE/third_party/pigweed/pw_env_setup/py" python3 -m unittest discover -s tools/pw_emu_avr/tests -v
+
       - name: Configure CMake (${{ matrix.crc_impl }})
         run: |
           cmake -B build -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
-            -DAVR_MCU=atmega328p \
+            -DAVR_MCU=atmega2560 \
             -DAVR_F_CPU=16000000UL \
             -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -87,23 +105,69 @@ jobs:
       - name: Build Firmware and Test Runner
         run: |
           if ! cmake --build build --target all > build/build.log 2>&1; then
-            tail -n 120 build/build.log
+            tail -n 160 build/build.log
             exit 1
           fi
           tail -n 20 build/build.log
 
+      - name: Measure application firmware and test runner on ATmega2560
+        if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
+        run: |
+          echo "=== ATmega2560 application firmware ==="
+          avr-size --format=avr --mcu=atmega2560 build/firmware.elf
+          echo "=== ATmega2560 test runner ==="
+          avr-size --format=avr --mcu=atmega2560 build/test_runner.elf
+          DATA_BYTES="$(avr-size -A build/firmware.elf | awk '$1 == ".data" {d=$2} $1 == ".bss" {b=$2} $1 == ".noinit" {n=$2} END {print d+b+n}')"
+          echo "ATmega2560 firmware static SRAM: ${DATA_BYTES} bytes / 8192 bytes"
+          echo "ATmega2560 firmware static SRAM remaining before stack/heap: $((8192-DATA_BYTES)) bytes"
+          test "$DATA_BYTES" -le 6144
+
+      - name: Build upstream pw_transfer probe (ATmega1284P)
+        run: |
+          cmake -B build-transfer -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
+            -DAVR_MCU=atmega1284p \
+            -DAVR_F_CPU=16000000UL \
+            -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          if ! cmake --build build-transfer --target pw_transfer_upstream_probe.elf pw_rpc_upstream_probe.elf > build-transfer/transfer-build.log 2>&1; then
+            tail -n 160 build-transfer/transfer-build.log
+            exit 1
+          fi
+          tail -n 30 build-transfer/transfer-build.log
+
+      - name: Run upstream pw_rpc unary and bidirectional probe (ATmega1284P)
+        run: |
+          # The two-endpoint HDLC/RPC probe needs more SRAM than ATmega328P.
+          set +e
+          timeout 5s simavr -m atmega1284p build-transfer/pw_rpc_upstream_probe.elf > build-transfer/pw_rpc_probe.log 2>&1
+          simavr_status=$?
+          set -e
+          cat build-transfer/pw_rpc_probe.log
+          echo "simavr exit status: ${simavr_status}; UART marker is authoritative"
+          grep -q "PW_RPC_PROBE_PASS" build-transfer/pw_rpc_probe.log
+
+      - name: Run cooperative pw_transfer probe (ATmega1284P)
+        run: |
+          # The UART marker is emitted only after all transfer assertions.
+          set +e
+          timeout 5s simavr -m atmega1284p build-transfer/pw_transfer_upstream_probe.elf > build-transfer/pw_transfer_probe.log 2>&1
+          simavr_status=$?
+          set -e
+          cat build-transfer/pw_transfer_probe.log
+          echo "simavr exit status: ${simavr_status}; UART marker is authoritative"
+          grep -q "PW_TRANSFER_PROBE_PASS" build-transfer/pw_transfer_probe.log
+
       - name: Run Pigweed AVR Test Suite in simavr
         run: |
-          cmake --build build --target run_tests
+          if ! simavr -m atmega2560 build/test_runner.elf > build/test_runner.log 2>&1; then
+            cat build/test_runner.log
+            exit 1
+          fi
+          cat build/test_runner.log
+          grep -q "100% OF PORTED PIGWEED MODULES VERIFIED OK!" build/test_runner.log
           ccache --show-stats
-
-      - name: Test pw_emu simavr launcher and UART integration
-        if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
-        env:
-          PYTHONPATH: third_party/pigweed/pw_emu/py:third_party/pigweed/pw_env_setup/py:tools/pw_emu_avr/python
-        run: |
-          python3 -m py_compile tools/pw_emu_avr/python/pw_emu_avr/simavr.py tools/pw_emu_avr/tests/test_simavr.py
-          python3 -m unittest discover -s tools/pw_emu_avr/tests -v
 
       - name: Verify Python Host Tools & Arduino Export
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
@@ -112,7 +176,16 @@ jobs:
           python3 tools/export_arduino_library.py
           test -s dist/PigweedAVR/src/pw_rpc/internal/packet.pwpb.h
           test -s dist/PigweedAVR/src/pw_rpc/server.h
+          test -s dist/PigweedAVR/src/pw_rpc/client.h
+          test -s dist/PigweedAVR/src/pw_rpc_client.cc
+          test -s dist/PigweedAVR/src/pw_rpc_client_call.cc
           test -s dist/PigweedAVR/src/pw_protobuf/encoder.h
+          test -s dist/PigweedAVR/src/pw_transfer/transfer_thread.h
+          test -s dist/PigweedAVR/src/pw_transfer/transfer.raw_rpc.pb.h
+          test -s dist/PigweedAVR/src/pw_transfer/transfer.pwpb.h
+          grep -q "define PW_TRANSFER_COOPERATIVE 1" dist/PigweedAVR/src/pw_transfer/transfer_thread.h
+          avr-g++ -mmcu=atmega2560 -DF_CPU=16000000UL -std=gnu++17 \
+            -fsyntax-only -Idist/PigweedAVR/src tools/ci/arduino_export_probe.cpp
 
       - name: Upload Build Artifacts
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
@@ -123,3 +196,4 @@ jobs:
             build/firmware.hex
             build/firmware.lst
             build/test_runner.elf
+            

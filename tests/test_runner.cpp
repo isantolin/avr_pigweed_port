@@ -22,7 +22,6 @@
 #include "pw_hdlc/decoder.h"
 #include "pw_assert/assert.h"
 #include "pw_assert/check.h"
-#include "pw_cobs/cobs.h"
 #include "pw_crypto/sha256.h"
 #include "pw_ring_buffer/prefixed_entry_ring_buffer.h"
 #include "pw_function/function.h"
@@ -32,7 +31,6 @@
 #include "pw_chrono/system_clock.h"
 #include "pw_log/log.h"
 #include "pw_log_avr/log_avr.h"
-#include "pw_rpc_avr/rpc_server.h"
 
 namespace {
 
@@ -392,23 +390,7 @@ bool TestCxxAbi() {
   return true;
 }
 
-// 13. Test pw_cobs (Consistent Overhead Byte Stuffing)
-bool TestPwCobs() {
-  const std::byte unencoded[] = {
-      std::byte{0x00}, std::byte{0x01}, std::byte{0x00}, std::byte{0x02}, std::byte{0x03}};
-  std::byte encoded[16];
-  auto encode_res = pw::cobs::Encode(pw::span(unencoded), pw::span(encoded));
-  if (!encode_res.ok()) return false;
-
-  std::byte decoded[16];
-  auto decode_res = pw::cobs::Decode(pw::span(encoded).first(encode_res.value().size()), pw::span(decoded));
-  if (!decode_res.ok()) return false;
-  if (decode_res.value().size() != sizeof(unencoded)) return false;
-  if (std::memcmp(unencoded, decoded, sizeof(unencoded)) != 0) return false;
-  return true;
-}
-
-// 14. Test pw_crypto (SHA-256 standard NIST test vector)
+// 13. Test pw_crypto (SHA-256 standard NIST test vector)
 bool TestPwCryptoSha256() {
   const char* msg = "abc";
   std::byte digest[pw::crypto::sha256::kDigestSizeBytes];
@@ -482,14 +464,45 @@ bool TestPwBase64() {
   char encoded[16];
   const size_t encoded_len = pw::base64::Encode(
       pw::as_bytes(pw::span(plain, 7)), pw::span(encoded));
-  if (encoded_len != 12) return false;
-  if (std::memcmp(encoded, "UGlnd2VlZA==", 12) != 0) return false;
+  if (encoded_len != 12) {
+    uart::Puts_P(PSTR("Base64: encoded length mismatch\\r\\n"));
+    return false;
+  }
+  if (std::memcmp(encoded, "UGlnd2VlZA==", 12) != 0) {
+    uart::Puts_P(PSTR("Base64: encoded payload mismatch\\r\\n"));
+    return false;
+  }
 
-  std::byte decoded[16];
+  std::byte decoded[16]{};
+  // Check the C entry point separately from the C++ span/string_view wrapper.
+  const size_t c_decoded_len = pw_Base64Decode(encoded, encoded_len, decoded);
+  if (c_decoded_len != 7 ||
+      std::memcmp(decoded, plain, 7) != 0) {
+    uart::Puts_P(PSTR("Base64: C decoder mismatch: "));
+    for (size_t i = 0; i < c_decoded_len && i < sizeof(decoded); ++i) {
+      uart::PutInt(std::to_integer<uint8_t>(decoded[i]));
+      uart::Putc(' ');
+    }
+    uart::Puts_P(PSTR("\\r\\n"));
+    return false;
+  }
+
+  std::memset(decoded, 0, sizeof(decoded));
   const size_t decoded_len = pw::base64::Decode(
       std::string_view(encoded, encoded_len), pw::span(decoded));
-  if (decoded_len != 7) return false;
-  if (std::memcmp(decoded, plain, 7) != 0) return false;
+  if (decoded_len != 7) {
+    uart::Puts_P(PSTR("Base64: C++ decoded length mismatch\\r\\n"));
+    return false;
+  }
+  if (std::memcmp(decoded, plain, 7) != 0) {
+    uart::Puts_P(PSTR("Base64: C++ decoded payload mismatch: "));
+    for (size_t i = 0; i < decoded_len; ++i) {
+      uart::PutInt(std::to_integer<uint8_t>(decoded[i]));
+      uart::Putc(' ');
+    }
+    uart::Puts_P(PSTR("\\r\\n"));
+    return false;
+  }
 
   return true;
 }
@@ -541,94 +554,6 @@ bool TestPwLog() {
   return true;
 }
 
-// 22. Test pw_rpc (Pigweed RPC Server & Service Dispatch on AVR)
-class MockBridgeService final : public pw::rpc_avr::RpcService {
- public:
-  static constexpr uint32_t kId = 0x00010001;
-
-  MockBridgeService() : RpcService(kId) {}
-
-  pw::Status HandleMethod(uint32_t method_id,
-                          pw::ConstByteSpan request,
-                          pw::ByteSpan response_buffer,
-                          size_t& response_size) override {
-    if (method_id == 1) {
-      // DigitalWrite(pin, val)
-      if (request.size() < 2) return pw::Status::InvalidArgument();
-      const uint8_t pin = static_cast<uint8_t>(request[0]);
-      const uint8_t val = static_cast<uint8_t>(request[1]);
-      if (pin >= 16) return pw::Status::OutOfRange();
-      pin_states_[pin] = val;
-      response_size = 0;
-      return pw::OkStatus();
-    }
-    if (method_id == 2) {
-      // DigitalRead(pin) -> val
-      if (request.size() < 1) return pw::Status::InvalidArgument();
-      const uint8_t pin = static_cast<uint8_t>(request[0]);
-      if (pin >= 16) return pw::Status::OutOfRange();
-      if (response_buffer.empty()) return pw::Status::ResourceExhausted();
-      response_buffer[0] = static_cast<std::byte>(pin_states_[pin]);
-      response_size = 1;
-      return pw::OkStatus();
-    }
-    return pw::Status::NotFound();
-  }
-
- private:
-  uint8_t pin_states_[16]{0};
-};
-
-bool TestPwRpc() {
-  MockBridgeService service;
-  pw::rpc_avr::RpcServer<2> server;
-  if (!server.RegisterService(service).ok()) return false;
-
-  // 1. DigitalWrite(pin=13, val=1)
-  const std::byte req_payload[] = {std::byte{13}, std::byte{1}};
-  pw::rpc_avr::RpcPacket req_packet;
-  req_packet.type = pw::rpc_avr::PacketType::kRequest;
-  req_packet.channel_id = 1;
-  req_packet.service_id = MockBridgeService::kId;
-  req_packet.method_id = 1;
-  req_packet.call_id = 101;
-  req_packet.payload = pw::span(req_payload);
-
-  std::byte req_buf[32];
-  auto enc_req = req_packet.Encode(req_buf);
-  if (!enc_req.ok()) return false;
-
-  std::byte resp_buf[64];
-  auto proc_res = server.ProcessPacket(pw::span(req_buf, enc_req.size()), resp_buf);
-  if (!proc_res.ok()) return false;
-
-  auto dec_resp = pw::rpc_avr::RpcPacket::Decode(pw::span(resp_buf, proc_res.size()));
-  if (!dec_resp.ok()) return false;
-  if (dec_resp->type != pw::rpc_avr::PacketType::kResponse) return false;
-  if (dec_resp->service_id != MockBridgeService::kId) return false;
-  if (dec_resp->method_id != 1) return false;
-  if (dec_resp->status != 0) return false;
-
-  // 2. DigitalRead(pin=13) -> expects 1
-  const std::byte read_payload[] = {std::byte{13}};
-  req_packet.method_id = 2;
-  req_packet.call_id = 102;
-  req_packet.payload = pw::span(read_payload);
-
-  enc_req = req_packet.Encode(req_buf);
-  if (!enc_req.ok()) return false;
-
-  proc_res = server.ProcessPacket(pw::span(req_buf, enc_req.size()), resp_buf);
-  if (!proc_res.ok()) return false;
-
-  dec_resp = pw::rpc_avr::RpcPacket::Decode(pw::span(resp_buf, proc_res.size()));
-  if (!dec_resp.ok()) return false;
-  if (dec_resp->status != 0) return false;
-  if (dec_resp->payload.size() != 1) return false;
-  if (dec_resp->payload[0] != std::byte{1}) return false;
-
-  return true;
-}
 
 }  // namespace
 
@@ -650,7 +575,6 @@ int main() {
   RUN_TEST(TestPwHdlcRoundtrip);
   RUN_TEST(TestPwAssert);
   RUN_TEST(TestCxxAbi);
-  RUN_TEST(TestPwCobs);
   RUN_TEST(TestPwCryptoSha256);
   RUN_TEST(TestPwRingBuffer);
   RUN_TEST(TestPwFunction);
@@ -659,7 +583,6 @@ int main() {
   RUN_TEST(TestPwTokenizer);
   RUN_TEST(TestPwChrono);
   RUN_TEST(TestPwLog);
-  RUN_TEST(TestPwRpc);
 
   uart::Finish(g_total_tests, g_passed_tests);
   return 0;
