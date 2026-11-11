@@ -506,7 +506,7 @@ from pw_rpc.client import Client""",
     transfer_content = transfer_content[:stream_start] + stream_tail
 
     insert_marker = "std::optional<chrono::SystemClock::time_point>\nTransferThread::GetNextTransferTimeout() const {"
-    if "bool TransferThread::Poll()" not in transfer_content:
+    if "Status TransferThread::Poll()" not in transfer_content:
         poll_code = '''#if defined(PW_TRANSFER_COOPERATIVE)
 Status TransferThread::Poll() {
   if (event_pending_) {
