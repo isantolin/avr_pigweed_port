@@ -57,7 +57,7 @@ jobs:
             -o DPkg::Lock::Timeout=120 \
             install -y --no-install-recommends \
               gcc-avr avr-libc binutils-avr cmake ninja-build simavr \
-              libsimavr-dev protobuf-compiler libprotobuf-dev python3-protobuf python3-jinja2 ccache
+              libsimavr-dev protobuf-compiler libprotobuf-dev python3-protobuf python3-jinja2 python3-serial ccache
 
           avr-gcc --version
           protoc --version
@@ -85,6 +85,11 @@ jobs:
         run: |
           cmake -S tools/pw_emu_avr -B build/pw_emu_avr -G Ninja -DCMAKE_C_COMPILER_LAUNCHER=ccache
           cmake --build build/pw_emu_avr
+
+      - name: Test pw_emu simavr runner and UART PTY lifecycle
+        if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
+        run: |
+          PYTHONPATH=tools/pw_emu_avr python3 -m unittest discover -s tools/pw_emu_avr/tests -v
 
       - name: Configure CMake (${{ matrix.crc_impl }})
         run: |
