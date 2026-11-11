@@ -96,9 +96,13 @@ jobs:
 
       - name: Run upstream pw_rpc unary and bidirectional probe (ATmega328P)
         run: |
-          # The firmware emits PASS only after all runtime assertions. simavr's
-          # process status reflects its CPU terminal state, not this probe result.
-          timeout 5s simavr -m atmega328p build/pw_rpc_upstream_probe.elf | tee build/pw_rpc_probe.log
+          # The UART marker is emitted only after all runtime assertions.
+          set +e
+          timeout 5s simavr -m atmega328p build/pw_rpc_upstream_probe.elf > build/pw_rpc_probe.log 2>&1
+          simavr_status=$?
+          set -e
+          cat build/pw_rpc_probe.log
+          echo "simavr exit status: ${simavr_status}; UART marker is authoritative"
           grep -q "PW_RPC_PROBE_PASS" build/pw_rpc_probe.log
 
       - name: Build upstream pw_transfer probe (ATmega2560)
@@ -114,8 +118,13 @@ jobs:
 
       - name: Run cooperative pw_transfer probe (ATmega2560)
         run: |
-          # As above, the UART PASS marker is the firmware's test result.
-          timeout 5s simavr -m atmega2560 build-transfer/pw_transfer_upstream_probe.elf | tee build-transfer/pw_transfer_probe.log
+          # The UART marker is emitted only after all transfer assertions.
+          set +e
+          timeout 5s simavr -m atmega2560 build-transfer/pw_transfer_upstream_probe.elf > build-transfer/pw_transfer_probe.log 2>&1
+          simavr_status=$?
+          set -e
+          cat build-transfer/pw_transfer_probe.log
+          echo "simavr exit status: ${simavr_status}; UART marker is authoritative"
           grep -q "PW_TRANSFER_PROBE_PASS" build-transfer/pw_transfer_probe.log
 
       - name: Run Pigweed AVR Test Suite in simavr
