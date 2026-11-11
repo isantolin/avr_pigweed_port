@@ -49,10 +49,20 @@ void EmitResult(uint8_t failure_code) {
 
 std::array<std::byte, 3> expected_request{};
 bool unary_response_ok = false;
+bool unary_status_ok = false;
+size_t unary_response_size = 0;
+uint8_t unary_response_first = 0;
+uint8_t unary_response_last = 0;
 bool bidi_response_ok = false;
 
 void OnUnaryResponse(pw::ConstByteSpan response, pw::Status status) {
-  unary_response_ok = status.ok() &&
+  unary_status_ok = status.ok();
+  unary_response_size = response.size();
+  if (!response.empty()) {
+    unary_response_first = static_cast<uint8_t>(response[0]);
+    unary_response_last = static_cast<uint8_t>(response[response.size() - 1]);
+  }
+  unary_response_ok = unary_status_ok &&
                       response.size() == expected_request.size() &&
                       response[0] == expected_request[0] &&
                       response[2] == expected_request[2];
@@ -169,7 +179,12 @@ int main() {
   if (!service.unary_called()) failure_code = 1;
   if (failure_code == 0 &&
       service.unary_request_size() != request.size()) failure_code = 2;
-  if (failure_code == 0 && !unary_response_ok) failure_code = 3;
+  if (failure_code == 0 && !unary_status_ok) failure_code = 7;
+  if (failure_code == 0 &&
+      unary_response_size != request.size()) failure_code = 8;
+  if (failure_code == 0 &&
+      (unary_response_first != static_cast<uint8_t>(request[0]) ||
+       unary_response_last != static_cast<uint8_t>(request[2]))) failure_code = 9;
 
   auto bidi_call = raw_client.Bidi();
   bidi_call.set_on_next(OnBidiResponse);
