@@ -163,6 +163,8 @@ jobs:
             exit 1
           fi
           tail -n 30 build-transfer-1284p/footprint-build.log
+          echo "===== Largest static SRAM symbols ====="
+          avr-nm -S --size-sort --radix=d build-transfer-1284p/pw_transfer_avr_footprint_probe.elf | grep -E ' [bBdD] ' | tail -n 60 || true
 
       - name: Run Pigweed AVR Test Suite in simavr
         run: |
