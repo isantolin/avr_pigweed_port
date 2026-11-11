@@ -144,6 +144,8 @@ jobs:
           test -s dist/PigweedAVR/src/pw_rpc/internal/packet.pwpb.h
           test -s dist/PigweedAVR/src/pw_rpc/server.h
           test -s dist/PigweedAVR/src/pw_rpc/client.h
+          test -s dist/PigweedAVR/src/pw_rpc_client.cc
+          test -s dist/PigweedAVR/src/pw_rpc_client_call.cc
           test -s dist/PigweedAVR/src/pw_protobuf/encoder.h
           test -s dist/PigweedAVR/src/pw_transfer/transfer_thread.h
           test -s dist/PigweedAVR/src/pw_transfer/transfer.raw_rpc.pb.h
