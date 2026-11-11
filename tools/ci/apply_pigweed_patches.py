@@ -82,17 +82,17 @@ def main() -> int:
     return WriteFixed(field_number, data);
   }''',
         '''  Status WriteDouble(uint32_t field_number, double value) {
-    if constexpr (sizeof(double) != sizeof(uint64_t)) {
-      (void)field_number;
-      (void)value;
-      return Status::Unimplemented();
-    } else {
-      uint64_t integral_value;
-      std::memcpy(&integral_value, &value, sizeof(value));
-      std::array<std::byte, sizeof(value)> data =
-          bytes::CopyInOrder(endian::little, integral_value);
-      return WriteFixed(field_number, data);
-    }
+#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8
+    uint64_t integral_value;
+    std::memcpy(&integral_value, &value, sizeof(value));
+    std::array<std::byte, sizeof(value)> data =
+        bytes::CopyInOrder(endian::little, integral_value);
+    return WriteFixed(field_number, data);
+#else
+    (void)field_number;
+    (void)value;
+    return Status::Unimplemented();
+#endif
   }''',
     )
     replace_once(
