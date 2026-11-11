@@ -48,7 +48,7 @@ def main() -> int:
 
     replace_once(
         "pw_protobuf/py/pw_protobuf/plugin.py",
-        "from pathlib import Path\\nfrom shlex import shlex\\n",
+        "from pathlib import Path\nfrom shlex import shlex\n",
         """from pathlib import Path
 from shlex import shlex
 
