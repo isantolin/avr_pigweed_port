@@ -24,14 +24,16 @@ constexpr uint64_t kHdlcAddress = 1;
 constexpr uint32_t kRpcChannelId = 1;
 constexpr uint32_t kReadResourceId = 0x1234;
 constexpr uint32_t kWriteResourceId = 0x5678;
-constexpr size_t kHdlcDecoderBufferSize = 256;
+constexpr size_t kHdlcDecoderBufferSize = 128;
 
 bool first_callback_called = false;
 bool duplicate_rejected = false;
 bool read_complete = false;
 bool write_complete = false;
+bool reverse_write_complete = false;
 pw::Status read_completion_status = pw::Status::Unknown();
 pw::Status write_completion_status = pw::Status::Unknown();
+pw::Status reverse_write_completion_status = pw::Status::Unknown();
 
 void OnFirstResourceStatus(
     pw::Status status,
@@ -53,6 +55,11 @@ void OnReadComplete(pw::Status status) {
 void OnWriteComplete(pw::Status status) {
   write_completion_status = status;
   write_complete = true;
+}
+
+void OnReverseWriteComplete(pw::Status status) {
+  reverse_write_completion_status = status;
+  reverse_write_complete = true;
 }
 
 void EmitResult(bool success) {
@@ -223,6 +230,59 @@ int main() {
   if (!write_completion_status.ok() ||
       write_sink.bytes_written() != write_data.size() ||
       std::memcmp(write_sink.data(), write_data.data(), write_data.size()) != 0) {
+    success = false;
+  }
+
+  // Reuse the same two TransferThread instances with their roles reversed.
+  // The first endpoint now serves transfers and the second endpoint is client.
+  static HdlcLoopbackWriter reverse_server_to_client_writer;
+  static pw::hdlc::RpcChannelOutput reverse_server_output(
+      reverse_server_to_client_writer, kHdlcAddress, "pw-transfer-reverse-server");
+  static std::array<pw::rpc::Channel, 1> reverse_server_channels = {
+      pw::rpc::Channel::Create<kRpcChannelId>(&reverse_server_output)};
+  static pw::rpc::Server reverse_server(pw::span<pw::rpc::Channel>(
+      reverse_server_channels.data(), reverse_server_channels.size()));
+
+  static HdlcLoopbackWriter reverse_client_to_server_writer(reverse_server);
+  static pw::hdlc::RpcChannelOutput reverse_client_output(
+      reverse_client_to_server_writer, kHdlcAddress, "pw-transfer-reverse-client");
+  static std::array<pw::rpc::Channel, 1> reverse_client_channels = {
+      pw::rpc::Channel::Create<kRpcChannelId>(&reverse_client_output)};
+  static pw::rpc::Client reverse_rpc_client(pw::span<pw::rpc::Channel>(
+      reverse_client_channels.data(), reverse_client_channels.size()));
+  reverse_server_to_client_writer.set_client(reverse_rpc_client);
+
+  static pw::transfer::TransferService reverse_transfer_service(
+      client_thread, 256);
+  reverse_server.RegisterService(reverse_transfer_service);
+  static pw::transfer::Client reverse_transfer_client(
+      reverse_rpc_client, kRpcChannelId, server_thread, 256);
+
+  std::array<std::byte, 32> reverse_data{};
+  for (size_t i = 0; i < reverse_data.size(); ++i) {
+    reverse_data[i] = static_cast<std::byte>(0x40 + i);
+  }
+  std::array<std::byte, 64> reverse_sink_buffer{};
+  pw::stream::MemoryWriter reverse_sink{pw::ByteSpan(reverse_sink_buffer)};
+  pw::transfer::WriteOnlyHandler reverse_handler(kWriteResourceId,
+                                                  reverse_sink);
+  if (!reverse_transfer_service.RegisterHandler(reverse_handler)) {
+    success = false;
+  }
+  pw::stream::MemoryReader reverse_source{pw::ConstByteSpan(reverse_data)};
+  reverse_write_complete = false;
+  auto reverse_result = reverse_transfer_client.Write(
+      kWriteResourceId, reverse_source, OnReverseWriteComplete);
+  if (!reverse_result.ok()) {
+    success = false;
+  } else if (!PumpTransfers(server_thread, client_thread,
+                            reverse_write_complete)) {
+    success = false;
+  }
+  if (!reverse_write_completion_status.ok() ||
+      reverse_sink.bytes_written() != reverse_data.size() ||
+      std::memcmp(reverse_sink.data(), reverse_data.data(),
+                  reverse_data.size()) != 0) {
     success = false;
   }
 
