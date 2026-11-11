@@ -436,6 +436,16 @@ from pw_rpc.client import Client""",
       chunk_size = slot.event.new_transfer.raw_chunk_size;
     }
     if (chunk_size > slot.chunk_storage.size()) {
+      if (slot.event.type == EventType::kNewServerTransfer) {
+        SendStatusChunk({
+            .session_id = slot.event.new_transfer.session_id,
+            .protocol_version = slot.event.new_transfer.protocol_version,
+            .status = Status::ResourceExhausted().code(),
+            .stream = slot.event.new_transfer.type == TransferType::kTransmit
+                          ? TransferStream::kServerRead
+                          : TransferStream::kServerWrite,
+        });
+      }
       event_overflowed_ = true;
       event_slot_available_ = true;
       return;
