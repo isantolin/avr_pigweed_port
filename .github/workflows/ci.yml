@@ -39,7 +39,7 @@ jobs:
             -o DPkg::Lock::Timeout=120 \
             install -y --no-install-recommends \
               gcc-avr avr-libc binutils-avr cmake ninja-build simavr \
-              libsimavr-dev protobuf-compiler python3-protobuf python3-jinja2 ccache
+              libsimavr-dev protobuf-compiler libprotobuf-dev python3-protobuf python3-jinja2 ccache
 
           avr-gcc --version
           simavr --help >/dev/null 2>&1 || test "$?" -eq 1
