@@ -181,6 +181,10 @@ bool PumpTransfers(pw::transfer::Thread<1, 1>& client_thread,
                    pw::transfer::Thread<1, 1>& server_thread,
                    bool& complete) {
   g_pump_failure_reason = 0;
+  g_client_to_server_frames = 0;
+  g_server_to_client_frames = 0;
+  g_server_process_packets = 0;
+  g_server_process_status = 0;
   for (size_t i = 0; i < 2048 && !complete; ++i) {
     const pw::Status client_status = client_thread.Poll(2);
     const pw::Status server_status = server_thread.Poll(2);
