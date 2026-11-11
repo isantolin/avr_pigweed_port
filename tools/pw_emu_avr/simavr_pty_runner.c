@@ -245,6 +245,36 @@ int main(int argc, char **argv) {
     }
   }
 
+  // Drain UART bytes queued by the final AVR instructions before closing
+  // the PTY. The firmware may enter sleep or terminate immediately after its
+  // final UART write, while the host-side queue still contains bytes.
+  for (unsigned attempt = 0;
+       g_tx_tail != g_tx_head && attempt < 2000;
+       ++attempt) {
+    size_t available = (g_tx_head + sizeof(g_tx_queue) - g_tx_tail) %
+                       sizeof(g_tx_queue);
+    size_t contiguous = sizeof(g_tx_queue) - g_tx_tail;
+    if (contiguous > available) contiguous = available;
+    const ssize_t written =
+        write(g_pty_master, &g_tx_queue[g_tx_tail], contiguous);
+    if (written > 0) {
+      g_tx_tail = (g_tx_tail + (size_t)written) % sizeof(g_tx_queue);
+    } else if (written < 0 &&
+               (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+      usleep(1000);
+    } else if (written < 0 && errno == EIO) {
+      break;
+    } else {
+      fprintf(stderr, "Final PTY flush failed: %s\n", strerror(errno));
+      g_failure = 1;
+      break;
+    }
+  }
+  if (g_tx_tail != g_tx_head) {
+    fprintf(stderr, "Warning: dropping %zu queued UART bytes on shutdown\n",
+            (g_tx_head + sizeof(g_tx_queue) - g_tx_tail) % sizeof(g_tx_queue));
+  }
+
   close(g_pty_master);
   g_pty_master = -1;
   if (avr->state == cpu_Crashed) {
