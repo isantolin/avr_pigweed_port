@@ -137,12 +137,12 @@ jobs:
 
       - name: Configure ATmega32U4 shared-thread footprint
         run: |
-          cmake -B build-transfer-32u4 -G Ninja \\
-            -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \\
-            -DAVR_MCU=atmega32u4 \\
-            -DAVR_F_CPU=16000000UL \\
-            -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \\
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \\
+          cmake -B build-transfer-32u4 -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
+            -DAVR_MCU=atmega32u4 \
+            -DAVR_F_CPU=16000000UL \
+            -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build ATmega32U4 shared-thread footprint
