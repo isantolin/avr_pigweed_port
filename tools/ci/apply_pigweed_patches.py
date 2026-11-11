@@ -58,51 +58,6 @@ __path__ = extend_path(__path__, __name__)
 from pw_rpc.client import Client""",
     )
     replace_once(
-        "pw_protobuf/py/pw_protobuf/plugin.py",
-        "import sys\n",
-        """import sys
-import types as _PigweedTypes
-from pathlib import Path as _PigweedPath
-
-# Pigweed's CMake Python proto target is generated in the build tree. Locate
-# its actual output rather than assuming the package directory layout.
-_package_roots = {}
-_codegen_files = []
-for _entry in sys.path:
-    _python_root = _PigweedPath(_entry)
-    if _python_root.name != "python" or not _python_root.is_dir():
-        continue
-    if not any(_part.startswith("pw_protobuf.") for _part in _python_root.parts):
-        continue
-    _codegen_files.extend(_python_root.rglob("codegen_options_pb2.py"))
-    for _package_name in ("pw_protobuf_codegen_protos", "pw_protobuf_protos"):
-        _package_dir = _python_root / _package_name
-        if _package_dir.is_dir():
-            _package_roots.setdefault(_package_name, []).append(str(_package_dir))
-
-if _codegen_files:
-    _package_roots.setdefault("pw_protobuf_codegen_protos", []).extend(
-        str(_module_file.parent) for _module_file in _codegen_files
-    )
-
-for _package_name, _package_paths in _package_roots.items():
-    _package = _PigweedTypes.ModuleType(_package_name)
-    _package.__path__ = list(dict.fromkeys(_package_paths))
-    _package.__package__ = _package_name
-    sys.modules[_package_name] = _package
-
-if not _codegen_files:
-    _searched = [
-        (_root, sorted(str(_item.relative_to(_root)) for _item in _root.rglob("*"))[:100])
-        for _root in map(_PigweedPath, sys.path)
-        if _root.name == "python" and _root.is_dir()
-    ]
-    raise ModuleNotFoundError(
-        "codegen_options_pb2.py not found; Python build trees: " + repr(_searched)
-    )
-print("PWPB_PLUGIN_PACKAGE", _codegen_files, _package_roots, file=sys.stderr)
-""",    )
-    replace_once(
         "pw_protobuf/public/pw_protobuf/wire_format.h",
         "inline constexpr static uint32_t kMaxFieldNumber = (1u << 29) - 1;",
         "inline constexpr static uint32_t kMaxFieldNumber = (uint32_t{1} << 29) - 1;",
