@@ -65,7 +65,10 @@ from pw_rpc.client import Client""",
     return static_cast<unsigned>(session_id_);
   }""",
         """  // Preserve the full session ID on targets with 16-bit unsigned.
-  uint32_t id_for_log() const { return session_id_; }""",
+  unsigned long id_for_log() const {
+    static_assert(sizeof(unsigned long) >= sizeof(session_id_));
+    return static_cast<unsigned long>(session_id_);
+  }""",
     )
     replace_once(
         "pw_protobuf/public/pw_protobuf/wire_format.h",

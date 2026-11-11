@@ -85,6 +85,7 @@ mkdir -p "$(dirname "$OUT")"
     pw_sync/public/pw_sync/no_lock.h \
     pw_transfer/public/pw_transfer/internal/chunk.h \
     pw_transfer/chunk.cc \
+    pw_transfer/context.cc \
     pw_protobuf/CMakeLists.txt \
     pw_protobuf/public/pw_protobuf/internal/config.h \
     pw_protobuf/public/pw_protobuf/decoder.h \
