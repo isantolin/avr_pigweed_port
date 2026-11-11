@@ -171,10 +171,12 @@ jobs:
           tail -n 30 build-transfer-32u4/footprint-build.log
           echo "===== Largest static SRAM symbols ====="
           avr-nm -S --size-sort --radix=d build-transfer-32u4/pw_transfer_avr_footprint_probe.elf | grep -E ' [bBdD] ' | tail -n 60 || true
+          echo "===== Largest SRAM literal origin ====="
+          grep -n -B 3 -A 3 '\\.LC58' build-transfer-32u4/pw_transfer_avr_footprint_probe.map | head -n 40 || true
 
       - name: Run Pigweed AVR Test Suite in simavr
         run: |
-          if ! simavr -m ${AVR_MCU} build/test_runner.elf > build/test_runner.log 2>&1; then
+          if ! simavr -m atmega328p build/test_runner.elf > build/test_runner.log 2>&1; then
             cat build/test_runner.log
             exit 1
           fi
