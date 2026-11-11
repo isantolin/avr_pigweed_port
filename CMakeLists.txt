@@ -323,6 +323,7 @@ add_executable(pw_transfer_upstream_probe.elf
   tests/pw_transfer_upstream_probe.cpp
   src/cxx_abi_stubs.cpp
 )
+target_include_directories(pw_transfer_upstream_probe.elf PRIVATE src)
 target_link_libraries(pw_transfer_upstream_probe.elf PRIVATE pw_transfer)
 add_custom_command(TARGET pw_transfer_upstream_probe.elf POST_BUILD
   COMMAND avr-size --format=avr --mcu=${AVR_MCU} $<TARGET_FILE:pw_transfer_upstream_probe.elf>
