@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#if defined(ARDUINO) || __has_include(<Arduino.h>)
+#if defined(ARDUINO)
 #include <Arduino.h>
 #else
 #include <avr/interrupt.h>
@@ -25,7 +25,7 @@ volatile uint32_t g_system_clock_millis = 0;
 
 }  // namespace
 
-#if !defined(ARDUINO) && !__has_include(<Arduino.h>)
+#if !defined(ARDUINO)
 #if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega2560__)
 ISR(TIMER0_COMPA_vect) {
   g_system_clock_millis++;
@@ -36,7 +36,7 @@ ISR(TIMER0_COMPA_vect) {
 extern "C" {
 
 void pw_chrono_avr_InitTimer0(void) {
-#if defined(ARDUINO) || __has_include(<Arduino.h>)
+#if defined(ARDUINO)
   // Arduino Core initializes Timer0 at startup for millis() and micros()
 #else
 #if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega2560__)
@@ -58,7 +58,7 @@ void pw_chrono_avr_StepMillis(uint32_t ms) {
 
 uint32_t pw_chrono_avr_GetMillis(void) {
   uint32_t current_ms = 0;
-#if defined(ARDUINO) || __has_include(<Arduino.h>)
+#if defined(ARDUINO)
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     current_ms = static_cast<uint32_t>(millis());
   }
