@@ -440,3 +440,68 @@ component:
 Keep the existing custom component isolated as a temporary compatibility
 experiment. Do not add it to `firmware.elf`, and do not make it a prerequisite
 for the cooperative `pw_transfer` implementation.
+
+
+### Build-graph audit on repository main
+
+The current repository CMake file was inspected at base commit
+`1b79d287e389955bd8ed9307e4555bab755322d6`:
+
+- It adds `pw_hdlc` and links `pw_hdlc.encoder` into the firmware.
+- It does not add the upstream `pw_rpc` directory or link any
+  `pw_rpc.server`, `pw_rpc.common`, or raw RPC target.
+- It declares a local `pw_rpc_avr` static library from
+  `pw_rpc_avr/src/rpc_server.cpp`.
+- Only `test_runner.elf` links `pw_rpc_avr`; `firmware.elf` does not.
+- `src/PigweedAVR.h` does not include the custom RPC headers.
+
+This confirms the custom dispatcher is not on the production firmware link
+path. The migration can be isolated and must not be coupled to the existing
+telemetry firmware until the upstream proof passes.
+
+### Upstream RPC integration proof: current status
+
+The upstream Pigweed CMake RPC module exposes distinct core targets for
+common packet/channel handling, server dispatch, and client calls; raw RPC
+stream APIs are layered on those core targets. The normal RPC test helpers,
+fake channel output, synchronous client API, and threaded test helpers bring
+additional dependencies and must not be pulled into the AVR image by accident.
+
+The integration must therefore start with the smallest server-only target
+closure, then add raw server streaming, and add client targets only if the AVR
+device itself must initiate transfers. The UART transport is a separate
+`ChannelOutput` implementation plus a packet ingress loop feeding
+`Server::ProcessPacket()`; HDLC framing alone is not an RPC endpoint.
+
+**Unverified gate:** the pinned submodule source at
+`55873baa1b37eaf7d0a830515a0846e3fc3a79e2` has not yet been successfully
+configured and compiled in this environment. Do not copy target names or
+transitive dependencies from a different Pigweed revision into the build.
+The exact pinned `pw_rpc/CMakeLists.txt`, `pw_rpc/raw/CMakeLists.txt`,
+generated-proto configuration, lock backend, and no-heap configuration must
+be inspected before changing the root CMake graph.
+
+No source implementation is claimed by this audit. In particular, no
+`ChannelOutput`, RPC server, or streaming service has been added, and no
+AVR memory figures or interoperability results are available.
+
+### Exit criteria for the implementation PR
+
+The upstream RPC migration is complete only when all of these are evidenced
+by CI artifacts/logs:
+
+1. Configure and build the exact pinned `pw_rpc` server target closure using
+   the AVR toolchain, with the production telemetry firmware unchanged.
+2. Link a minimal server-only image and report `avr-size` Flash/data/BSS.
+3. Run host unit tests for UART packet ingress, bounded TX behavior, and
+   malformed packet rejection.
+4. Exchange a unary request/response with an upstream-generated Pigweed
+   packet.
+5. Exchange a multi-message bidirectional raw RPC call with correct call IDs,
+   final status, cancellation, and stream lifetime.
+6. Verify the AVR build has no unresolved mutex/thread backend and no
+   accidental dynamic allocation dependency.
+7. Only then add `pw_transfer` and its cooperative execution layer.
+
+Until these gates pass, retain `pw_rpc_avr` only as a test-only legacy target;
+do not delete it and do not expose it as the firmware RPC API.
