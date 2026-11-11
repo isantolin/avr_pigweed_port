@@ -90,7 +90,12 @@ void OnTimeoutComplete(pw::Status status) {
   timeout_complete = true;
 }
 
-void EmitResult(bool success) {
+void MarkFailure(bool& success, uint8_t& failure_code, uint8_t code) {
+  success = false;
+  if (failure_code == 0) failure_code = code;
+}
+
+void EmitResult(bool success, uint8_t failure_code) {
   const uint16_t ubrr =
       static_cast<uint16_t>((F_CPU / (16UL * 115200UL)) - 1UL);
   UBRR0H = static_cast<uint8_t>(ubrr >> 8);
@@ -98,8 +103,14 @@ void EmitResult(bool success) {
   UCSR0B = (1 << TXEN0);
   UCSR0A = (1 << TXC0);
   UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
-  const char* marker = success ? "PW_TRANSFER_PROBE_PASS\r\n"
-                               : "PW_TRANSFER_PROBE_FAIL\r\n";
+  char failure_marker[] = "PW_TRANSFER_PROBE_FAIL_00\r\n";
+  const size_t code_index = sizeof("PW_TRANSFER_PROBE_FAIL_") - 1;
+  failure_marker[code_index] =
+      static_cast<char>('0' + (failure_code / 10U));
+  failure_marker[code_index + 1] =
+      static_cast<char>('0' + (failure_code % 10U));
+  const char* marker =
+      success ? "PW_TRANSFER_PROBE_PASS\r\n" : failure_marker;
   while (*marker != '\0') {
     while (!(UCSR0A & (1 << UDRE0))) {}
     UDR0 = static_cast<uint8_t>(*marker++);
@@ -200,11 +211,12 @@ int main() {
   // Fill the bounded event queue and verify overflow is explicit, observable,
   // and resets the queue so subsequent transfer events can proceed.
   bool success = true;
+  uint8_t failure_code = 0;
   client_thread.EnqueueTestEvent();
   client_thread.EnqueueTestEvent();
   client_thread.EnqueueTestEvent();
   if (client_thread.Poll(0) != pw::Status::ResourceExhausted()) {
-    success = false;
+    MarkFailure(success, failure_code, 1);
   }
 
   // The resource-status responder is a single staged upstream callback.
@@ -214,10 +226,10 @@ int main() {
   client_thread.EnqueueResourceEvent(0x9999, OnFirstResourceStatus);
   client_thread.EnqueueResourceEvent(0x999A, OnDuplicateResourceStatus);
 
-  success = success && duplicate_rejected;
-  if (client_thread.Poll(0) != pw::Status::Unavailable()) success = false;
-  if (!client_thread.Poll(1).ok()) success = false;
-  if (!first_callback_called) success = false;
+  if (!duplicate_rejected) MarkFailure(success, failure_code, 2);
+  if (client_thread.Poll(0) != pw::Status::Unavailable()) MarkFailure(success, failure_code, 2);
+  if (!client_thread.Poll(1).ok()) MarkFailure(success, failure_code, 3);
+  if (!first_callback_called) MarkFailure(success, failure_code, 4);
 
   static HdlcLoopbackWriter server_to_client_writer;
   static pw::hdlc::RpcChannelOutput server_output(
@@ -247,7 +259,7 @@ int main() {
   }
   pw::stream::MemoryReader read_source{pw::ConstByteSpan(read_data)};
   pw::transfer::ReadOnlyHandler read_handler(kReadResourceId, read_source);
-  if (!transfer_service.RegisterHandler(read_handler)) success = false;
+  if (!transfer_service.RegisterHandler(read_handler)) MarkFailure(success, failure_code, 5);
 
   std::array<std::byte, 64> read_output_buffer{};
   pw::stream::MemoryWriter read_output{pw::ByteSpan(read_output_buffer)};
@@ -255,14 +267,14 @@ int main() {
   auto read_result =
       transfer_client.Read(kReadResourceId, read_output, OnReadComplete);
   if (!read_result.ok()) {
-    success = false;
+    MarkFailure(success, failure_code, 6);
   } else if (!PumpTransfers(client_thread, server_thread, read_complete)) {
-    success = false;
+    MarkFailure(success, failure_code, 7);
   }
   if (!read_completion_status.ok() ||
       read_output.bytes_written() != read_data.size() ||
       std::memcmp(read_output.data(), read_data.data(), read_data.size()) != 0) {
-    success = false;
+    MarkFailure(success, failure_code, 8);
   }
 
   std::array<std::byte, 32> write_data{};
@@ -272,21 +284,21 @@ int main() {
   std::array<std::byte, 64> write_sink_buffer{};
   pw::stream::MemoryWriter write_sink{pw::ByteSpan(write_sink_buffer)};
   pw::transfer::WriteOnlyHandler write_handler(kWriteResourceId, write_sink);
-  if (!transfer_service.RegisterHandler(write_handler)) success = false;
+  if (!transfer_service.RegisterHandler(write_handler)) MarkFailure(success, failure_code, 9);
 
   pw::stream::MemoryReader write_source{pw::ConstByteSpan(write_data)};
   write_complete = false;
   auto write_result =
       transfer_client.Write(kWriteResourceId, write_source, OnWriteComplete);
   if (!write_result.ok()) {
-    success = false;
+    MarkFailure(success, failure_code, 10);
   } else if (!PumpTransfers(client_thread, server_thread, write_complete)) {
-    success = false;
+    MarkFailure(success, failure_code, 11);
   }
   if (!write_completion_status.ok() ||
       write_sink.bytes_written() != write_data.size() ||
       std::memcmp(write_sink.data(), write_data.data(), write_data.size()) != 0) {
-    success = false;
+    MarkFailure(success, failure_code, 12);
   }
 
   // Cancel an in-flight read before its payload is drained. The transfer
@@ -298,7 +310,7 @@ int main() {
   pw::stream::MemoryReader cancel_source{pw::ConstByteSpan(cancel_data)};
   pw::transfer::ReadOnlyHandler cancel_handler(kCancelResourceId,
                                                 cancel_source);
-  if (!transfer_service.RegisterHandler(cancel_handler)) success = false;
+  if (!transfer_service.RegisterHandler(cancel_handler)) MarkFailure(success, failure_code, 13);
 
   std::array<std::byte, 256> cancel_output_buffer{};
   pw::stream::MemoryWriter cancel_output{pw::ByteSpan(cancel_output_buffer)};
@@ -306,16 +318,16 @@ int main() {
   auto cancel_result =
       transfer_client.Read(kCancelResourceId, cancel_output, OnCancelComplete);
   if (!cancel_result.ok()) {
-    success = false;
+    MarkFailure(success, failure_code, 14);
   } else {
     (void)client_thread.Poll(1);
     (void)server_thread.Poll(1);
     cancel_result->Cancel();
     if (!PumpTransfers(client_thread, server_thread, cancel_complete)) {
-      success = false;
+      MarkFailure(success, failure_code, 15);
     }
   }
-  if (cancel_completion_status != pw::Status::Cancelled()) success = false;
+  if (cancel_completion_status != pw::Status::Cancelled()) MarkFailure(success, failure_code, 16);
 
   // Drop one server response. A zero initial-chunk timeout forces an upstream
   // retry; the next response is delivered and the transfer must complete.
@@ -325,11 +337,11 @@ int main() {
   }
   pw::stream::MemoryReader retry_source{pw::ConstByteSpan(retry_data)};
   pw::transfer::ReadOnlyHandler retry_handler(kRetryResourceId, retry_source);
-  if (!transfer_service.RegisterHandler(retry_handler)) success = false;
+  if (!transfer_service.RegisterHandler(retry_handler)) MarkFailure(success, failure_code, 17);
   std::array<std::byte, 64> retry_output_buffer{};
   pw::stream::MemoryWriter retry_output{pw::ByteSpan(retry_output_buffer)};
   server_to_client_writer.DropNextFrames(1);
-  if (!transfer_client.set_max_retries(2).ok()) success = false;
+  if (!transfer_client.set_max_retries(2).ok()) MarkFailure(success, failure_code, 18);
   retry_complete = false;
   auto retry_result = transfer_client.Read(
       kRetryResourceId,
@@ -338,15 +350,15 @@ int main() {
       pw::transfer::cfg::kDefaultClientTimeout,
       pw::chrono::SystemClock::for_at_least(std::chrono::milliseconds(0)));
   if (!retry_result.ok()) {
-    success = false;
+    MarkFailure(success, failure_code, 19);
   } else if (!PumpTransfers(client_thread, server_thread, retry_complete)) {
-    success = false;
+    MarkFailure(success, failure_code, 20);
   }
   if (!retry_completion_status.ok() ||
       retry_output.bytes_written() != retry_data.size() ||
       std::memcmp(retry_output.data(), retry_data.data(), retry_data.size()) != 0 ||
       server_to_client_writer.dropped_frames() != 1) {
-    success = false;
+    MarkFailure(success, failure_code, 21);
   }
 
   // Drop every server response and exhaust the retry budget. The cooperative
@@ -355,11 +367,11 @@ int main() {
   pw::stream::MemoryReader timeout_source{pw::ConstByteSpan(timeout_data)};
   pw::transfer::ReadOnlyHandler timeout_handler(kTimeoutResourceId,
                                                  timeout_source);
-  if (!transfer_service.RegisterHandler(timeout_handler)) success = false;
+  if (!transfer_service.RegisterHandler(timeout_handler)) MarkFailure(success, failure_code, 22);
   std::array<std::byte, 64> timeout_output_buffer{};
   pw::stream::MemoryWriter timeout_output{pw::ByteSpan(timeout_output_buffer)};
   server_to_client_writer.SetDropAll(true);
-  if (!transfer_client.set_max_retries(1).ok()) success = false;
+  if (!transfer_client.set_max_retries(1).ok()) MarkFailure(success, failure_code, 23);
   timeout_complete = false;
   auto timeout_result = transfer_client.Read(
       kTimeoutResourceId,
@@ -368,13 +380,13 @@ int main() {
       pw::transfer::cfg::kDefaultClientTimeout,
       pw::chrono::SystemClock::for_at_least(std::chrono::milliseconds(0)));
   if (!timeout_result.ok()) {
-    success = false;
+    MarkFailure(success, failure_code, 24);
   } else if (!PumpTransfers(client_thread, server_thread, timeout_complete)) {
-    success = false;
+    MarkFailure(success, failure_code, 25);
   }
   server_to_client_writer.SetDropAll(false);
   if (timeout_completion_status != pw::Status::DeadlineExceeded()) {
-    success = false;
+    MarkFailure(success, failure_code, 26);
   }
 
   // Reuse the same two TransferThread instances with their roles reversed.
@@ -411,25 +423,25 @@ int main() {
   pw::transfer::WriteOnlyHandler reverse_handler(kWriteResourceId,
                                                   reverse_sink);
   if (!reverse_transfer_service.RegisterHandler(reverse_handler)) {
-    success = false;
+    MarkFailure(success, failure_code, 27);
   }
   pw::stream::MemoryReader reverse_source{pw::ConstByteSpan(reverse_data)};
   reverse_write_complete = false;
   auto reverse_result = reverse_transfer_client.Write(
       kWriteResourceId, reverse_source, OnReverseWriteComplete);
   if (!reverse_result.ok()) {
-    success = false;
+    MarkFailure(success, failure_code, 28);
   } else if (!PumpTransfers(server_thread, client_thread,
                             reverse_write_complete)) {
-    success = false;
+    MarkFailure(success, failure_code, 29);
   }
   if (!reverse_write_completion_status.ok() ||
       reverse_sink.bytes_written() != reverse_data.size() ||
       std::memcmp(reverse_sink.data(), reverse_data.data(),
                   reverse_data.size()) != 0) {
-    success = false;
+    MarkFailure(success, failure_code, 30);
   }
 
-  EmitResult(success);
+  EmitResult(success, failure_code);
   return success ? 0 : 1;
 }
