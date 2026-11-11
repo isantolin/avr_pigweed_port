@@ -508,19 +508,14 @@ from pw_rpc.client import Client""",
     insert_marker = "std::optional<chrono::SystemClock::time_point>\nTransferThread::GetNextTransferTimeout() const {"
     if "bool TransferThread::Poll()" not in transfer_content:
         poll_code = '''#if defined(PW_TRANSFER_COOPERATIVE)
-bool TransferThread::Poll() {
-  bool did_work = false;
+Status TransferThread::Poll() {
   if (event_pending_) {
-    const bool is_terminating = next_event_.type == EventType::kTerminate;
     HandleEvent(next_event_);
     event_pending_ = false;
     event_slot_available_ = true;
-    did_work = true;
-    if (is_terminating) {
-      return true;
-    }
   }
-  return HandleTimeouts() || did_work;
+  (void)HandleTimeouts();
+  return event_overflowed_ ? Status::ResourceExhausted() : OkStatus();
 }
 #endif  // PW_TRANSFER_COOPERATIVE
 
