@@ -53,7 +53,7 @@ Build the runner, then launch an ELF through the normal frontend:
 ```sh
 cmake -S tools/pw_emu_avr -B build/pw_emu_avr
 cmake --build build/pw_emu_avr
-pw emu start --pause atmega328p
+pw emu start --file build/test_runner.elf --pause atmega328p
 pw emu term uart0
 ```
 
