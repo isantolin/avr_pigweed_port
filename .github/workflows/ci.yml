@@ -7,6 +7,12 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+# Keep only the newest run for each PR or branch. PR events are grouped by
+# PR number (stable across synchronize/reopened events); non-PR events use ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     name: Build & Test (${{ matrix.crc_impl }})
