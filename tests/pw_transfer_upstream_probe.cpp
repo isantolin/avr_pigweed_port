@@ -12,5 +12,5 @@ int main() {
       pw::ByteSpan(chunk_buffer.data(), chunk_buffer.size()),
       pw::ByteSpan(encode_buffer.data(), encode_buffer.size()));
   pw::transfer::TransferService service(transfer_thread, 128);
-  return transfer_thread.Poll() ? 1 : 0;
+  return transfer_thread.Poll().ok() ? 0 : 1;
 }
