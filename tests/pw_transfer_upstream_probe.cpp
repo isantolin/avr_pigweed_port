@@ -216,8 +216,16 @@ bool PumpTransfers(pw::transfer::Thread<1, 1>& client_thread,
         g_pump_failure_reason = 9;
       } else if (g_server_process_status != 0) {
         g_pump_failure_reason = 10;
+      } else if (server_thread.PendingEventsForTest() != 0) {
+        g_pump_failure_reason = 12;
+      } else if (server_thread.ActiveServerTransfersForTest() == 0) {
+        g_pump_failure_reason = 13;
+      } else if (client_thread.PendingEventsForTest() != 0) {
+        g_pump_failure_reason = 14;
+      } else if (client_thread.ActiveClientTransfersForTest() == 0) {
+        g_pump_failure_reason = 15;
       } else {
-        g_pump_failure_reason = 11;
+        g_pump_failure_reason = 16;
       }
     } else {
       g_pump_failure_reason = 7;
