@@ -56,7 +56,7 @@ The port contains two different probes because the RPC endpoint and transfer end
 - Real HDLC encode/decode loopback between the client and server channel outputs.
 - Generated service registration and response completion.
 
-The two-endpoint HDLC/RPC runtime probe is built and executed on ATmega1284P because the combined upstream client/server call state exceeds the 2 KiB SRAM limit of ATmega328P. The ATmega328P build still compiles the port's normal firmware and test runner; the Bridge-class ATmega32U4 memory budget is checked by the separate shared-thread transfer footprint probe. Its UART result marker is emitted only after all runtime assertions pass.
+The two-endpoint HDLC/RPC runtime probe is built and executed on ATmega1284P because the combined upstream client/server call state exceeds the 2 KiB SRAM limit of ATmega328P. The ATmega328P build still compiles the port's normal firmware and test runner; Its UART result marker is emitted only after all runtime assertions pass.
 
 ### Upstream transfer probe
 
@@ -71,7 +71,7 @@ The two-endpoint HDLC/RPC runtime probe is built and executed on ATmega1284P bec
 
 The loopback probe uses separate `Thread<1, 1>` instances for the two simulated endpoints. That is intentional: one endpoint is a client and the other is a server during a transfer. A single AVR `Thread<1, 1>` is not permitted to run both roles concurrently.
 
-The end-to-end transfer probe is built for ATmega1284P (16 KiB SRAM) to provide enough memory for both simulated endpoints and the complete upstream RPC/transfer state. The runtime probe also deliberately fills the bounded event queue, verifies an explicit RESOURCE_EXHAUSTED result, and confirms that polling resets the queue for later transfers. A separate shared-thread footprint probe is built for ATmega32U4, instantiating the production arrangement (one RPC channel, both RPC endpoints, one `Thread<1, 1>`, both transfer service/client objects, read/write handlers, and retained client `Read()`/`Write()` call paths). The complete Bridge firmware footprint, worst-case stack, and hardware UART/HDLC validation remain release gates.
+The end-to-end transfer probe is built for ATmega1284P (16 KiB SRAM) to provide enough memory for both simulated endpoints and the complete upstream RPC/transfer state. The runtime probe also deliberately fills the bounded event queue, verifies an explicit RESOURCE_EXHAUSTED result, and confirms that polling resets the queue for later transfers. The complete Bridge firmware footprint, worst-case stack, and hardware UART/HDLC validation remain release gates.
 
 CI runs both `PW_CHECKSUM_CRC32_1BITS` and `PW_CHECKSUM_CRC32_4BITS`. The firmware UART pass marker, rather than simavr's terminal process status after firmware shutdown, is the runtime-probe result.
 
@@ -103,7 +103,7 @@ The existing `FileSystemService.Read` server stream is not automatically equival
 
 - Complete CI for both CRC configurations after the latest source/export changes.
 - Verify the exported Arduino library links a sketch that uses upstream `pw_transfer`.
-- Measure flash, static SRAM, and worst-case stack on ATmega32U4 (the Bridge target), not only ATmega328P/ATmega1284P probes.
+- Measure flash, static SRAM, and worst-case stack on the minimum supported Arduino Mega 2560 target, including the complete Bridge application.
 - Exercise sequential client-to-server and server-to-client role reuse on one `Thread<1, 1>`.
 
 - Integrate the validated port revision into `arduino-yun-bridge2`, then test the MCU and MPU implementations together over the real UART/HDLC transport.
@@ -113,14 +113,12 @@ No production-readiness claim should be made until those gates pass.
 
 ## AVR memory-class compatibility
 
-The combined upstream `pw_rpc` + `pw_transfer` probe instantiates one shared
-`Thread<1,1>`, the RPC client and server, and both transfer directions. The
-measured ATmega32U4 image requires approximately 63 KB of Flash and 9 KB of
-SRAM. It therefore cannot run on ATmega32U4 (32 KB Flash / 2.5 KB SRAM) or
-ATmega2560 (256 KB Flash / 8 KB SRAM) in this configuration.
+Arduino Mega 2560 (ATmega2560) is the minimum supported application target.
+ATmega32U4 is not part of the supported target or CI test matrix.
 
-The complete combined implementation is validated on ATmega1284P (128 KB
-Flash / 16 KB SRAM). This is a build/footprint validation, not a claim that
-the full transfer stack is deployable on the Arduino Yún's ATmega32U4. Smaller
-AVR targets need a reduced role/configuration or must keep transfer orchestration
-on the OpenWrt side rather than instantiate both RPC endpoints on the MCU.
+The ATmega1284P transfer loopback probe is retained as a larger-memory
+simulation harness for exercising both RPC endpoints and transfer roles. It
+does not replace an application-target build or prove that the complete Bridge
+firmware fits on the Mega 2560. The Mega 2560 remains the required target for
+the production integration build, static SRAM/Flash accounting, and worst-case
+stack validation.
