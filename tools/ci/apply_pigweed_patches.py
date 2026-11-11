@@ -895,6 +895,12 @@ bool TransferThread::HandleTimeouts() {
         if insert_marker not in transfer_content:
             raise RuntimeError("could not find timeout insertion point in transfer_thread.cc")
         transfer_content = transfer_content.replace(insert_marker, poll_code + insert_marker, 1)
+    # ResourceStatus contains scalar fields without default member
+    # initializers. Zero-initialize every temporary passed to callbacks.
+    transfer_content = transfer_content.replace(
+        "internal::ResourceStatus stats;",
+        "internal::ResourceStatus stats{};",
+    )
     transfer_cc.write_text(transfer_content)
 
     transfer_header = PW_ROOT / "pw_transfer" / "public" / "pw_transfer" / "transfer_thread.h"
