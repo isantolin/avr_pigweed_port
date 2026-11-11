@@ -146,6 +146,14 @@ from pw_rpc.client import Client""",
             retry_send, retry_send_cooperative, 1
         )
     context_cc.write_text(context_content)
+    # stdcompat's endian enumerators exceed AVR's 16-bit int. Give the
+    # polyfill an explicit 32-bit underlying type; values and semantics stay
+    # identical on all targets.
+    replace_once(
+        "third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/bit.h",
+        "enum class endian {",
+        "enum class endian : std::uint32_t {",
+    )
     replace_once(
         "pw_protobuf/public/pw_protobuf/wire_format.h",
         "inline constexpr static uint32_t kMaxFieldNumber = (1u << 29) - 1;",
