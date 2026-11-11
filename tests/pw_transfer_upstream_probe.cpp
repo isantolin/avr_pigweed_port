@@ -208,7 +208,7 @@ bool PumpTransfers(pw::transfer::Thread<1, 1>& client_thread,
     }
     // Advance the AVR system clock so timeout/retry paths are deterministic
     // under simavr rather than depending on host-side wall-clock timing.
-    _delay_ms(1);
+    pw_chrono_avr_StepMillis(1);
   }
   if (!complete) {
     if (g_client_to_server_frames < 2) {
@@ -274,7 +274,7 @@ bool PumpTransfers(pw::transfer::Thread<1, 1>& client_thread,
       g_pump_failure_reason = 23;
       return false;
     }
-    _delay_ms(1);
+    pw_chrono_avr_StepMillis(1);
   }
   g_pump_failure_reason = 24;
   return false;
