@@ -107,5 +107,7 @@ mkdir -p "$(dirname "$OUT")"
     echo "===== $file ====="
     if [[ -f "$path" ]]; then sed -n '1,1200p' "$path"; else echo "NOT PRESENT AT PINNED REVISION"; fi
   done
-} | tee "$OUT"
+} > "$OUT"
 echo "Pigweed source audit written to: $OUT"
+echo "Audit lines: $(wc -l < \"$OUT\")"
+sha256sum "$OUT"
