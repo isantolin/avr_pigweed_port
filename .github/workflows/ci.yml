@@ -104,11 +104,11 @@ jobs:
           fi
           tail -n 20 build/build.log
 
-      - name: Build upstream pw_transfer probe (ATmega2560)
+      - name: Build upstream pw_transfer probe (ATmega1284P)
         run: |
           cmake -B build-transfer -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
-            -DAVR_MCU=atmega2560 \
+            -DAVR_MCU=atmega1284p \
             -DAVR_F_CPU=16000000UL \
             -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -119,23 +119,23 @@ jobs:
           fi
           tail -n 30 build-transfer/transfer-build.log
 
-      - name: Run upstream pw_rpc unary and bidirectional probe (ATmega2560)
+      - name: Run upstream pw_rpc unary and bidirectional probe (ATmega1284P)
         run: |
           # The two-endpoint HDLC/RPC probe needs more SRAM than ATmega328P.
           # The MCU-under-test Bridge footprint is checked separately on 32U4.
           set +e
-          timeout 5s simavr -m atmega2560 build-transfer/pw_rpc_upstream_probe.elf > build-transfer/pw_rpc_probe.log 2>&1
+          timeout 5s simavr -m atmega1284p build-transfer/pw_rpc_upstream_probe.elf > build-transfer/pw_rpc_probe.log 2>&1
           simavr_status=$?
           set -e
           cat build-transfer/pw_rpc_probe.log
           echo "simavr exit status: ${simavr_status}; UART marker is authoritative"
           grep -q "PW_RPC_PROBE_PASS" build-transfer/pw_rpc_probe.log
 
-      - name: Run cooperative pw_transfer probe (ATmega2560)
+      - name: Run cooperative pw_transfer probe (ATmega1284P)
         run: |
           # The UART marker is emitted only after all transfer assertions.
           set +e
-          timeout 5s simavr -m atmega2560 build-transfer/pw_transfer_upstream_probe.elf > build-transfer/pw_transfer_probe.log 2>&1
+          timeout 5s simavr -m atmega1284p build-transfer/pw_transfer_upstream_probe.elf > build-transfer/pw_transfer_probe.log 2>&1
           simavr_status=$?
           set -e
           cat build-transfer/pw_transfer_probe.log
