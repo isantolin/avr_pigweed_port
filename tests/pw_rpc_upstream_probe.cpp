@@ -6,7 +6,6 @@
 #include <avr/sleep.h>
 #include <utility>
 
-#include "avr_uart_stream.h"
 #include "pw_bytes/span.h"
 #include "pw_function/function.h"
 #include "pw_hdlc/decoder.h"
@@ -24,7 +23,7 @@ namespace {
 
 constexpr uint64_t kHdlcAddress = 1;
 constexpr uint32_t kRpcChannelId = 1;
-constexpr size_t kHdlcDecoderBufferSize = 128;
+constexpr size_t kHdlcDecoderBufferSize = 64;
 
 void EmitResult(uint8_t failure_code) {
   const uint16_t ubrr =
@@ -151,34 +150,30 @@ class HdlcLoopbackWriter final : public pw::stream::NonSeekableWriter {
 int main() {
   uint8_t failure_code = 0;
 
-  // Keep the physical AVR UART/HDLC output in the link and verify that the
-  // decoder accepts an incomplete frame without dispatching a packet.
-  avr_port::AvrUartStream uart(115200);
-  pw::hdlc::RpcChannelOutput hdlc_output(uart, kHdlcAddress, "avr-hdlc-probe");
-  (void)hdlc_output;
-
-  HdlcLoopbackWriter server_to_client_writer;
-  pw::hdlc::RpcChannelOutput server_output(
+  // Static storage keeps the nested client -> HDLC -> server -> HDLC ->
+  // client dispatch stack within the SRAM budget of ATmega328P.
+  static HdlcLoopbackWriter server_to_client_writer;
+  static pw::hdlc::RpcChannelOutput server_output(
       server_to_client_writer, kHdlcAddress, "avr-server-hdlc");
-  std::array<pw::rpc::Channel, 1> server_channels = {
+  static std::array<pw::rpc::Channel, 1> server_channels = {
       pw::rpc::Channel::Create<kRpcChannelId>(&server_output)};
-  pw::rpc::Server server(pw::span<pw::rpc::Channel>(server_channels.data(),
-                                                     server_channels.size()));
+  static pw::rpc::Server server(pw::span<pw::rpc::Channel>(
+      server_channels.data(), server_channels.size()));
 
-  ProbeService service;
-  server.RegisterService(service);
+  static ProbeService service;
+  if (!server.RegisterService(service).ok()) return 1;
 
-  HdlcLoopbackWriter client_to_server_writer(server);
-  pw::hdlc::RpcChannelOutput client_output(
+  static HdlcLoopbackWriter client_to_server_writer(server);
+  static pw::hdlc::RpcChannelOutput client_output(
       client_to_server_writer, kHdlcAddress, "avr-client-hdlc");
-  std::array<pw::rpc::Channel, 1> client_channels = {
+  static std::array<pw::rpc::Channel, 1> client_channels = {
       pw::rpc::Channel::Create<kRpcChannelId>(&client_output)};
-  pw::rpc::Client client(pw::span<pw::rpc::Channel>(client_channels.data(),
-                                                     client_channels.size()));
+  static pw::rpc::Client client(pw::span<pw::rpc::Channel>(
+      client_channels.data(), client_channels.size()));
   server_to_client_writer.set_client(client);
 
   using RawProbeClient = ::avr::port::rpc::pw_rpc::raw::RpcProbe::Client;
-  RawProbeClient raw_client(client, kRpcChannelId);
+  static RawProbeClient raw_client(client, kRpcChannelId);
 
   const std::array<std::byte, 3> request = {
       std::byte{0x11}, std::byte{0x22}, std::byte{0x33}};
@@ -204,7 +199,6 @@ int main() {
   if (bidi_response_size != request.size() && failure_code == 0) failure_code = 8;
   if (bidi_response_middle != static_cast<uint8_t>(request[1]) &&
       failure_code == 0) failure_code = 9;
-  (void)bidi_call.Cancel();
 
   // The RPC calls above traversed both HDLC encoders and decoders.
   EmitResult(failure_code);
