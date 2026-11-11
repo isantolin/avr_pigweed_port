@@ -323,7 +323,7 @@ target_link_libraries(firmware.elf PRIVATE
 
 # 6a. Isolated upstream pw_rpc + Pigweed HDLC integration proof.
 # Kept separate from firmware until ingress and streaming tests pass.
-add_executable(pw_rpc_upstream_probe.elf
+add_executable(pw_rpc_upstream_probe.elf EXCLUDE_FROM_ALL
   tests/pw_rpc_upstream_probe.cpp
   src/cxx_abi_stubs.cpp
 )
