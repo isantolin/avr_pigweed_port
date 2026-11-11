@@ -351,14 +351,16 @@ def export_library(dest_dir: Path):
         "static constexpr unsigned int kMaxFieldSize = (1u << 16) - 1;",
         "static constexpr uint32_t kMaxFieldSize = (uint32_t{1} << 16) - 1;",
     )
-    replace_in_export(
-        "pw_protobuf/internal/codegen.h",
-        "static_assert(sizeof(MessageField) <= sizeof(size_t) * 4,\n"
-        '              "MessageField should be four words or less");',
-        "static_assert(sizeof(MessageField) <=\n"
-        "                  (sizeof(size_t) == 2 ? 12 : sizeof(size_t) * 4),\n"
-        '              "MessageField exceeds the target-specific size budget");',
-    )
+    codegen_header = src_dir / "pw_protobuf/internal/codegen.h"
+    if "MessageField should be four 32-bit words or less on 16-bit targets" not in codegen_header.read_text(encoding="utf-8"):
+        replace_in_export(
+            "pw_protobuf/internal/codegen.h",
+            "static_assert(sizeof(MessageField) <= sizeof(size_t) * 4,\n"
+            '              "MessageField should be four words or less");',
+            "static_assert(sizeof(MessageField) <=\n"
+            "                  (sizeof(size_t) == 2 ? 12 : sizeof(size_t) * 4),\n"
+            '              "MessageField exceeds the target-specific size budget");',
+        )
 
     encoder_path = "pw_protobuf/encoder.h"
     replace_in_export(
