@@ -60,7 +60,7 @@ static void uart_tx(struct avr_irq_t *irq, uint32_t value, void *opaque) {
 
 static void usage(const char *program) {
   fprintf(stderr, "Usage: %s --firmware FILE [--mcu atmega328p] "
-                  "[--frequency HZ] [--uart 0]\n", program);
+                  "[--frequency HZ] [--uart 0] [--pty-file PATH]\n", program);
 }
 
 int main(int argc, char **argv) {
@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
   if (pty_file_path) {
     FILE *pty_file = fopen(pty_file_path, "w");
     if (!pty_file) {
-      fprintf(stderr, "Unable to write PTY path file %s: %s\\n",
+      fprintf(stderr, "Unable to write PTY path file %s: %s\n",
               pty_file_path, strerror(errno));
       close(g_pty_master);
       g_pty_master = -1;
@@ -162,10 +162,10 @@ int main(int argc, char **argv) {
       return 1;
     }
     const int path_write_failed =
-        fprintf(pty_file, "%s\\n", pty_path) < 0 || fflush(pty_file) != 0;
+        fprintf(pty_file, "%s\n", pty_path) < 0 || fflush(pty_file) != 0;
     const int path_close_failed = fclose(pty_file) != 0;
     if (path_write_failed || path_close_failed) {
-      fprintf(stderr, "Unable to persist PTY path to %s\\n", pty_file_path);
+      fprintf(stderr, "Unable to persist PTY path to %s\n", pty_file_path);
       close(g_pty_master);
       g_pty_master = -1;
       avr_terminate(avr);
