@@ -156,6 +156,10 @@ jobs:
         run: |
           if ! cmake --build build-transfer-32u4 --target pw_transfer_avr_footprint_probe.elf > build-transfer-32u4/footprint-build.log 2>&1; then
             tail -n 160 build-transfer-32u4/footprint-build.log
+            if [ -f build-transfer-32u4/pw_transfer_avr_footprint_probe.map ]; then
+              echo "===== Largest SRAM map entries ====="
+              grep -E '^\\.data|^\\.bss|^ *0x[0-9a-fA-F]+ +0x[0-9a-fA-F]+ ' build-transfer-32u4/pw_transfer_avr_footprint_probe.map | tail -n 180
+            fi
             exit 1
           fi
           tail -n 30 build-transfer-32u4/footprint-build.log
