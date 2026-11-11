@@ -886,11 +886,25 @@ Status TransferThread::Poll(size_t budget) {
 
   size_t processed = 0;
   while (event_queue_size_ != 0 && processed < budget) {
-    CooperativeEventSlot& slot = event_queue_[event_queue_head_];
-    HandleEvent(slot.event);
+    // Detach the head slot before dispatch. HandleEvent may synchronously
+    // enqueue another event (for example while a transfer context installs
+    // its stream). Dispatching from the live ring slot would either report a
+    // false queue overflow or let the producer overwrite the event in flight.
+    CooperativeEventSlot current = event_queue_[event_queue_head_];
     event_queue_head_ =
         (event_queue_head_ + 1) % PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY;
     --event_queue_size_;
+
+    // The copied Event initially points into the ring slot. Rebind payload
+    // pointers to the detached local slot before the ring slot is reused.
+    if (current.event.type == EventType::kClientChunk ||
+        current.event.type == EventType::kServerChunk) {
+      current.event.chunk.data = current.chunk_storage.data();
+    } else if (current.event.type == EventType::kNewClientTransfer ||
+               current.event.type == EventType::kNewServerTransfer) {
+      current.event.new_transfer.raw_chunk_data = current.chunk_storage.data();
+    }
+    HandleEvent(current.event);
     ++processed;
   }
   (void)HandleTimeouts();
