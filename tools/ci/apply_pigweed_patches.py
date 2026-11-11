@@ -52,9 +52,11 @@ def main() -> int:
         """from pathlib import Path
 from shlex import shlex
 
-# protoc launches this plugin from a module-specific build directory. Add the
-# generated Python proto package roots from the common out-of-source build dir.
-for _build_root in (Path.cwd(), *Path.cwd().parents):
+# protoc may launch plugins with a working directory different from the
+# CMake module directory. Search the repository's out-of-source build roots.
+_repo_root = Path(__file__).resolve().parents[5]
+_build_roots = [*_repo_root.glob("build*"), Path.cwd(), *Path.cwd().parents]
+for _build_root in _build_roots:
     for _target in (
         "pw_protobuf.codegen_protos",
         "pw_protobuf.common_proto",

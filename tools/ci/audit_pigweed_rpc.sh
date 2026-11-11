@@ -20,6 +20,9 @@ mkdir -p "$(dirname "$OUT")"
   echo "=== AVR protobuf static assertions and integer-width assumptions ==="
   grep -R -n -E 'four words|1 << (16|29)|sizeof\(double\)|sizeof\(uintptr_t\)|sizeof\(void\*)' "$PW_ROOT/pw_protobuf/public/pw_protobuf" 2>/dev/null | head -n 200 || true
   echo
+  echo "=== RPC Python plugin package layout ==="
+  find "$PW_ROOT/pw_rpc/py" "$PW_ROOT/pw_rpc2/py" -maxdepth 4 -type f -print 2>/dev/null | sort || true
+  echo
   echo "=== Transfer thread/synchronization dependencies ==="
   grep -R -n -E 'sync::Mutex|BinarySemaphore|TimedThreadNotification|ThreadCore|event_notification_' "$PW_ROOT/pw_transfer" 2>/dev/null | head -n 200 || true
   echo
