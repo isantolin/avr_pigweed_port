@@ -356,7 +356,11 @@ int main() {
       client_channels.data(), client_channels.size()));
   server_to_client_writer.set_client(rpc_client);
 
-  static pw::transfer::TransferService transfer_service(server_thread, 256);
+  static pw::transfer::TransferService transfer_service(
+      server_thread,
+      256,
+      pw::chrono::SystemClock::for_at_least(std::chrono::milliseconds(100)),
+      0);
   server.RegisterService(transfer_service);
   static pw::transfer::Client transfer_client(
       rpc_client, kRpcChannelId, client_thread, 256);
