@@ -174,7 +174,7 @@ int main() {
   server_to_client_writer.set_client(rpc_client);
 
   static pw::transfer::TransferService transfer_service(server_thread, 64);
-  if (!server.RegisterService(transfer_service).ok()) success = false;
+  server.RegisterService(transfer_service);
   static pw::transfer::Client transfer_client(
       rpc_client, kRpcChannelId, client_thread, 64);
 
