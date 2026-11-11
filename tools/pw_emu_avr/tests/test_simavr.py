@@ -12,6 +12,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import call, patch
 
+from serial import SerialException
+
 from pw_emu_avr.simavr import SimavrConnector, SimavrLauncher
 
 
@@ -96,7 +98,7 @@ class SimavrAdapterTest(unittest.TestCase):
                 while b'[  PASSED  ]' not in output and time.monotonic() < deadline:
                     try:
                         chunk = stream.read(256)
-                    except OSError:
+                    except (OSError, SerialException):
                         # simavr may close the PTY after the firmware's main
                         # function reaches its terminal sleep/exit state.
                         break
