@@ -529,3 +529,52 @@ Consequences for the implementation:
 4. The exact `pw_rpc` lock configuration and the pinned `pw_hdlc` RPC transport API must be validated by the AVR compiler before the firmware target is changed.
 
 CI run 52 passed the existing AVR build and simavr suite while performing this source inspection. It did not compile or link upstream RPC; that remains a separate gate.
+
+
+### Implementation status and verified limits
+
+The implementation work now applies a narrow compatibility patch to the pinned
+Pigweed checkout at configure time; the submodule gitlink remains unchanged.
+
+Verified by AVR CI:
+
+- The PWPB generated Python modules are emitted under the module binary
+  directory (for example, `build/pw_protobuf/pw_protobuf.codegen_protos/python`).
+  The root CMake configuration now exports those actual paths to Pigweed's
+  `generate_protos.py` invocations. No custom PWPB generator or generated
+  protobuf module is maintained by this port.
+- The upstream `pw_rpc` server probe links on ATmega328P: 10,736 bytes of
+  program memory and 592 bytes of data memory.
+- The upstream `pw_transfer.core` and `pw_transfer` sources compile with the
+  cooperative AVR patch enabled. The AVR-specific session-ID log formatter
+  preserves the complete 32-bit session ID.
+- The upstream `pw_log.rate_limited` implementation is built from Pigweed's
+  pinned source and linked with the AVR logging facade.
+
+A real hardware limit was also measured: the combined client-and-server
+`pw_transfer` probe overflows the ATmega328P's 32 KiB Flash region by 9,294
+bytes. The probe is therefore configured to link against the larger 8-bit
+ATmega2560 by default, while the ordinary firmware, RPC probe, and test runner
+remain validated against the configured `AVR_MCU` (currently ATmega328P).
+This does **not** establish that the combined Transfer image fits an
+ATmega328P or ATmega32U4.
+
+The following behavior gates remain open and must not be treated as completed:
+
+1. Link the combined Transfer probe on ATmega2560 and record Flash/RAM usage.
+2. Verify that the cooperative event handoff cannot overwrite a pending event;
+   add bounded queueing or an explicit backpressure result and test overflow.
+3. Enforce the single-active-role rule across client and server contexts. The
+   current `Thread<1,1>` capacity declaration alone does not enforce mutual
+   exclusion between the roles.
+4. Exercise a real transfer end-to-end over upstream raw RPC/HDLC, including
+   cancellation, timeout, retries, and stream lifetime.
+5. Run the full simavr suite and verify both CRC configurations.
+6. Decide support tiers by MCU Flash/RAM budget. Do not claim ATmega328P support
+   for the combined client/server Transfer image unless its actual linked image
+   fits and its runtime tests pass.
+
+The earlier design gates above are historical; this status section supersedes
+them where they conflict. No firmware-facing RPC API has been switched to
+upstream yet, and `pw_rpc_avr` remains isolated until the integration and
+interoperability tests pass.
