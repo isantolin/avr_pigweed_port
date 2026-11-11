@@ -423,6 +423,13 @@ from pw_rpc.client import Client""",
     }
     return count;
   }
+  size_t ServerTransfersWithTimeoutForTest() const {
+    size_t count = 0;
+    for (const ServerContext& context : server_transfers_) {
+      if (context.active() && context.timeout().has_value()) ++count;
+    }
+    return count;
+  }
 #endif
 #endif
 
