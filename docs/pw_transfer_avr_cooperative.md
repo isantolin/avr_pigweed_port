@@ -71,7 +71,7 @@ The probe is built for ATmega328P. Its UART result marker is emitted only after 
 
 The loopback probe uses separate `Thread<1, 1>` instances for the two simulated endpoints. That is intentional: one endpoint is a client and the other is a server during a transfer. A single AVR `Thread<1, 1>` is not permitted to run both roles concurrently.
 
-The end-to-end transfer probe is built for ATmega2560 to provide enough SRAM for both simulated endpoints. A separate shared-thread footprint probe is built for ATmega32U4, instantiating the production arrangement (one RPC channel, both RPC endpoints, one `Thread<1, 1>`, both transfer service/client objects, read/write handlers, and retained client `Read()`/`Write()` call paths). The complete Bridge firmware footprint, worst-case stack, and hardware UART/HDLC validation remain release gates.
+The end-to-end transfer probe is built for ATmega2560 to provide enough SRAM for both simulated endpoints. The runtime probe also deliberately fills the bounded event queue, verifies an explicit RESOURCE_EXHAUSTED result, and confirms that polling resets the queue for later transfers. A separate shared-thread footprint probe is built for ATmega32U4, instantiating the production arrangement (one RPC channel, both RPC endpoints, one `Thread<1, 1>`, both transfer service/client objects, read/write handlers, and retained client `Read()`/`Write()` call paths). The complete Bridge firmware footprint, worst-case stack, and hardware UART/HDLC validation remain release gates.
 
 CI runs both `PW_CHECKSUM_CRC32_1BITS` and `PW_CHECKSUM_CRC32_4BITS`. The firmware UART pass marker, rather than simavr's terminal process status after firmware shutdown, is the runtime-probe result.
 
@@ -105,7 +105,7 @@ The existing `FileSystemService.Read` server stream is not automatically equival
 - Verify the exported Arduino library links a sketch that uses upstream `pw_transfer`.
 - Measure flash, static SRAM, and worst-case stack on ATmega32U4 (the Bridge target), not only ATmega328P/ATmega2560 probes.
 - Exercise sequential client-to-server and server-to-client role reuse on one `Thread<1, 1>`.
-- Add a dedicated queue-saturation runtime test.
+
 - Integrate the validated port revision into `arduino-yun-bridge2`, then test the MCU and MPU implementations together over the real UART/HDLC transport.
 
 No production-readiness claim should be made until those gates pass.
