@@ -226,7 +226,7 @@ int main() {
   client_thread.EnqueueResourceEvent(0x9999, OnFirstResourceStatus);
   client_thread.EnqueueResourceEvent(0x999A, OnDuplicateResourceStatus);
 
-  if (!duplicate_rejected) MarkFailure(success, failure_code, 2);
+  if (!duplicate_rejected) MarkFailure(success, failure_code, 31);
   if (client_thread.Poll(0) != pw::Status::Unavailable()) MarkFailure(success, failure_code, 2);
   if (!client_thread.Poll(1).ok()) MarkFailure(success, failure_code, 3);
   if (!first_callback_called) MarkFailure(success, failure_code, 4);
