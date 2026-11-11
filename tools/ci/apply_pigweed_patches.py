@@ -412,15 +412,15 @@ def main() -> int:
     transfer_cc = PW_ROOT / "pw_transfer" / "transfer_thread.cc"
     transfer_content = transfer_cc.read_text()
     run_start = transfer_content.index("void TransferThread::Run() {")
-    if "#if !defined(PW_TRANSFER_COOPERATIVE)\\nvoid TransferThread::Run()" not in transfer_content:
-        run_end_marker = "\\n}\\n\\nstd::optional<chrono::SystemClock::time_point>"
+    if "#if !defined(PW_TRANSFER_COOPERATIVE)\nvoid TransferThread::Run()" not in transfer_content:
+        run_end_marker = "\n}\n\nstd::optional<chrono::SystemClock::time_point>"
         run_end = transfer_content.index(run_end_marker, run_start) + 3
         run_block = transfer_content[run_start:run_end]
         transfer_content = (
             transfer_content[:run_start]
-            + "#if !defined(PW_TRANSFER_COOPERATIVE)\\n"
+            + "#if !defined(PW_TRANSFER_COOPERATIVE)\n"
             + run_block
-            + "#endif  // !PW_TRANSFER_COOPERATIVE\\n"
+            + "#endif  // !PW_TRANSFER_COOPERATIVE\n"
             + transfer_content[run_end:]
         )
 
