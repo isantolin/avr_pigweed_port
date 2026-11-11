@@ -223,7 +223,8 @@ bool PumpTransfers(pw::transfer::Thread<1, 1>& client_thread,
       } else if (g_server_process_status != 0) {
         g_pump_failure_reason = 10;
       } else if (server_thread.PendingEventsForTest() != 0) {
-        g_pump_failure_reason = 12;
+        g_pump_failure_reason = static_cast<uint8_t>(
+            20U + server_thread.PendingEventTypeForTest());
       } else if (server_thread.ActiveServerTransfersForTest() == 0) {
         g_pump_failure_reason = 13;
       } else if (client_thread.PendingEventsForTest() != 0) {
