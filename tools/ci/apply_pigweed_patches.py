@@ -161,12 +161,12 @@ from pw_rpc.client import Client""",
     replace_once(
         "third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/internal/bit.h",
         "#include <limits>",
-        "#include <cstdint>\\n#include <limits>",
+        "#include <cstdint>\n#include <limits>",
     )
     replace_once(
         "third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/internal/bit.h",
-        "template <unsigned little, unsigned big>\\nconstexpr unsigned native_endianess() {",
-        "template <std::uint32_t little, std::uint32_t big>\\nconstexpr std::uint32_t native_endianess() {",
+        "template <unsigned little, unsigned big>\nconstexpr unsigned native_endianess() {",
+        "template <std::uint32_t little, std::uint32_t big>\nconstexpr std::uint32_t native_endianess() {",
     )
     replace_once(
         "pw_protobuf/public/pw_protobuf/wire_format.h",
