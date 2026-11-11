@@ -18,7 +18,7 @@ set(COMMON_AVR_FLAGS "-mmcu=${AVR_MCU} -DF_CPU=${AVR_F_CPU} -Os -ffunction-secti
 
 set(CMAKE_C_FLAGS_INIT "${COMMON_AVR_FLAGS} -Wall -Wextra -Werror -Wno-conversion")
 set(CMAKE_CXX_FLAGS_INIT "${COMMON_AVR_FLAGS} -Wall -Wextra -Werror -Wno-conversion -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit -D__cpp_lib_endian=201907L -include ${CMAKE_CURRENT_LIST_DIR}/src/avr_stdio_compat.h -isystem ${AVR_STDLIB_INCLUDE}")
-set(CMAKE_EXE_LINKER_FLAGS_INIT "-mmcu=${AVR_MCU} -Wl,--gc-sections -flto")
+set(CMAKE_EXE_LINKER_FLAGS_INIT "-mmcu=${AVR_MCU} -Wl,--gc-sections -Wl,-T,${CMAKE_CURRENT_LIST_DIR}/third_party/pigweed/pw_tokenizer/pw_tokenizer_linker_sections.ld -flto")
 
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
