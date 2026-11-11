@@ -605,8 +605,17 @@ from pw_rpc.client import Client""",
 
     stream_start = transfer_content.index("void TransferThread::SetClientReadStream")
     stream_tail = transfer_content[stream_start:]
-    old_wait = "  NotifyEvent();\n  WaitUntilEventIsProcessed();"
-    new_wait = "  NotifyEvent();\n#if !defined(PW_TRANSFER_COOPERATIVE)\n  WaitUntilEventIsProcessed();\n#endif"
+    old_wait = "  NotifyEvent();\\n  WaitUntilEventIsProcessed();"
+    new_wait = """#if defined(PW_TRANSFER_COOPERATIVE)
+  // In the cooperative build this callback runs on the same owner loop as
+  // Poll(). Install the RPC stream synchronously so the first incoming
+  // transfer chunk cannot arrive before its on_next callback is attached.
+  HandleSetStreamEvent(next_event_.set_stream.stream,
+                       next_event_.set_stream.behavior);
+#else
+  NotifyEvent();
+  WaitUntilEventIsProcessed();
+#endif"""
     wait_count = stream_tail.count(old_wait)
     if wait_count == 6:
         stream_tail = stream_tail.replace(old_wait, new_wait)
@@ -615,32 +624,6 @@ from pw_rpc.client import Client""",
             f"expected six stream callback waits or six already-patched waits; found {wait_count}"
         )
     transfer_content = transfer_content[:stream_start] + stream_tail
-
-    # Stream objects and callbacks are staged in single upstream members.
-    # Prevent a second stream mutation from overwriting them before Poll().
-    stream_methods = (
-        "void TransferThread::SetClientReadStream(",
-        "void TransferThread::CloseClientReadStream(",
-        "void TransferThread::SetClientWriteStream(",
-        "void TransferThread::CloseClientWriteStream(",
-        "void TransferThread::SetServerReadStream(",
-        "void TransferThread::SetServerWriteStream(",
-    )
-    for signature in stream_methods:
-        method_start = transfer_content.index(signature)
-        method_brace = transfer_content.index("{", method_start) + 1
-        guard = """
-#if defined(PW_TRANSFER_COOPERATIVE)
-  if (cooperative_stream_pending_) {
-    event_overflowed_ = true;
-    return;
-  }
-#endif
-"""
-        if guard.strip() not in transfer_content[method_brace:method_brace + 250]:
-            transfer_content = (
-                transfer_content[:method_brace] + guard + transfer_content[method_brace:]
-            )
 
     # Claim the single global transfer role only after StartTransfer has
     # staged its event and resolved the server handler.
