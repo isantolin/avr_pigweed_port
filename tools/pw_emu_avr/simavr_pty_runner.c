@@ -97,6 +97,7 @@ int main(int argc, char **argv) {
     avr_terminate(avr);
     return 1;
   }
+  firmware.frequency = frequency;
   avr_load_firmware(avr, &firmware);
 
   int pty_slave = -1;
@@ -138,7 +139,7 @@ int main(int argc, char **argv) {
   fflush(stdout);
 
   uint8_t input[256];
-  while (!g_stop && avr->state != cpu_Done) {
+  while (!g_stop && avr->state != cpu_Done && avr->state != cpu_Crashed) {
     const ssize_t count = read(g_pty_master, input, sizeof(input));
     if (count > 0) {
       for (ssize_t i = 0; i < count; ++i) avr_raise_irq(rx, input[i]);
