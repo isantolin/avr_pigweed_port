@@ -151,28 +151,6 @@ int main(int argc, char **argv) {
   }
   close(pty_slave);
 
-  if (pty_file_path) {
-    FILE *pty_file = fopen(pty_file_path, "w");
-    if (!pty_file) {
-      fprintf(stderr, "Unable to write PTY path file %s: %s\n",
-              pty_file_path, strerror(errno));
-      close(g_pty_master);
-      g_pty_master = -1;
-      avr_terminate(avr);
-      return 1;
-    }
-    const int path_write_failed =
-        fprintf(pty_file, "%s\n", pty_path) < 0 || fflush(pty_file) != 0;
-    const int path_close_failed = fclose(pty_file) != 0;
-    if (path_write_failed || path_close_failed) {
-      fprintf(stderr, "Unable to persist PTY path to %s\n", pty_file_path);
-      close(g_pty_master);
-      g_pty_master = -1;
-      avr_terminate(avr);
-      return 1;
-    }
-  }
-
   const int flags = fcntl(g_pty_master, F_GETFL, 0);
   if (flags >= 0) (void)fcntl(g_pty_master, F_SETFL, flags | O_NONBLOCK);
 
@@ -197,6 +175,28 @@ int main(int argc, char **argv) {
   signal(SIGTERM, stop_handler);
   signal(SIGUSR1, reset_handler);
   signal(SIGUSR2, continue_handler);
+  if (pty_file_path) {
+    FILE *pty_file = fopen(pty_file_path, "w");
+    if (!pty_file) {
+      fprintf(stderr, "Unable to write PTY path file %s: %s\n",
+              pty_file_path, strerror(errno));
+      close(g_pty_master);
+      g_pty_master = -1;
+      avr_terminate(avr);
+      return 1;
+    }
+    const int path_write_failed =
+        fprintf(pty_file, "%s\n", pty_path) < 0 || fflush(pty_file) != 0;
+    const int path_close_failed = fclose(pty_file) != 0;
+    if (path_write_failed || path_close_failed) {
+      fprintf(stderr, "Unable to persist PTY path to %s\n", pty_file_path);
+      close(g_pty_master);
+      g_pty_master = -1;
+      avr_terminate(avr);
+      return 1;
+    }
+  }
+
   printf("%s\n", pty_path);
   fflush(stdout);
 
