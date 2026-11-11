@@ -319,6 +319,8 @@ def export_library(dest_dir: Path):
     def replace_in_export(relative_path: str, old: str, new: str) -> None:
         path = src_dir / relative_path
         content = path.read_text(encoding="utf-8")
+        if new in content:
+            return
         if old not in content:
             raise RuntimeError(
                 f"Pigweed compatibility patch did not match {relative_path}"
