@@ -63,7 +63,7 @@ The probe is built for ATmega328P. Its UART result marker is emitted only after 
 `tests/pw_transfer_upstream_probe.cpp` exercises:
 
 - A real upstream `pw_transfer::TransferService` and `pw_transfer::Client`.
-- Complete read and write transfers, plus cancellation of an in-flight read.
+- Complete read and write transfers, cancellation of an in-flight read, successful recovery after a dropped response, and retry exhaustion with a deadline error.
 - HDLC framing and upstream RPC packet dispatch in both directions.
 - Cooperative event polling with a bounded processing budget.
 - Resource-status callback staging and duplicate rejection.
@@ -105,7 +105,7 @@ The existing `FileSystemService.Read` server stream is not automatically equival
 - Verify the exported Arduino library links a sketch that uses upstream `pw_transfer`.
 - Measure flash, static SRAM, and worst-case stack on ATmega32U4 (the Bridge target), not only ATmega328P/ATmega2560 probes.
 - Exercise sequential client-to-server and server-to-client role reuse on one `Thread<1, 1>`.
-- Add timeout, retry, and queue-saturation runtime tests.
+- Add a dedicated queue-saturation runtime test.
 - Integrate the validated port revision into `arduino-yun-bridge2`, then test the MCU and MPU implementations together over the real UART/HDLC transport.
 
 No production-readiness claim should be made until those gates pass.
