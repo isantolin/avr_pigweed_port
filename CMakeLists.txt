@@ -238,21 +238,6 @@ target_link_libraries(pw_log INTERFACE pw_log_avr)
 
 # RPC is provided by upstream pw_rpc; no parallel AVR dispatcher is built.
 
-# pw_cobs (Consistent Overhead Byte Stuffing)
-pw_add_library(pw_cobs STATIC
-  SOURCES
-    ${PW_ROOT}/pw_cobs/cpp/cobs.cc
-  PUBLIC_INCLUDES
-    ${PW_ROOT}/pw_cobs/cpp/public
-  PUBLIC_DEPS
-    pw_assert
-    pw_bytes
-    pw_containers
-    pw_result
-    pw_span
-    pw_status
-)
-
 # pw_crypto with pure AVR SHA-256 backend
 pw_add_library(pw_crypto_avr STATIC
   SOURCES
@@ -399,7 +384,6 @@ target_link_libraries(test_runner.elf PRIVATE
   pw_checksum
   pw_hdlc.encoder
   pw_hdlc.decoder
-  pw_cobs
   pw_crypto
   pw_ring_buffer
   pw_function
