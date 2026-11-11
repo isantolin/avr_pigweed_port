@@ -144,17 +144,8 @@ add_subdirectory("${PW_ROOT}/pw_rpc" pw_rpc EXCLUDE_FROM_ALL)
 target_link_libraries(pw_rpc.common PUBLIC pw_sync.no_lock pw_varint)
 target_include_directories(pw_rpc.common PUBLIC "${PW_ROOT}/pw_protobuf/public")
 
-# The upstream common RPC implementation is codec-agnostic, but this Pigweed
-# revision declares its PWPB generated protocol library as a public dependency.
-# The AVR port uses raw RPC only; do not pull the PWPB runtime (which requires
-# 64-bit double) into the 32-bit-double AVR image.
-foreach(_pw_rpc_prop IN ITEMS LINK_LIBRARIES INTERFACE_LINK_LIBRARIES)
-  get_target_property(_pw_rpc_deps pw_rpc.common ${_pw_rpc_prop})
-  if(_pw_rpc_deps)
-    list(REMOVE_ITEM _pw_rpc_deps pw_rpc.protos.pwpb)
-    set_property(TARGET pw_rpc.common PROPERTY ${_pw_rpc_prop} "${_pw_rpc_deps}")
-  endif()
-endforeach()
+# Keep Pigweed RPC lockless on the single AVR owner loop.
+target_link_libraries(pw_rpc.common PUBLIC pw_sync.no_lock pw_rpc.disable_global_mutex_config)
 
 # pw_log_avr (Tokenized logging backend for AVR)
 pw_add_library(pw_log_avr STATIC
