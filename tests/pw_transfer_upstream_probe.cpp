@@ -9,6 +9,7 @@
 #include <avr/sleep.h>
 
 #include "pw_bytes/span.h"
+#include "pw_chrono/system_clock.h"
 #include "pw_chrono_avr/system_clock_avr.h"
 #include "pw_hdlc/decoder.h"
 #include "pw_hdlc/rpc_channel.h"
@@ -319,8 +320,10 @@ int main() {
   bool success = true;
   uint8_t failure_code = 0;
   const uint32_t clock_before = pw_chrono_avr_GetMillis();
+  const auto system_clock_before = pw::chrono::SystemClock::now();
   pw_chrono_avr_StepMillis(1);
-  if (pw_chrono_avr_GetMillis() != clock_before + 1U) {
+  if (pw_chrono_avr_GetMillis() != clock_before + 1U ||
+      pw::chrono::SystemClock::now() <= system_clock_before) {
     MarkFailure(success, failure_code, 32);
   }
   client_thread.EnqueueTestEvent();
