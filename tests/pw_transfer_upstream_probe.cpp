@@ -349,7 +349,9 @@ int main() {
     MarkFailure(success, failure_code, 11);
   }
   if (!write_completion_status.ok()) {
-    MarkFailure(success, failure_code, 22);
+    MarkFailure(success, failure_code,
+                static_cast<uint8_t>(30U +
+                    static_cast<uint8_t>(write_completion_status.code())));
   } else if (write_sink.bytes_written() != write_data.size()) {
     MarkFailure(success, failure_code, 23);
   } else if (std::memcmp(write_sink.data(),
