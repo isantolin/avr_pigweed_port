@@ -11,6 +11,37 @@ explicit, reviewable patch, not an untracked edit to the submodule.
 The initial integration target is a bare-metal AVR main loop. It must not
 create an OS thread, call a blocking wait, or require a heap-backed event queue.
 
+## Implemented cooperative layer
+
+The PR now carries the first concrete implementation of the cooperative seam
+against the pinned source revision:
+
+- A fixed-capacity, two-entry event ring is statically allocated in the
+  upstream transfer thread. Each entry owns a 128-byte chunk copy; incoming
+  chunk data is copied before the shared upstream staging buffer can be reused.
+- `Poll(budget)` processes no more than the requested number of queued events,
+  checks client/server deadlines, and returns `UNAVAILABLE` while work remains.
+  It never waits for a thread notification or starts a thread.
+- Queue overflow is latched. The next poll consumes already accepted staged
+  events in order, terminates active transfers with `RESOURCE_EXHAUSTED`, and
+  returns `RESOURCE_EXHAUSTED`; it does not continue a transfer after silently
+  losing a chunk.
+- One cooperative role reservation covers both context arrays. A client or
+  server session owns the port until completion, cancellation, timeout, or
+  failure; a different session or opposite role receives `UNAVAILABLE`.
+  Retransmission for the already reserved session remains allowed.
+- Stream mutations and resource-status callbacks retain their upstream
+  single-staging-object contract; overlapping mutations are rejected rather
+  than overwriting a staged stream or callback.
+- CMake fixes the initial AVR configuration at queue capacity 2 and chunk
+  storage 128 bytes. Increasing either value requires a new SRAM measurement.
+
+The CI build has compiled and linked this implementation for both CRC32
+variants and the ATmega2560 transfer probe. This is compile/link evidence only;
+it is not yet a proof of end-to-end UART interoperability or every transfer
+state transition. The probe also exercises zero-budget polling, one-event
+processing, and the single-in-flight resource-status callback contract.
+
 ## Verified upstream constraints
 
 The following constraints were identified while reviewing the pinned
