@@ -3,4 +3,4 @@
 
 #include "pw_assert_avr/assert_avr.h"
 
-#define PW_ASSERT_LITE_HANDLE_FAILURE(expression) pw_assert_avr_HandleFailure(__LINE__)
+#define PW_ASSERT_LITE_HANDLE_FAILURE(expression) pw_assert_avr_HandleFailure(__FILE__, __LINE__, #expression)
