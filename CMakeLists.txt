@@ -336,15 +336,22 @@ add_custom_command(TARGET pw_rpc_upstream_probe.elf POST_BUILD
 )
 
 # 6b. Upstream pw_transfer cooperative AVR link probe.
+# The complete upstream client+server transfer implementation exceeds the
+# ATmega328P's 32 KiB Flash budget. Keep the base port on AVR_MCU, and measure
+# the full cooperative pw_transfer image on a larger 8-bit AVR by default.
+set(AVR_TRANSFER_MCU "atmega2560" CACHE STRING
+    "AVR MCU used for the combined upstream pw_transfer client/server probe")
 add_executable(pw_transfer_upstream_probe.elf
   tests/pw_transfer_upstream_probe.cpp
   src/cxx_abi_stubs.cpp
 )
 target_include_directories(pw_transfer_upstream_probe.elf PRIVATE src)
+target_compile_options(pw_transfer_upstream_probe.elf PRIVATE -mmcu=${AVR_TRANSFER_MCU})
+target_link_options(pw_transfer_upstream_probe.elf PRIVATE -mmcu=${AVR_TRANSFER_MCU})
 target_link_libraries(pw_transfer_upstream_probe.elf PRIVATE pw_transfer)
 add_custom_command(TARGET pw_transfer_upstream_probe.elf POST_BUILD
-  COMMAND avr-size --format=avr --mcu=${AVR_MCU} $<TARGET_FILE:pw_transfer_upstream_probe.elf>
-  COMMENT "Report upstream pw_transfer AVR probe memory usage"
+  COMMAND avr-size --format=avr --mcu=${AVR_TRANSFER_MCU} $<TARGET_FILE:pw_transfer_upstream_probe.elf>
+  COMMENT "Report upstream pw_transfer AVR probe memory usage (${AVR_TRANSFER_MCU})"
 )
 
 # 7. Post-processing: extract .hex, assembly listing, and memory size audit
