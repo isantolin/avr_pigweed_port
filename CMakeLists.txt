@@ -129,7 +129,8 @@ add_subdirectory("${PW_ROOT}/pw_checksum" pw_checksum EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_sync" pw_sync EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_hdlc" pw_hdlc EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_rpc" pw_rpc EXCLUDE_FROM_ALL)
-target_link_libraries(pw_rpc.common PUBLIC pw_sync.no_lock)
+target_link_libraries(pw_rpc.common PUBLIC pw_sync.no_lock pw_varint)
+target_include_directories(pw_rpc.common PUBLIC "${PW_ROOT}/pw_protobuf/public")
 
 # The upstream common RPC implementation is codec-agnostic, but this Pigweed
 # revision declares its PWPB generated protocol library as a public dependency.
