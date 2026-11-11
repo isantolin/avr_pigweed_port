@@ -105,7 +105,7 @@ The existing `FileSystemService.Read` server stream is not automatically equival
 - Verify the exported Arduino library links a sketch that uses upstream `pw_transfer`.
 - Measure flash, static SRAM, and worst-case stack on ATmega32U4 (the Bridge target), not only ATmega328P/ATmega2560 probes.
 - Exercise sequential client-to-server and server-to-client role reuse on one `Thread<1, 1>`.
-- Add cancellation, timeout, retry, and queue-saturation runtime tests.
+- Add timeout, retry, and queue-saturation runtime tests.
 - Integrate the validated port revision into `arduino-yun-bridge2`, then test the MCU and MPU implementations together over the real UART/HDLC transport.
 
 No production-readiness claim should be made until those gates pass.
