@@ -110,6 +110,42 @@ from pw_rpc.client import Client""",
         print(f"patched {patched_log_formats} transfer log format specifiers")
     elif "id_for_log()" in context_content and "%lu" not in context_content:
         raise RuntimeError("transfer log format patch did not match any call")
+
+    # A server that sends START_ACK must own a deadline while waiting for
+    # START_ACK_CONFIRMATION. Upstream relies on the client retrying START and
+    # otherwise leaves a half-open server context forever if the client gives
+    # up (e.g. a lost ACK on a lossy UART). Apply this only to the cooperative
+    # AVR build; normal threaded Pigweed behavior remains unchanged.
+    start_ack_send = """      EncodeAndSendChunk(start_ack);
+      break;"""
+    start_ack_send_cooperative = """      EncodeAndSendChunk(start_ack);
+#if defined(PW_TRANSFER_COOPERATIVE)
+      SetTimeout(chunk_timeout_);
+#endif
+      break;"""
+    if start_ack_send_cooperative not in context_content:
+        if start_ack_send not in context_content:
+            raise RuntimeError("could not locate server START_ACK send")
+        context_content = context_content.replace(
+            start_ack_send, start_ack_send_cooperative, 1
+        )
+
+    retry_send = """  EncodeAndSendChunk(retry_chunk);
+}"""
+    retry_send_cooperative = """  EncodeAndSendChunk(retry_chunk);
+#if defined(PW_TRANSFER_COOPERATIVE)
+  if (last_chunk_sent_ == Chunk::Type::kStartAck) {
+    SetTimeout(chunk_timeout_);
+  }
+#endif
+}"""
+    if retry_send_cooperative not in context_content:
+        if retry_send not in context_content:
+            raise RuntimeError("could not locate transfer handshake retry send")
+        context_content = context_content.replace(
+            retry_send, retry_send_cooperative, 1
+        )
+    context_cc.write_text(context_content)
     replace_once(
         "pw_protobuf/public/pw_protobuf/wire_format.h",
         "inline constexpr static uint32_t kMaxFieldNumber = (1u << 29) - 1;",
