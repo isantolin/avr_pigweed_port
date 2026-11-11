@@ -41,6 +41,7 @@ bool reverse_write_complete = false;
 bool cancel_complete = false;
 bool retry_complete = false;
 bool timeout_complete = false;
+uint8_t g_pump_failure_reason = 0;
 pw::Status read_completion_status = pw::Status::Unknown();
 pw::Status write_completion_status = pw::Status::Unknown();
 pw::Status reverse_write_completion_status = pw::Status::Unknown();
@@ -171,25 +172,33 @@ class HdlcLoopbackWriter final : public pw::stream::NonSeekableWriter {
 bool PumpTransfers(pw::transfer::Thread<1, 1>& client_thread,
                    pw::transfer::Thread<1, 1>& server_thread,
                    bool& complete) {
+  g_pump_failure_reason = 0;
   for (size_t i = 0; i < 256 && !complete; ++i) {
     const pw::Status client_status = client_thread.Poll(2);
     const pw::Status server_status = server_thread.Poll(2);
-    if (client_status == pw::Status::ResourceExhausted() ||
-        server_status == pw::Status::ResourceExhausted()) {
+    if (client_status == pw::Status::ResourceExhausted()) {
+      g_pump_failure_reason = 1;
+      return false;
+    }
+    if (server_status == pw::Status::ResourceExhausted()) {
+      g_pump_failure_reason = 2;
       return false;
     }
     if (!client_status.ok() &&
         client_status != pw::Status::Unavailable()) {
+      g_pump_failure_reason = 3;
       return false;
     }
     if (!server_status.ok() &&
         server_status != pw::Status::Unavailable()) {
+      g_pump_failure_reason = 4;
       return false;
     }
     // Advance the AVR system clock so timeout/retry paths are deterministic
     // under simavr rather than depending on host-side wall-clock timing.
     _delay_ms(1);
   }
+  if (!complete) g_pump_failure_reason = 5;
   return complete;
 }
 
@@ -269,7 +278,8 @@ int main() {
   if (!read_result.ok()) {
     MarkFailure(success, failure_code, 6);
   } else if (!PumpTransfers(client_thread, server_thread, read_complete)) {
-    MarkFailure(success, failure_code, 7);
+    MarkFailure(success, failure_code,
+                static_cast<uint8_t>(40U + g_pump_failure_reason));
   }
   if (!read_completion_status.ok() ||
       read_output.bytes_written() != read_data.size() ||
