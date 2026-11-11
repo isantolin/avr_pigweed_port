@@ -105,7 +105,7 @@ for index, line in enumerate(lines):
     lines[index] = prefix + ": " + " ".join(updated)
 if replaced == 0:
     raise SystemExit("No mirror+file or Canonical/Azure Ubuntu URI found")
-path.write_text("\\n".join(lines) + "\\n")
+path.write_text("\n".join(lines) + "\n")
 print(f"Replaced {replaced} Ubuntu URI(s) with {mirror}")
 PY
   then
