@@ -26,7 +26,13 @@ jobs:
       - name: Install AVR Toolchain & simavr
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-avr avr-libc binutils-avr cmake ninja-build simavr protobuf-compiler python3-protobuf python3-jinja2
+          sudo apt-get install -y gcc-avr avr-libc binutils-avr cmake ninja-build simavr libsimavr-dev protobuf-compiler python3-protobuf python3-jinja2
+
+      - name: Build host-side pw_emu simavr runner
+        if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
+        run: |
+          cmake -S tools/pw_emu_avr -B build/pw_emu_avr -G Ninja
+          cmake --build build/pw_emu_avr
 
       - name: Configure CMake (${{ matrix.crc_impl }})
         run: |
