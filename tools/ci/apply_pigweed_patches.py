@@ -339,7 +339,18 @@ from pw_rpc.client import Client""",
 #include "pw_sync/timed_thread_notification.h"
 #include "pw_thread/thread_core.h"
 #include "pw_transfer/handler.h"''',
-        '''#include "pw_span/span.h"
+        '''#include <array>
+#include <cstddef>
+#include <cstring>
+
+#ifndef PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY
+#define PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY 2
+#endif
+#ifndef PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE
+#define PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE 128
+#endif
+
+#include "pw_span/span.h"
 #include "pw_assert/check.h"
 #if !defined(PW_TRANSFER_COOPERATIVE)
 #include "pw_sync/binary_semaphore.h"
@@ -362,10 +373,10 @@ from pw_rpc.client import Client""",
         '''  // For testing only: terminates the transfer thread with a kTerminate event.
   void Terminate();''',
         '''#if defined(PW_TRANSFER_COOPERATIVE)
-  // Process the pending event and expired deadlines from the single owner loop.
-  // ResourceExhausted reports an event source that hit the occupied handoff slot.
-  Status Poll();
-  void ClearEventOverflow() { event_overflowed_ = false; }
+  // Process at most budget queued events and check transfer deadlines.
+  // Unavailable means more events remain; ResourceExhausted means the bounded
+  // queue overflowed and active transfers were aborted rather than corrupted.
+  Status Poll(size_t budget = 1);
 #endif
 
   // For testing only: terminates the transfer thread with a kTerminate event.
@@ -379,7 +390,7 @@ from pw_rpc.client import Client""",
   }''',
         '''  void WaitUntilEventIsProcessed() {
 #if defined(PW_TRANSFER_COOPERATIVE)
-    (void)Poll();
+    (void)Poll(PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY);
 #else
     next_event_ownership_.acquire();
     next_event_ownership_.release();
@@ -406,8 +417,42 @@ from pw_rpc.client import Client""",
   }''',
         '''  void NotifyEvent() {
 #if defined(PW_TRANSFER_COOPERATIVE)
-    PW_CHECK(!event_pending_, "Transfer event slot is already occupied");
-    event_pending_ = true;
+    if (event_queue_size_ >= PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY) {
+      event_overflowed_ = true;
+      event_slot_available_ = true;
+      return;
+    }
+    CooperativeEventSlot& slot = event_queue_[event_queue_tail_];
+    slot.event = next_event_;
+    const std::byte* chunk_data = nullptr;
+    size_t chunk_size = 0;
+    if (slot.event.type == EventType::kClientChunk ||
+        slot.event.type == EventType::kServerChunk) {
+      chunk_data = slot.event.chunk.data;
+      chunk_size = slot.event.chunk.size;
+    } else if (slot.event.type == EventType::kNewClientTransfer ||
+               slot.event.type == EventType::kNewServerTransfer) {
+      chunk_data = slot.event.new_transfer.raw_chunk_data;
+      chunk_size = slot.event.new_transfer.raw_chunk_size;
+    }
+    if (chunk_size > slot.chunk_storage.size()) {
+      event_overflowed_ = true;
+      event_slot_available_ = true;
+      return;
+    }
+    if (chunk_size != 0) {
+      std::memcpy(slot.chunk_storage.data(), chunk_data, chunk_size);
+      if (slot.event.type == EventType::kClientChunk ||
+          slot.event.type == EventType::kServerChunk) {
+        slot.event.chunk.data = slot.chunk_storage.data();
+      } else {
+        slot.event.new_transfer.raw_chunk_data = slot.chunk_storage.data();
+      }
+    }
+    event_queue_tail_ =
+        (event_queue_tail_ + 1) % PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY;
+    ++event_queue_size_;
+    event_slot_available_ = true;
 #else
     event_notification_.release();
 #endif
@@ -415,7 +460,8 @@ from pw_rpc.client import Client""",
 
   bool TryWaitForEventToProcess() {
 #if defined(PW_TRANSFER_COOPERATIVE)
-    if (!event_slot_available_) {
+    if (!event_slot_available_ ||
+        event_queue_size_ >= PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY) {
       event_overflowed_ = true;
       return false;
     }
@@ -437,9 +483,25 @@ from pw_rpc.client import Client""",
 
   Event next_event_;''',
         '''#if defined(PW_TRANSFER_COOPERATIVE)
-  bool event_pending_ = false;
+  struct CooperativeEventSlot {
+    Event event{};
+    std::array<std::byte, PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE>
+        chunk_storage{};
+  };
+  static_assert(PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY >= 2,
+                "The cooperative event queue must have at least two slots");
+  std::array<CooperativeEventSlot, PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY>
+      event_queue_{};
+  size_t event_queue_head_ = 0;
+  size_t event_queue_tail_ = 0;
+  size_t event_queue_size_ = 0;
   bool event_slot_available_ = true;
   bool event_overflowed_ = false;
+  enum class CooperativeRole : uint8_t { kIdle, kClient, kServer };
+  CooperativeRole cooperative_role_ = CooperativeRole::kIdle;
+  uint32_t cooperative_session_id_ = 0;
+  bool cooperative_start_pending_ = false;
+  void UpdateCooperativeRole();
 #else
   sync::TimedThreadNotification event_notification_;
   sync::BinarySemaphore next_event_ownership_;
@@ -505,17 +567,134 @@ from pw_rpc.client import Client""",
         )
     transfer_content = transfer_content[:stream_start] + stream_tail
 
+    # Reserve one global client/server role before queuing a new transfer. A
+    # retransmission/restart for the same session is allowed; a different
+    # session or the opposite role is rejected with UNAVAILABLE.
+    start_marker = "  bool is_client_transfer = stream != nullptr;\n"
+    role_code = """  bool is_client_transfer = stream != nullptr;
+#if defined(PW_TRANSFER_COOPERATIVE)
+  if (next_event_.type == EventType::kNewClientTransfer ||
+      next_event_.type == EventType::kNewServerTransfer) {
+    const CooperativeRole requested_role =
+        is_client_transfer ? CooperativeRole::kClient
+                           : CooperativeRole::kServer;
+    if (cooperative_role_ != CooperativeRole::kIdle &&
+        (cooperative_role_ != requested_role ||
+         cooperative_session_id_ != session_id ||
+         cooperative_start_pending_)) {
+      if (is_client_transfer) {
+        if (on_completion) on_completion(Status::Unavailable());
+      } else {
+        SendStatusChunk({
+            .session_id = session_id,
+            .protocol_version = version,
+            .status = Status::Unavailable().code(),
+            .stream = type == TransferType::kTransmit
+                          ? TransferStream::kServerRead
+                          : TransferStream::kServerWrite,
+        });
+      }
+      event_slot_available_ = true;
+      return;
+    }
+    cooperative_role_ = requested_role;
+    cooperative_session_id_ = session_id;
+    cooperative_start_pending_ = true;
+  }
+#endif
+"""
+    if transfer_content.count(start_marker) != 1:
+        raise RuntimeError("could not find unique StartTransfer role insertion point")
+    transfer_content = transfer_content.replace(start_marker, role_code, 1)
+
+    # A newly accepted transfer event consumes the pending role reservation.
+    handle_marker = """  if (event.type == EventType::kNewClientTransfer) {
+    // TODO(frolv): This is terrible."""
+    handle_replacement = """  if (event.type == EventType::kNewClientTransfer ||
+      event.type == EventType::kNewServerTransfer) {
+#if defined(PW_TRANSFER_COOPERATIVE)
+    cooperative_start_pending_ = false;
+#endif
+  }
+
+  if (event.type == EventType::kNewClientTransfer) {
+    // TODO(frolv): This is terrible."""
+    if transfer_content.count(handle_marker) != 1:
+        raise RuntimeError("could not find unique new-transfer handling point")
+    transfer_content = transfer_content.replace(handle_marker, handle_replacement, 1)
+
+    # Update the global role after every state-machine event; it is released
+    # only after both upstream context arrays are inactive.
+    context_marker = "  ctx->HandleEvent(event);\n}"
+    context_replacement = """  ctx->HandleEvent(event);
+#if defined(PW_TRANSFER_COOPERATIVE)
+  UpdateCooperativeRole();
+#endif
+}"""
+    if transfer_content.count(context_marker) != 1:
+        raise RuntimeError("could not find unique context event dispatch")
+    transfer_content = transfer_content.replace(context_marker, context_replacement, 1)
+
     insert_marker = "std::optional<chrono::SystemClock::time_point>\nTransferThread::GetNextTransferTimeout() const {"
     if "Status TransferThread::Poll()" not in transfer_content:
         poll_code = '''#if defined(PW_TRANSFER_COOPERATIVE)
-Status TransferThread::Poll() {
-  if (event_pending_) {
-    HandleEvent(next_event_);
-    event_pending_ = false;
-    event_slot_available_ = true;
+Status TransferThread::Poll(size_t budget) {
+  if (event_overflowed_) {
+    Event abort_event{};
+    abort_event.type = EventType::kClientEndTransfer;
+    abort_event.end_transfer = {
+        .id_type = IdentifierType::Session,
+        .id = 0,
+        .status = Status::ResourceExhausted().code(),
+        .send_status_chunk = true,
+    };
+    for (ClientContext& context : client_transfers_) {
+      if (context.active()) {
+        abort_event.end_transfer.id = context.session_id();
+        context.HandleEvent(abort_event);
+      }
+    }
+    abort_event.type = EventType::kServerEndTransfer;
+    for (ServerContext& context : server_transfers_) {
+      if (context.active()) {
+        abort_event.end_transfer.id = context.session_id();
+        context.HandleEvent(abort_event);
+      }
+    }
+    event_queue_head_ = event_queue_tail_;
+    event_queue_size_ = 0;
+    event_overflowed_ = false;
+    cooperative_start_pending_ = false;
+    UpdateCooperativeRole();
+    return Status::ResourceExhausted();
+  }
+
+  size_t processed = 0;
+  while (event_queue_size_ != 0 && processed < budget) {
+    CooperativeEventSlot& slot = event_queue_[event_queue_head_];
+    HandleEvent(slot.event);
+    event_queue_head_ =
+        (event_queue_head_ + 1) % PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY;
+    --event_queue_size_;
+    ++processed;
   }
   (void)HandleTimeouts();
-  return event_overflowed_ ? Status::ResourceExhausted() : OkStatus();
+  UpdateCooperativeRole();
+  return event_queue_size_ != 0 ? Status::Unavailable() : OkStatus();
+}
+
+void TransferThread::UpdateCooperativeRole() {
+  if (cooperative_start_pending_) {
+    return;
+  }
+  for (const Context& context : client_transfers_) {
+    if (context.active()) return;
+  }
+  for (const Context& context : server_transfers_) {
+    if (context.active()) return;
+  }
+  cooperative_role_ = CooperativeRole::kIdle;
+  cooperative_session_id_ = 0;
 }
 #endif  // PW_TRANSFER_COOPERATIVE
 
