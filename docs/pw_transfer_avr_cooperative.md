@@ -63,7 +63,7 @@ The probe is built for ATmega328P. Its UART result marker is emitted only after 
 `tests/pw_transfer_upstream_probe.cpp` exercises:
 
 - A real upstream `pw_transfer::TransferService` and `pw_transfer::Client`.
-- A complete read transfer and a complete write transfer.
+- Complete read and write transfers, plus cancellation of an in-flight read.
 - HDLC framing and upstream RPC packet dispatch in both directions.
 - Cooperative event polling with a bounded processing budget.
 - Resource-status callback staging and duplicate rejection.
@@ -71,7 +71,7 @@ The probe is built for ATmega328P. Its UART result marker is emitted only after 
 
 The loopback probe uses separate `Thread<1, 1>` instances for the two simulated endpoints. That is intentional: one endpoint is a client and the other is a server during a transfer. A single AVR `Thread<1, 1>` is not permitted to run both roles concurrently.
 
-The end-to-end transfer probe is built for ATmega2560 to provide enough SRAM for both simulated endpoints. A separate shared-thread footprint probe is built for ATmega32U4, instantiating the production arrangement (one RPC channel, both RPC endpoints, one `Thread<1, 1>`, and both transfer service/client objects). The complete Bridge firmware footprint, worst-case stack, and hardware UART/HDLC validation remain release gates.
+The end-to-end transfer probe is built for ATmega2560 to provide enough SRAM for both simulated endpoints. A separate shared-thread footprint probe is built for ATmega32U4, instantiating the production arrangement (one RPC channel, both RPC endpoints, one `Thread<1, 1>`, both transfer service/client objects, read/write handlers, and retained client `Read()`/`Write()` call paths). The complete Bridge firmware footprint, worst-case stack, and hardware UART/HDLC validation remain release gates.
 
 CI runs both `PW_CHECKSUM_CRC32_1BITS` and `PW_CHECKSUM_CRC32_4BITS`. The firmware UART pass marker, rather than simavr's terminal process status after firmware shutdown, is the runtime-probe result.
 
