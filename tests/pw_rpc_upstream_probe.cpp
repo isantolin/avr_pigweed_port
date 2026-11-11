@@ -1,6 +1,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <avr/sleep.h>
 #include <utility>
 
 #include "avr_uart_stream.h"
@@ -21,6 +24,25 @@ namespace {
 constexpr uint64_t kHdlcAddress = 1;
 constexpr uint32_t kRpcChannelId = 1;
 constexpr size_t kHdlcDecoderBufferSize = 128;
+
+void EmitResult(bool success) {
+  const uint16_t ubrr =
+      static_cast<uint16_t>((F_CPU / (16UL * 115200UL)) - 1UL);
+  UBRR0H = static_cast<uint8_t>(ubrr >> 8);
+  UBRR0L = static_cast<uint8_t>(ubrr & 0xFF);
+  UCSR0B = (1 << TXEN0);
+  UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+  const char* marker = success ? "PW_RPC_PROBE_PASS\\r\\n"
+                               : "PW_RPC_PROBE_FAIL\\r\\n";
+  while (*marker != '\\0') {
+    while (!(UCSR0A & (1 << UDRE0))) {}
+    UDR0 = static_cast<uint8_t>(*marker++);
+  }
+  while (!(UCSR0A & (1 << TXC0))) {}
+  cli();
+  sleep_enable();
+  sleep_cpu();
+}
 
 std::array<std::byte, 3> expected_request{};
 bool unary_response_ok = false;
@@ -122,6 +144,8 @@ class ServerToClientOutput final : public pw::rpc::ChannelOutput {
 }  // namespace
 
 int main() {
+  bool success = true;
+
   // Keep the physical AVR UART/HDLC output in the link and verify that the
   // decoder accepts an incomplete frame without dispatching a packet.
   avr_port::AvrUartStream uart(115200);
@@ -129,19 +153,12 @@ int main() {
   (void)hdlc_output;
 
   std::array<std::byte, kHdlcDecoderBufferSize> decoder_storage{};
-  pw::rpc::Server* server_ptr = nullptr;
-  HdlcRpcIngress* ingress_ptr = nullptr;
-
   ServerToClientOutput server_output;
   std::array<pw::rpc::Channel, 1> server_channels = {
       pw::rpc::Channel::Create<kRpcChannelId>(&server_output)};
   pw::rpc::Server server(pw::span<pw::rpc::Channel>(server_channels.data(),
                                                      server_channels.size()));
-  server_ptr = &server;
   HdlcRpcIngress ingress(server, pw::ByteSpan(decoder_storage));
-  ingress_ptr = &ingress;
-  (void)server_ptr;
-  (void)ingress_ptr;
 
   ProbeService service;
   server.RegisterService(service);
@@ -161,19 +178,23 @@ int main() {
   expected_request = request;
   auto unary_call = raw_client.Unary(request, OnUnaryResponse);
   (void)unary_call;
-  if (!service.unary_called() || service.unary_request_size() != request.size() ||
+  if (!service.unary_called() ||
+      service.unary_request_size() != request.size() ||
       !unary_response_ok) {
-    return 1;
+    success = false;
   }
 
   auto bidi_call = raw_client.Bidi();
   bidi_call.set_on_next(OnBidiResponse);
-  if (!bidi_call.Write(request).ok()) return 1;
-  if (!service.bidi_server_received() || !bidi_response_ok) return 1;
+  if (!bidi_call.Write(request).ok()) success = false;
+  if (!service.bidi_server_received() || !bidi_response_ok) success = false;
   (void)bidi_call.Cancel();
 
   // A lone HDLC flag is an incomplete frame, not a malformed packet.
-  return ingress.ProcessByte(std::byte{0x7e}) == pw::Status::Unavailable()
-             ? 0
-             : 1;
+  if (ingress.ProcessByte(std::byte{0x7e}) != pw::Status::Unavailable()) {
+    success = false;
+  }
+
+  EmitResult(success);
+  return success ? 0 : 1;
 }
