@@ -399,3 +399,44 @@ separate prerequisite from the cooperative transfer scheduler.
 Do not implement a fake `RawServerReaderWriter` facade over the current unary
 dispatcher: transfer depends on persistent bidirectional call state and stream
 callbacks, which a one-request/one-response wrapper cannot safely emulate.
+
+### Architecture decision: prefer upstream `pw_rpc`, not a second RPC stack
+
+A further inspection of the repository's current `main` build graph and public
+headers changes the migration risk assessment:
+
+- `firmware.elf` does not link `pw_rpc_avr`; only `test_runner.elf` links
+  that target. The custom dispatcher is therefore not currently a firmware
+  runtime dependency.
+- `src/PigweedAVR.h` does not expose `pw_rpc_avr` either.
+- The custom implementation is a unary-only test component. Extending it into
+  a second RPC stack would duplicate upstream call dispatch, channel, stream,
+  and lifecycle machinery and create a long-term compatibility burden.
+
+**Decision:** the preferred path is to compile and use the pinned upstream
+`pw_rpc` implementation, with AVR-specific transport and platform backends.
+Do not expand `pw_rpc_avr` to implement streaming unless a measured build
+constraint proves that upstream `pw_rpc` cannot fit or cannot be configured
+for this target.
+
+This is a migration direction, not a claim that upstream `pw_rpc` already
+builds on AVR. The following proof is required before deleting the custom
+component:
+
+1. Inspect the pinned `pw_rpc` CMake target and its transitive dependencies.
+2. Add the minimum upstream `pw_rpc` targets to an isolated AVR integration
+   build, without changing the existing firmware target.
+3. Implement only the missing AVR platform pieces, beginning with
+   `ChannelOutput` and the UART/HDLC packet ingress path.
+4. Compile and link a minimal upstream unary service on the actual AVR
+   toolchain; record Flash and SRAM use.
+5. Exercise a bidirectional raw RPC stream using upstream-generated packets
+   on the host and simavr.
+6. Add the pinned `pw_transfer` client/server service only after the streaming
+   test passes.
+7. Remove `pw_rpc_avr` and its tests once no target depends on it and the
+   upstream interoperability tests cover the required behavior.
+
+Keep the existing custom component isolated as a temporary compatibility
+experiment. Do not add it to `firmware.elf`, and do not make it a prerequisite
+for the cooperative `pw_transfer` implementation.
