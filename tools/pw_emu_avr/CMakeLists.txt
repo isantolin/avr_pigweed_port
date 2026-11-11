@@ -10,7 +10,7 @@ find_library(SIMAVR_LIBRARY NAMES simavr REQUIRED)
 find_library(UTIL_LIBRARY NAMES util)
 
 add_executable(simavr_pty_runner simavr_pty_runner.c)
-target_include_directories(simavr_pty_runner PRIVATE ${SIMAVR_INCLUDE_DIR})
+target_include_directories(simavr_pty_runner SYSTEM PRIVATE ${SIMAVR_INCLUDE_DIR})
 target_link_libraries(simavr_pty_runner PRIVATE ${SIMAVR_LIBRARY})
 if(UTIL_LIBRARY)
   target_link_libraries(simavr_pty_runner PRIVATE ${UTIL_LIBRARY})
