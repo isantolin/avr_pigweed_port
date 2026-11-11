@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package avr.port.rpc;
+
+service RpcProbe {
+  rpc Unary(EchoMessage) returns (EchoMessage);
+  rpc Bidi(stream EchoMessage) returns (stream EchoMessage);
+}
+
+message EchoMessage {
+  uint32 sequence = 1;
+  bytes payload = 2;
+}
