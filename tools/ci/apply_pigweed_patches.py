@@ -25,6 +25,18 @@ def replace_once(relative_path: str, old: str, new: str) -> None:
     print(f"patched: {relative_path}")
 
 
+def replace_all(relative_path: str, old: str, new: str) -> None:
+    path = PW_ROOT / relative_path
+    content = path.read_text()
+    if old not in content:
+        if new in content:
+            print(f"already patched: {relative_path}")
+            return
+        raise RuntimeError(f"{relative_path}: source pattern not found")
+    path.write_text(content.replace(old, new))
+    print(f"patched all occurrences: {relative_path}")
+
+
 def main() -> int:
     actual = subprocess.check_output(
         ["git", "-C", str(PW_ROOT), "rev-parse", "HEAD"], text=True
@@ -400,25 +412,29 @@ def main() -> int:
     transfer_cc = PW_ROOT / "pw_transfer" / "transfer_thread.cc"
     transfer_content = transfer_cc.read_text()
     run_start = transfer_content.index("void TransferThread::Run() {")
-    run_end_marker = "\n}\n\nstd::optional<chrono::SystemClock::time_point>"
-    run_end = transfer_content.index(run_end_marker, run_start) + 3
-    run_block = transfer_content[run_start:run_end]
-    transfer_content = (
-        transfer_content[:run_start]
-        + "#if !defined(PW_TRANSFER_COOPERATIVE)\n"
-        + run_block
-        + "#endif  // !PW_TRANSFER_COOPERATIVE\n"
-        + transfer_content[run_end:]
-    )
+    if "#if !defined(PW_TRANSFER_COOPERATIVE)\\nvoid TransferThread::Run()" not in transfer_content:
+        run_end_marker = "\\n}\\n\\nstd::optional<chrono::SystemClock::time_point>"
+        run_end = transfer_content.index(run_end_marker, run_start) + 3
+        run_block = transfer_content[run_start:run_end]
+        transfer_content = (
+            transfer_content[:run_start]
+            + "#if !defined(PW_TRANSFER_COOPERATIVE)\\n"
+            + run_block
+            + "#endif  // !PW_TRANSFER_COOPERATIVE\\n"
+            + transfer_content[run_end:]
+        )
 
     stream_start = transfer_content.index("void TransferThread::SetClientReadStream")
     stream_tail = transfer_content[stream_start:]
     old_wait = "  NotifyEvent();\n  WaitUntilEventIsProcessed();"
     new_wait = "  NotifyEvent();\n#if !defined(PW_TRANSFER_COOPERATIVE)\n  WaitUntilEventIsProcessed();\n#endif"
     wait_count = stream_tail.count(old_wait)
-    if wait_count != 6:
-        raise RuntimeError(f"expected six stream callback waits, found {wait_count}")
-    stream_tail = stream_tail.replace(old_wait, new_wait)
+    if wait_count == 6:
+        stream_tail = stream_tail.replace(old_wait, new_wait)
+    elif stream_tail.count(new_wait) != 6:
+        raise RuntimeError(
+            f"expected six stream callback waits or six already-patched waits; found {wait_count}"
+        )
     transfer_content = transfer_content[:stream_start] + stream_tail
 
     insert_marker = "std::optional<chrono::SystemClock::time_point>\nTransferThread::GetNextTransferTimeout() const {"
