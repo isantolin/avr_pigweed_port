@@ -29,6 +29,7 @@ static int g_pty_master = -1;
 static uint8_t g_tx_queue[65536];
 static size_t g_tx_head = 0;
 static size_t g_tx_tail = 0;
+static bool g_tx_logged = false;
 
 static void stop_handler(int signal_number) {
   (void)signal_number;
@@ -48,6 +49,10 @@ static void continue_handler(int signal_number) {
 static void uart_tx(struct avr_irq_t *irq, uint32_t value, void *opaque) {
   (void)irq;
   (void)opaque;
+  if (!g_tx_logged) {
+    fprintf(stderr, "simavr UART TX IRQ received first byte 0x%02x\n", (unsigned)(value & 0xffU));
+    g_tx_logged = true;
+  }
   const size_t next = (g_tx_head + 1U) % sizeof(g_tx_queue);
   if (next == g_tx_tail) {
     fprintf(stderr, "UART TX queue overflow\n");
@@ -212,6 +217,7 @@ int main(int argc, char **argv) {
     if (g_continue) {
       g_continue = 0;
       paused = false;
+      fprintf(stderr, "simavr resume signal accepted\n");
     }
     if (paused) {
       usleep(10000);
@@ -219,6 +225,7 @@ int main(int argc, char **argv) {
     }
     const ssize_t count = read(g_pty_master, input, sizeof(input));
     if (count > 0) {
+      fprintf(stderr, "simavr PTY RX: %zd byte(s), first=0x%02x\n", count, (unsigned)input[0]);
       for (ssize_t i = 0; i < count; ++i) avr_raise_irq(rx, input[i]);
     } else if (count < 0 && errno != EAGAIN && errno != EWOULDBLOCK &&
                errno != EINTR && errno != EIO) {
