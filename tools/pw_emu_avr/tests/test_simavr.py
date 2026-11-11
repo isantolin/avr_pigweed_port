@@ -91,18 +91,30 @@ class SimavrAdapterTest(unittest.TestCase):
             stream = None
             try:
                 stream = connector.get_channel_stream('uart0', timeout=1.0)
+                output = bytearray()
+                connector.cont()
+                deadline = time.monotonic() + 5.0
+                self.assertTrue(connector.running(), connector.get_logs())
+                while b'PW_EMU_UART_READY' not in output and time.monotonic() < deadline:
+                    try:
+                        output.extend(stream.read(64))
+                    except (OSError, SerialException):
+                        break
+                self.assertIn(
+                    b'PW_EMU_UART_READY',
+                    output,
+                    f'UART ready marker missing: {output!r}; runner logs: {connector.get_logs()}',
+                )
+
                 input_fd = os.open(
                     connector.get_channel_path('uart0'),
                     os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK,
                 )
                 try:
-                    connector.cont()
                     os.write(input_fd, b'G')
                 finally:
                     os.close(input_fd)
-                output = bytearray()
                 deadline = time.monotonic() + 5.0
-                self.assertTrue(connector.running(), connector.get_logs())
                 while b'PW_EMU_UART_PASS' not in output and time.monotonic() < deadline:
                     try:
                         output.extend(stream.read(64))
@@ -114,14 +126,26 @@ class SimavrAdapterTest(unittest.TestCase):
                     f'UART output missing: {output!r}; runner logs: {connector.get_logs()}',
                 )
 
-                # Reset must restart the ELF and emit the same UART marker again.
+                # Reset must restart the ELF, reinitialize UART, and accept a
+                # second host byte only after the second READY marker.
                 connector.reset()
+                connector.cont()
+                deadline = time.monotonic() + 5.0
+                while output.count(b'PW_EMU_UART_READY') < 2 and time.monotonic() < deadline:
+                    try:
+                        output.extend(stream.read(64))
+                    except (OSError, SerialException):
+                        break
+                self.assertGreaterEqual(
+                    output.count(b'PW_EMU_UART_READY'),
+                    2,
+                    f'UART did not reinitialize after reset: {output!r}; runner logs: {connector.get_logs()}',
+                )
                 input_fd = os.open(
                     connector.get_channel_path('uart0'),
                     os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK,
                 )
                 try:
-                    connector.cont()
                     os.write(input_fd, b'G')
                 finally:
                     os.close(input_fd)
