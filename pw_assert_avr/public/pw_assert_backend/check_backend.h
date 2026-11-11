@@ -5,7 +5,7 @@
 
 // Halts execution with line diagnostics without consuming any SRAM for strings
 #define PW_HANDLE_CRASH(...) \
-  pw_assert_avr_HandleFailure(__FILE__, __LINE__, nullptr)
+  pw_assert_avr_HandleFailure(__FILE__, __LINE__, 0)
 
 #define PW_HANDLE_ASSERT_FAILURE(condition_string, message, ...) \
   pw_assert_avr_HandleFailure(__FILE__, __LINE__, condition_string)
