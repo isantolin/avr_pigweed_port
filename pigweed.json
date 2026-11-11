@@ -1,0 +1,15 @@
+{
+  "pw": {
+    "pw_emu": {
+      "emulators": {
+        "simavr": {
+          "launcher": "pw_emu_avr.simavr.SimavrLauncher",
+          "connector": "pw_emu_avr.simavr.SimavrConnector"
+        }
+      },
+      "target_files": [
+        "tools/pw_emu_avr/targets.json"
+      ]
+    }
+  }
+}
