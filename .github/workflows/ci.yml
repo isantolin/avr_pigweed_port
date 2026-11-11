@@ -24,6 +24,10 @@ jobs:
         run: |
           git submodule update --init --recursive --depth 1
 
+      - name: Audit exact pinned Pigweed RPC and transfer sources
+        run: |
+          bash tools/ci/audit_pigweed_rpc.sh
+
       - name: Install AVR Toolchain & simavr
         env:
           DEBIAN_FRONTEND: noninteractive
