@@ -67,7 +67,7 @@ The probe is built for ATmega328P. Its UART result marker is emitted only after 
 - HDLC framing and upstream RPC packet dispatch in both directions.
 - Cooperative event polling with a bounded processing budget.
 - Resource-status callback staging and duplicate rejection.
-- Sequential reuse of the client and server transfer threads across read and write operations.
+- Sequential reuse of the same two transfer-thread objects with their roles reversed: the first endpoint starts as client and then becomes server, while the second starts as server and then becomes client.
 
 The loopback probe uses separate `Thread<1, 1>` instances for the two simulated endpoints. That is intentional: one endpoint is a client and the other is a server during a transfer. A single AVR `Thread<1, 1>` is not permitted to run both roles concurrently.
 
