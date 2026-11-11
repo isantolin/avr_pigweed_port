@@ -709,24 +709,49 @@ constexpr bool has_unique_object_representations_v = is_trivially_copyable<T>::v
                 )
                 hdr.write_text(c, encoding="utf-8")
 
-    # 5. Create an example sketch for Arduino Yún
+    # 5. Create an upstream pw_rpc + HDLC server skeleton.
+    # Applications register their generated Pigweed services on this server.
     examples_dir = dest_dir / "examples" / "YunBridgeRpc"
     examples_dir.mkdir(parents=True, exist_ok=True)
 
-    example_ino = """// Example Arduino Yún Pigweed HDLC / RPC Integration
+    example_ino = """// Arduino Yún: upstream Pigweed pw_rpc over HDLC/UART.
 #include <Arduino.h>
 #include <PigweedAVR.h>
+#include "avr_uart_stream.h"
+#include "pw_hdlc/rpc_channel.h"
+#include "pw_rpc/server.h"
+
+namespace {
+constexpr uint64_t kHdlcAddress = 1;
+constexpr uint32_t kRpcChannelId = 1;
+
+avr_port::AvrUartStream uart(115200);
+pw::hdlc::RpcChannelOutput output(uart, kHdlcAddress, "yun-rpc");
+std::array<pw::rpc::Channel, 1> channels = {
+    pw::rpc::Channel::Create<kRpcChannelId>(&output)};
+pw::rpc::Server server(pw::span<pw::rpc::Channel>(channels.data(),
+                                                   channels.size()));
+std::byte decoder_storage[128]{};
+pw::hdlc::Decoder decoder(pw::ByteSpan(decoder_storage));
+
+void PollUart() {
+  while (Serial1.available() > 0) {
+    const std::byte value{static_cast<uint8_t>(Serial1.read())};
+    auto frame = decoder.Process(value);
+    if (!frame.ok()) continue;
+    if (frame->address() != kHdlcAddress) continue;
+    (void)server.ProcessPacket(frame->data());
+  }
+}
+}  // namespace
 
 void setup() {
   Serial1.begin(115200);
+  // Register generated pw_rpc services here, before processing packets.
 }
 
 void loop() {
-  // Bridge handles HDLC framing and RPC dispatch cooperatively
-  if (Serial1.available()) {
-    int byte_read = Serial1.read();
-    (void)byte_read;
-  }
+  PollUart();
 }
 """
     (examples_dir / "YunBridgeRpc.ino").write_text(example_ino)
