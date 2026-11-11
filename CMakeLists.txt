@@ -383,6 +383,9 @@ add_executable(pw_transfer_avr_footprint_probe.elf EXCLUDE_FROM_ALL
 target_include_directories(pw_transfer_avr_footprint_probe.elf PRIVATE
   src
   "${PW_ROOT}/pw_tokenizer/public"
+  "${PW_ROOT}/pw_log/public"
+  "${CMAKE_CURRENT_SOURCE_DIR}/pw_log_avr/public"
+  "${CMAKE_CURRENT_SOURCE_DIR}/pw_log_avr/public_overrides"
 )
 target_link_libraries(pw_transfer_avr_footprint_probe.elf PRIVATE
   pw_transfer
