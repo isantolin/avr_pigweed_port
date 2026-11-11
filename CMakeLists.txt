@@ -152,6 +152,19 @@ add_subdirectory("${PW_ROOT}/pw_string" pw_string EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_base64" pw_base64 EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_tokenizer" pw_tokenizer EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_chrono" pw_chrono EXCLUDE_FROM_ALL)
+
+# The AVR logging facade above replaces Pigweed's default backend, but
+# pw_transfer still uses the upstream rate limiter implementation.
+add_library(pw_log.rate_limited STATIC
+  "${PW_ROOT}/pw_log/rate_limited.cc"
+)
+target_include_directories(pw_log.rate_limited PUBLIC
+  "${PW_ROOT}/pw_log/public"
+)
+target_link_libraries(pw_log.rate_limited PUBLIC
+  pw_log
+  pw_chrono.system_clock
+)
 add_subdirectory("${PW_ROOT}/pw_stream" pw_stream EXCLUDE_FROM_ALL)
 # The pinned Pigweed proto sources use proto2/proto3, not Editions. Keep
 # the generator compatible with the distro protoc (3.21) by disabling the
