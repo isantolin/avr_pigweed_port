@@ -76,7 +76,7 @@ class SimavrAdapterTest(unittest.TestCase):
 
     @unittest.skipUnless(
         (ROOT / 'build/pw_emu_avr/simavr_pty_runner').is_file()
-        and (ROOT / 'build/test_runner.elf').is_file(),
+        and (ROOT / 'build/pw_emu_avr/pw_emu_test_firmware.elf').is_file(),
         'host runner and AVR test firmware must be built',
     )
     def test_pw_emu_launches_runner_and_reads_uart(self) -> None:
@@ -85,7 +85,7 @@ class SimavrAdapterTest(unittest.TestCase):
             connector = launcher.start(
                 Path(directory),
                 'atmega328p',
-                file=ROOT / 'build/test_runner.elf',
+                file=ROOT / 'build/pw_emu_avr/pw_emu_test_firmware.elf',
                 pause=True,
             )
             stream = None
@@ -93,21 +93,32 @@ class SimavrAdapterTest(unittest.TestCase):
                 stream = connector.get_channel_stream('uart0', timeout=1.0)
                 connector.cont()
                 output = bytearray()
-                deadline = time.monotonic() + 20.0
+                deadline = time.monotonic() + 5.0
                 self.assertTrue(connector.running(), connector.get_logs())
-                while b'[  PASSED  ]' not in output and time.monotonic() < deadline:
+                while b'PW_EMU_UART_PASS' not in output and time.monotonic() < deadline:
                     try:
-                        chunk = stream.read(256)
+                        output.extend(stream.read(64))
                     except (OSError, SerialException):
-                        # simavr may close the PTY after the firmware's main
-                        # function reaches its terminal sleep/exit state.
                         break
-                    if chunk:
-                        output.extend(chunk)
                 self.assertIn(
-                    b'[  PASSED  ]',
+                    b'PW_EMU_UART_PASS',
                     output,
                     f'UART output missing; runner logs: {connector.get_logs()}',
+                )
+
+                # Reset must restart the ELF and emit the same UART marker again.
+                connector.reset()
+                connector.cont()
+                deadline = time.monotonic() + 5.0
+                while output.count(b'PW_EMU_UART_PASS') < 2 and time.monotonic() < deadline:
+                    try:
+                        output.extend(stream.read(64))
+                    except (OSError, SerialException):
+                        break
+                self.assertGreaterEqual(
+                    output.count(b'PW_EMU_UART_PASS'),
+                    2,
+                    f'UART marker missing after reset; runner logs: {connector.get_logs()}',
                 )
             finally:
                 if stream is not None:
