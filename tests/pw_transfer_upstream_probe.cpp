@@ -210,12 +210,14 @@ bool PumpTransfers(pw::transfer::Thread<1, 1>& client_thread,
     if (g_client_to_server_frames == 0) {
       g_pump_failure_reason = 5;
     } else if (g_server_to_client_frames == 0) {
-      if (g_server_process_packets == 0) {
+      if (g_client_to_server_frames < 2) {
         g_pump_failure_reason = 8;
-      } else if (g_server_process_status != 0) {
+      } else if (g_server_process_packets < 2) {
         g_pump_failure_reason = 9;
-      } else {
+      } else if (g_server_process_status != 0) {
         g_pump_failure_reason = 10;
+      } else {
+        g_pump_failure_reason = 11;
       }
     } else {
       g_pump_failure_reason = 7;
