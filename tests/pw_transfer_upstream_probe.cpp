@@ -284,7 +284,17 @@ bool PumpTransfers(pw::transfer::Thread<1, 1>& client_thread,
     }
     pw_chrono_avr_StepMillis(1);
   }
-  g_pump_failure_reason = 24;
+  if (server_thread.ActiveServerTransfersForTest() != 0) {
+    g_pump_failure_reason = 30;
+  } else if (server_thread.PendingEventsForTest() != 0) {
+    g_pump_failure_reason = 31;
+  } else if (client_thread.ActiveClientTransfersForTest() != 0) {
+    g_pump_failure_reason = 32;
+  } else if (client_thread.PendingEventsForTest() != 0) {
+    g_pump_failure_reason = 33;
+  } else {
+    g_pump_failure_reason = 34;
+  }
   return false;
 }
 
