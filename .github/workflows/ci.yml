@@ -144,7 +144,7 @@ jobs:
 
       - name: Configure ATmega32U4 shared-thread footprint
         run: |
-          cmake -B build-transfer-32u4 -G Ninja \
+          cmake -B build-transfer-1284p -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
             -DAVR_MCU=atmega1284p \
             -DAVR_F_CPU=16000000UL \
@@ -154,15 +154,15 @@ jobs:
 
       - name: Build ATmega1284P shared-thread footprint
         run: |
-          if ! cmake --build build-transfer-32u4 --target pw_transfer_avr_footprint_probe.elf > build-transfer-32u4/footprint-build.log 2>&1; then
-            tail -n 160 build-transfer-32u4/footprint-build.log
-            if [ -f build-transfer-32u4/pw_transfer_avr_footprint_probe.map ]; then
+          if ! cmake --build build-transfer-1284p --target pw_transfer_avr_footprint_probe.elf > build-transfer-1284p/footprint-build.log 2>&1; then
+            tail -n 160 build-transfer-1284p/footprint-build.log
+            if [ -f build-transfer-1284p/pw_transfer_avr_footprint_probe.map ]; then
               echo "===== Largest SRAM map entries ====="
-              grep -E '^\\.data|^\\.bss|^ *0x[0-9a-fA-F]+ +0x[0-9a-fA-F]+ ' build-transfer-32u4/pw_transfer_avr_footprint_probe.map | tail -n 180
+              grep -E '^\\.data|^\\.bss|^ *0x[0-9a-fA-F]+ +0x[0-9a-fA-F]+ ' build-transfer-1284p/pw_transfer_avr_footprint_probe.map | tail -n 180
             fi
             exit 1
           fi
-          tail -n 30 build-transfer-32u4/footprint-build.log
+          tail -n 30 build-transfer-1284p/footprint-build.log
 
       - name: Run Pigweed AVR Test Suite in simavr
         run: |
