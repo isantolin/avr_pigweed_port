@@ -23,9 +23,16 @@ mkdir -p "$(dirname "$OUT")"
     pw_rpc/public/pw_rpc/server.h \
     pw_rpc/public/pw_rpc/raw/server_reader_writer.h \
     pw_rpc/public/pw_rpc/internal/config.h \
+    pw_rpc/public/pw_rpc/internal/lock.h \
+    pw_hdlc/CMakeLists.txt \
+    pw_hdlc/public/pw_hdlc/rpc_channel.h \
+    pw_hdlc/public/pw_hdlc/encoder.h \
+    pw_thread/public/pw_thread/thread_core.h \
     pw_transfer/CMakeLists.txt \
     pw_transfer/public/pw_transfer/transfer.h \
     pw_transfer/public/pw_transfer/transfer_thread.h \
+    pw_transfer/transfer_thread.cc \
+    pw_transfer/client.cc \
     pw_sync/CMakeLists.txt \
     pw_sync/backend.cmake
   do
