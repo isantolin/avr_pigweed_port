@@ -8,6 +8,7 @@ int main(void) {
   UBRR0H = (uint8_t)(ubrr >> 8);
   UBRR0L = (uint8_t)(ubrr & 0xffU);
   UCSR0B = (uint8_t)(1U << TXEN0);
+  UCSR0A = (uint8_t)(1U << TXC0);
   UCSR0C = (uint8_t)((1U << UCSZ01) | (1U << UCSZ00));
 
   static const char message[] = "PW_EMU_UART_PASS\r\n";
