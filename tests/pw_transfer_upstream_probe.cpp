@@ -24,6 +24,7 @@ constexpr uint64_t kHdlcAddress = 1;
 constexpr uint32_t kRpcChannelId = 1;
 constexpr uint32_t kReadResourceId = 0x1234;
 constexpr uint32_t kWriteResourceId = 0x5678;
+constexpr uint32_t kCancelResourceId = 0x1235;
 constexpr size_t kHdlcDecoderBufferSize = 128;
 
 bool first_callback_called = false;
@@ -31,9 +32,11 @@ bool duplicate_rejected = false;
 bool read_complete = false;
 bool write_complete = false;
 bool reverse_write_complete = false;
+bool cancel_complete = false;
 pw::Status read_completion_status = pw::Status::Unknown();
 pw::Status write_completion_status = pw::Status::Unknown();
 pw::Status reverse_write_completion_status = pw::Status::Unknown();
+pw::Status cancel_completion_status = pw::Status::Unknown();
 
 void OnFirstResourceStatus(
     pw::Status status,
@@ -60,6 +63,11 @@ void OnWriteComplete(pw::Status status) {
 void OnReverseWriteComplete(pw::Status status) {
   reverse_write_completion_status = status;
   reverse_write_complete = true;
+}
+
+void OnCancelComplete(pw::Status status) {
+  cancel_completion_status = status;
+  cancel_complete = true;
 }
 
 void EmitResult(bool success) {
@@ -232,6 +240,34 @@ int main() {
       std::memcmp(write_sink.data(), write_data.data(), write_data.size()) != 0) {
     success = false;
   }
+
+  // Cancel an in-flight read before its payload is drained. The transfer
+  // callback must report CANCELLED and release the client role.
+  std::array<std::byte, 256> cancel_data{};
+  for (size_t i = 0; i < cancel_data.size(); ++i) {
+    cancel_data[i] = static_cast<std::byte>(0x20 + (i & 0x3F));
+  }
+  pw::stream::MemoryReader cancel_source{pw::ConstByteSpan(cancel_data)};
+  pw::transfer::ReadOnlyHandler cancel_handler(kCancelResourceId,
+                                                cancel_source);
+  if (!transfer_service.RegisterHandler(cancel_handler)) success = false;
+
+  std::array<std::byte, 256> cancel_output_buffer{};
+  pw::stream::MemoryWriter cancel_output{pw::ByteSpan(cancel_output_buffer)};
+  cancel_complete = false;
+  auto cancel_result =
+      transfer_client.Read(kCancelResourceId, cancel_output, OnCancelComplete);
+  if (!cancel_result.ok()) {
+    success = false;
+  } else {
+    (void)client_thread.Poll(1);
+    (void)server_thread.Poll(1);
+    cancel_result->Cancel();
+    if (!PumpTransfers(client_thread, server_thread, cancel_complete)) {
+      success = false;
+    }
+  }
+  if (cancel_completion_status != pw::Status::Cancelled()) success = false;
 
   // Reuse the same two TransferThread instances with their roles reversed.
   // The first endpoint now serves transfers and the second endpoint is client.
