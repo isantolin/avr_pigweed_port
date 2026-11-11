@@ -1,3 +1,4 @@
+#define PW_TRANSFER_COOPERATIVE_TEST 1
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -197,6 +198,16 @@ int main() {
   static pw::transfer::Thread<1, 1> server_thread{
       pw::ByteSpan(server_chunk), pw::ByteSpan(server_encode)};
 
+  // Fill the bounded event queue and verify overflow is explicit, observable,
+  // and resets the queue so subsequent transfer events can proceed.
+  bool success = true;
+  client_thread.EnqueueTestEvent();
+  client_thread.EnqueueTestEvent();
+  client_thread.EnqueueTestEvent();
+  if (client_thread.Poll(0) != pw::Status::ResourceExhausted()) {
+    success = false;
+  }
+
   // The resource-status responder is a single staged upstream callback.
   // Verify the cooperative queue preserves that contract and honors budgets.
   first_callback_called = false;
@@ -204,7 +215,7 @@ int main() {
   client_thread.EnqueueResourceEvent(0x9999, OnFirstResourceStatus);
   client_thread.EnqueueResourceEvent(0x999A, OnDuplicateResourceStatus);
 
-  bool success = duplicate_rejected;
+  success = success && duplicate_rejected;
   if (client_thread.Poll(0) != pw::Status::Unavailable()) success = false;
   if (!client_thread.Poll(1).ok()) success = false;
   if (!first_callback_called) success = false;
