@@ -47,6 +47,26 @@ def main() -> int:
         )
 
     replace_once(
+        "pw_protobuf/py/pw_protobuf/plugin.py",
+        "from pathlib import Path\\nfrom shlex import shlex\\n",
+        """from pathlib import Path
+from shlex import shlex
+
+# protoc launches this plugin from a module-specific build directory. Add the
+# generated Python proto package roots from the common out-of-source build dir.
+for _build_root in (Path.cwd(), *Path.cwd().parents):
+    for _target in (
+        "pw_protobuf.codegen_protos",
+        "pw_protobuf.common_proto",
+        "pw_protobuf.status_proto",
+        "pw_protobuf.field_options_proto",
+    ):
+        _python_root = _build_root / _target / "python"
+        if _python_root.is_dir() and str(_python_root) not in sys.path:
+            sys.path.append(str(_python_root))
+""",
+    )
+    replace_once(
         "pw_protobuf/public/pw_protobuf/wire_format.h",
         "inline constexpr static uint32_t kMaxFieldNumber = (1u << 29) - 1;",
         "inline constexpr static uint32_t kMaxFieldNumber = (uint32_t{1} << 29) - 1;",
