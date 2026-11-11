@@ -50,6 +50,8 @@ mkdir -p "$(dirname "$OUT")"
     pw_protobuf/public/pw_protobuf/buffer_encoder.h \
     pw_protobuf/public/pw_protobuf/message.h \
     pw_protobuf/public/pw_protobuf/config.h \
+    pw_protobuf/public/pw_protobuf/serialized_size.h \
+    pw_status/public/pw_status/status_with_size.h \
     pw_protobuf/decoder.cc \
     pw_protobuf/encoder.cc \
     pw_protobuf/message.cc \
