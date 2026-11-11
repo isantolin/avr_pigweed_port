@@ -42,6 +42,7 @@ set(_pw_generated_python_paths
   "${CMAKE_BINARY_DIR}/pw_protobuf/pw_protobuf.common_proto/python"
   "${CMAKE_BINARY_DIR}/pw_protobuf/pw_protobuf.status_proto/python"
   "${CMAKE_BINARY_DIR}/pw_protobuf/pw_protobuf.field_options_proto/python"
+  # pw_rpc uses its own subdirectory binary root.
   "${CMAKE_BINARY_DIR}/pw_rpc/pw_rpc.protos/python"
 )
 if(DEFINED ENV{PYTHONPATH} AND NOT "$ENV{PYTHONPATH}" STREQUAL "")
