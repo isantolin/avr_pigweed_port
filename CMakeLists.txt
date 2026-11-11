@@ -374,8 +374,8 @@ add_custom_command(TARGET pw_transfer_upstream_probe.elf POST_BUILD
   COMMENT "Report upstream pw_transfer AVR probe memory usage (${AVR_MCU})"
 )
 
-# Production footprint probe: one Thread<1,1> shared by upstream client and
-# server objects, matching the Bridge's sequential-role architecture.
+# Full-feature footprint probe: one Thread<1,1> shared by upstream client and
+# server objects. ATmega1284P is the minimum validated AVR memory class.
 add_executable(pw_transfer_avr_footprint_probe.elf EXCLUDE_FROM_ALL
   tests/pw_transfer_avr_footprint_probe.cpp
   src/cxx_abi_stubs.cpp
