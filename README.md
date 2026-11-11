@@ -90,7 +90,7 @@ cmake --build build-transfer --target pw_transfer_upstream_probe.elf
 simavr -m atmega2560 build-transfer/pw_transfer_upstream_probe.elf
 ```
 
-The probe exercises read and write transfers, cancellation of an in-flight read, and sequential client/server role reversal on the same two transfer-thread objects.
+The probe exercises read/write transfers, cancellation, recovery after a dropped response, retry exhaustion/deadline handling, and sequential client/server role reversal on the same two transfer-thread objects.
 
 ### ATmega32U4 footprint
 
