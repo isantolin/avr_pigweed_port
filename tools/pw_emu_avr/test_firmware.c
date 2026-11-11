@@ -10,8 +10,8 @@ int main(void) {
   UCSR0B = (uint8_t)(1U << TXEN0);
   UCSR0C = (uint8_t)((1U << UCSZ01) | (1U << UCSZ00));
 
-  static const char message[] = "PW_EMU_UART_PASS\\r\\n";
-  for (uint8_t i = 0; message[i] != '\\0'; ++i) {
+  static const char message[] = "PW_EMU_UART_PASS\r\n";
+  for (uint8_t i = 0; message[i] != '\0'; ++i) {
     while ((UCSR0A & (1U << UDRE0)) == 0U) {
     }
     UDR0 = (uint8_t)message[i];
