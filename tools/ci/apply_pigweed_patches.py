@@ -93,12 +93,12 @@ for _package_name, _package_paths in _package_roots.items():
 
 if not _codegen_files:
     _searched = [
-        str(_root)
+        (_root, sorted(str(_item.relative_to(_root)) for _item in _root.rglob("*"))[:100])
         for _root in map(_PigweedPath, sys.path)
-        if _root.name == "python"
+        if _root.name == "python" and _root.is_dir()
     ]
     raise ModuleNotFoundError(
-        "codegen_options_pb2.py not found; searched: " + repr(_searched)
+        "codegen_options_pb2.py not found; Python build trees: " + repr(_searched)
     )
 print("PWPB_PLUGIN_PACKAGE", _codegen_files, _package_roots, file=sys.stderr)
 """,    )
