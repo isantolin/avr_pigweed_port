@@ -173,7 +173,12 @@ jobs:
 
       - name: Run Pigweed AVR Test Suite in simavr
         run: |
-          cmake --build build --target run_tests
+          if ! simavr -m ${AVR_MCU} build/test_runner.elf > build/test_runner.log 2>&1; then
+            cat build/test_runner.log
+            exit 1
+          fi
+          cat build/test_runner.log
+          grep -q "100% OF PORTED PIGWEED MODULES VERIFIED OK!" build/test_runner.log
           ccache --show-stats
 
       - name: Verify Python Host Tools & Arduino Export
