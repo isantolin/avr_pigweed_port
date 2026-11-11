@@ -159,6 +159,34 @@ add_subdirectory("${PW_ROOT}/pw_checksum" pw_checksum EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_sync" pw_sync EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_hdlc" pw_hdlc EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_rpc" pw_rpc EXCLUDE_FROM_ALL)
+add_subdirectory("${PW_ROOT}/pw_transfer" pw_transfer EXCLUDE_FROM_ALL)
+
+# The AVR uses a cooperative event pump, not Pigweed's blocking thread
+# notification/semaphore backends. Keep all transfer state in upstream code.
+function(avr_remove_target_deps target)
+  foreach(property IN ITEMS LINK_LIBRARIES INTERFACE_LINK_LIBRARIES)
+    get_target_property(dependencies "${target}" "${property}")
+    if(dependencies)
+      foreach(dependency IN LISTS ARGN)
+        list(REMOVE_ITEM dependencies "${dependency}")
+      endforeach()
+      set_property(TARGET "${target}" PROPERTY "${property}" "${dependencies}")
+    endif()
+  endforeach()
+endfunction()
+
+avr_remove_target_deps(pw_transfer.core
+  pw_sync.binary_semaphore
+  pw_sync.timed_thread_notification
+  pw_thread.thread_core
+  pw_sync.mutex
+)
+avr_remove_target_deps(pw_transfer pw_sync.mutex)
+avr_remove_target_deps(pw_transfer.config pw_chrono.system_timer)
+target_link_libraries(pw_transfer PUBLIC pw_sync.no_lock)
+target_compile_definitions(pw_transfer.core PUBLIC PW_TRANSFER_COOPERATIVE=1)
+target_compile_definitions(pw_transfer PUBLIC PW_TRANSFER_COOPERATIVE=1)
+
 # Keep Pigweed RPC lockless on the single AVR owner loop.
 target_link_libraries(pw_rpc.common PUBLIC
   pw_sync.no_lock
@@ -288,6 +316,17 @@ target_link_libraries(pw_rpc_upstream_probe.elf PRIVATE
 add_custom_command(TARGET pw_rpc_upstream_probe.elf POST_BUILD
   COMMAND avr-size --format=avr --mcu=${AVR_MCU} $<TARGET_FILE:pw_rpc_upstream_probe.elf>
   COMMENT "Report upstream pw_rpc AVR probe memory usage"
+)
+
+# 6b. Upstream pw_transfer cooperative AVR link probe.
+add_executable(pw_transfer_upstream_probe.elf
+  tests/pw_transfer_upstream_probe.cpp
+  src/cxx_abi_stubs.cpp
+)
+target_link_libraries(pw_transfer_upstream_probe.elf PRIVATE pw_transfer)
+add_custom_command(TARGET pw_transfer_upstream_probe.elf POST_BUILD
+  COMMAND avr-size --format=avr --mcu=${AVR_MCU} $<TARGET_FILE:pw_transfer_upstream_probe.elf>
+  COMMENT "Report upstream pw_transfer AVR probe memory usage"
 )
 
 # 7. Post-processing: extract .hex, assembly listing, and memory size audit
