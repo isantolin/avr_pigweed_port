@@ -201,8 +201,16 @@ avr_remove_target_deps(pw_transfer.core
 avr_remove_target_deps(pw_transfer pw_sync.mutex)
 avr_remove_target_deps(pw_transfer.config pw_chrono.system_timer)
 target_link_libraries(pw_transfer PUBLIC pw_sync.no_lock)
-target_compile_definitions(pw_transfer.core PUBLIC PW_TRANSFER_COOPERATIVE=1)
-target_compile_definitions(pw_transfer PUBLIC PW_TRANSFER_COOPERATIVE=1)
+target_compile_definitions(pw_transfer.core PUBLIC
+  PW_TRANSFER_COOPERATIVE=1
+  PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY=2
+  PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE=128
+)
+target_compile_definitions(pw_transfer PUBLIC
+  PW_TRANSFER_COOPERATIVE=1
+  PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY=2
+  PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE=128
+)
 
 # Keep Pigweed RPC lockless on the single AVR owner loop.
 target_link_libraries(pw_rpc.common PUBLIC
