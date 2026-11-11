@@ -322,6 +322,14 @@ def export_library(dest_dir: Path):
         if new in content:
             return
         if old not in content:
+            # The source-tree AVR patch already provides these double guards.
+            # The Arduino export must not try to apply a second, older variant.
+            if (
+                relative_path.startswith("pw_protobuf/")
+                and "Double" in old
+                and "if constexpr (sizeof(double) != sizeof(uint64_t))" in content
+            ):
+                return
             raise RuntimeError(
                 f"Pigweed compatibility patch did not match {relative_path}"
             )
