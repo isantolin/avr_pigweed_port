@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
+      fail-fast: false
       matrix:
         crc_impl: [PW_CHECKSUM_CRC32_4BITS, PW_CHECKSUM_CRC32_1BITS]
 
