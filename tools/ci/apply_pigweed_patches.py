@@ -614,7 +614,7 @@ from pw_rpc.client import Client""",
     for signature in stream_methods:
         method_start = transfer_content.index(signature)
         next_method = transfer_content.find(
-            "\\nvoid TransferThread::", method_start + len(signature)
+            "\nvoid TransferThread::", method_start + len(signature)
         )
         method_end = len(transfer_content) if next_method < 0 else next_method
         method_block = transfer_content[method_start:method_end]
