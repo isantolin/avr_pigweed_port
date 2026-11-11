@@ -3,11 +3,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <avr/interrupt.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 
 #include "pw_bytes/span.h"
+#include "pw_chrono_avr/system_clock_avr.h"
 #include "pw_hdlc/decoder.h"
 #include "pw_hdlc/rpc_channel.h"
 #include "pw_rpc/client.h"
@@ -174,6 +176,9 @@ bool PumpTransfers(pw::transfer::Thread<1, 1>& client_thread,
 }  // namespace
 
 int main() {
+  pw_chrono_avr_InitTimer0();
+  sei();
+
   static std::array<std::byte, 128> client_chunk{};
   static std::array<std::byte, 128> client_encode{};
   static std::array<std::byte, 128> server_chunk{};
