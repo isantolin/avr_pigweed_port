@@ -607,9 +607,13 @@ from pw_rpc.client import Client""",
         "void TransferThread::SetServerReadStream(",
         "void TransferThread::SetServerWriteStream(",
     )
-    old_reserve = "  if (!TryWaitForEventToProcess()) { return; }"
+    old_reserve = """  if (!TryWaitForEventToProcess()) {
+    return;
+  }"""
     new_reserve = """#if !defined(PW_TRANSFER_COOPERATIVE)
-  if (!TryWaitForEventToProcess()) { return; }
+  if (!TryWaitForEventToProcess()) {
+    return;
+  }
 #endif"""
     for signature in stream_methods:
         method_start = transfer_content.index(signature)
