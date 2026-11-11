@@ -387,6 +387,7 @@ target_include_directories(pw_transfer_avr_footprint_probe.elf PRIVATE
 target_link_libraries(pw_transfer_avr_footprint_probe.elf PRIVATE
   pw_transfer
   pw_tokenizer
+  pw_log
   pw_rpc.server
   pw_rpc.client
   pw_rpc.raw.server_api
