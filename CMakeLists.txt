@@ -40,6 +40,7 @@ set(_pw_generated_python_paths
   "${CMAKE_BINARY_DIR}/pw_protobuf.common_proto/python"
   "${CMAKE_BINARY_DIR}/pw_protobuf.status_proto/python"
   "${CMAKE_BINARY_DIR}/pw_protobuf.field_options_proto/python"
+  "${CMAKE_BINARY_DIR}/pw_rpc/pw_rpc.protos/python"
 )
 if(DEFINED ENV{PYTHONPATH} AND NOT "$ENV{PYTHONPATH}" STREQUAL "")
   list(APPEND _pw_generated_python_paths "$ENV{PYTHONPATH}")

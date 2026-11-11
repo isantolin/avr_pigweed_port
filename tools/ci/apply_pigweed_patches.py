@@ -47,6 +47,17 @@ def main() -> int:
         )
 
     replace_once(
+        "pw_rpc/py/pw_rpc/__init__.py",
+        "from pw_rpc.client import Client",
+        """from pkgutil import extend_path
+
+# Generated pw_rpc.protos Python modules live in a sibling build directory.
+# Extend this package so pw_rpc.internal.packet_pb2 is importable by protoc.
+__path__ = extend_path(__path__, __name__)
+
+from pw_rpc.client import Client""",
+    )
+    replace_once(
         "pw_protobuf/py/pw_protobuf/plugin.py",
         "import sys\n",
         """import sys

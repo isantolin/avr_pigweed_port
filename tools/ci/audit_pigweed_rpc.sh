@@ -43,6 +43,7 @@ mkdir -p "$(dirname "$OUT")"
     pw_rpc/public/pw_rpc/internal/config.h \
     pw_rpc/public/pw_rpc/internal/lock.h \
     pw_rpc/py/pw_rpc/plugin.py \
+    pw_rpc/py/pw_rpc/__init__.py \
     pw_rpc/py/pw_rpc/codegen.py \
     pw_rpc/py/pw_rpc/descriptors.py \
     pw_rpc/py/pw_rpc/packets.py \
