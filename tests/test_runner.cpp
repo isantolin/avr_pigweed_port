@@ -481,14 +481,26 @@ bool TestPwBase64() {
   char encoded[16];
   const size_t encoded_len = pw::base64::Encode(
       pw::as_bytes(pw::span(plain, 7)), pw::span(encoded));
-  if (encoded_len != 12) return false;
-  if (std::memcmp(encoded, "UGlnd2VlZA==", 12) != 0) return false;
+  if (encoded_len != 12) {
+    uart::Puts_P(PSTR("Base64: encoded length mismatch\\r\\n"));
+    return false;
+  }
+  if (std::memcmp(encoded, "UGlnd2VlZA==", 12) != 0) {
+    uart::Puts_P(PSTR("Base64: encoded payload mismatch\\r\\n"));
+    return false;
+  }
 
   std::byte decoded[16];
   const size_t decoded_len = pw::base64::Decode(
       std::string_view(encoded, encoded_len), pw::span(decoded));
-  if (decoded_len != 7) return false;
-  if (std::memcmp(decoded, plain, 7) != 0) return false;
+  if (decoded_len != 7) {
+    uart::Puts_P(PSTR("Base64: decoded length mismatch\\r\\n"));
+    return false;
+  }
+  if (std::memcmp(decoded, plain, 7) != 0) {
+    uart::Puts_P(PSTR("Base64: decoded payload mismatch\\r\\n"));
+    return false;
+  }
 
   return true;
 }
