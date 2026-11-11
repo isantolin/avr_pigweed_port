@@ -64,41 +64,43 @@ from pw_rpc.client import Client""",
 import types as _PigweedTypes
 from pathlib import Path as _PigweedPath
 
-# The protoc plugin runs as a separate process. Resolve the generated Python
-# package roots explicitly and register namespace packages before importing
-# Pigweed's generated options modules.
+# Pigweed's CMake Python proto target is generated in the build tree. Locate
+# its actual output rather than assuming the package directory layout.
 _package_roots = {}
+_codegen_files = []
 for _entry in sys.path:
     _python_root = _PigweedPath(_entry)
-    if _python_root.name != "python" or not any(
-        _part.startswith("pw_protobuf.") for _part in _python_root.parts
-    ):
+    if _python_root.name != "python" or not _python_root.is_dir():
         continue
+    if not any(_part.startswith("pw_protobuf.") for _part in _python_root.parts):
+        continue
+    _codegen_files.extend(_python_root.rglob("codegen_options_pb2.py"))
     for _package_name in ("pw_protobuf_codegen_protos", "pw_protobuf_protos"):
         _package_dir = _python_root / _package_name
         if _package_dir.is_dir():
             _package_roots.setdefault(_package_name, []).append(str(_package_dir))
 
+if _codegen_files:
+    _package_roots.setdefault("pw_protobuf_codegen_protos", []).extend(
+        str(_module_file.parent) for _module_file in _codegen_files
+    )
+
 for _package_name, _package_paths in _package_roots.items():
     _package = _PigweedTypes.ModuleType(_package_name)
-    _package.__path__ = _package_paths
+    _package.__path__ = list(dict.fromkeys(_package_paths))
     _package.__package__ = _package_name
     sys.modules[_package_name] = _package
 
-_codegen_module = next(
-    (
-        _path / "pw_protobuf_codegen_protos" / "codegen_options_pb2.py"
-        for _path in map(_PigweedPath, sys.path)
-        if (_path / "pw_protobuf_codegen_protos" / "codegen_options_pb2.py").is_file()
-    ),
-    None,
-)
-if _codegen_module is None:
+if not _codegen_files:
+    _searched = [
+        str(_root)
+        for _root in map(_PigweedPath, sys.path)
+        if _root.name == "python"
+    ]
     raise ModuleNotFoundError(
-        "codegen_options_pb2.py not found; searched Python roots: "
-        + repr(sys.path)
+        "codegen_options_pb2.py not found; searched: " + repr(_searched)
     )
-print("PWPB_PLUGIN_PACKAGE", _codegen_module, _package_roots, file=sys.stderr)
+print("PWPB_PLUGIN_PACKAGE", _codegen_files, _package_roots, file=sys.stderr)
 """,    )
     replace_once(
         "pw_protobuf/public/pw_protobuf/wire_format.h",
