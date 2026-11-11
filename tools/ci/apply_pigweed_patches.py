@@ -394,6 +394,12 @@ from pw_rpc.client import Client""",
   }
 
   size_t PendingEventsForTest() const { return event_queue_size_; }
+  uint8_t PendingEventTypeForTest(size_t offset = 0) const {
+    if (offset >= event_queue_size_) return 0xff;
+    const size_t index =
+        (event_queue_head_ + offset) % PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY;
+    return static_cast<uint8_t>(event_queue_[index].event.type);
+  }
 
   size_t ActiveClientTransfersForTest() const {
     size_t count = 0;
