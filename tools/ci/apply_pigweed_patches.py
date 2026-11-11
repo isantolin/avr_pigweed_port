@@ -567,12 +567,13 @@ from pw_rpc.client import Client""",
         )
     transfer_content = transfer_content[:stream_start] + stream_tail
 
-    # Reserve one global client/server role before queuing a new transfer. A
-    # retransmission/restart for the same session is allowed; a different
-    # session or the opposite role is rejected with UNAVAILABLE.
-    start_marker = "  bool is_client_transfer = stream != nullptr;\n"
-    role_code = """  bool is_client_transfer = stream != nullptr;
-#if defined(PW_TRANSFER_COOPERATIVE)
+    # Claim the single global transfer role only after StartTransfer has
+    # staged its event and resolved the server handler.
+    start_begin = transfer_content.index("void TransferThread::StartTransfer(")
+    start_end = transfer_content.index("void TransferThread::ProcessChunk(", start_begin)
+    start_block = transfer_content[start_begin:start_end]
+    notify = "  NotifyEvent();"
+    role_code = """#if defined(PW_TRANSFER_COOPERATIVE)
   if (next_event_.type == EventType::kNewClientTransfer ||
       next_event_.type == EventType::kNewServerTransfer) {
     const CooperativeRole requested_role =
@@ -583,7 +584,10 @@ from pw_rpc.client import Client""",
          cooperative_session_id_ != session_id ||
          cooperative_start_pending_)) {
       if (is_client_transfer) {
-        if (on_completion) on_completion(Status::Unavailable());
+        if (staged_on_completion_) {
+          staged_on_completion_(Status::Unavailable());
+          staged_on_completion_ = nullptr;
+        }
       } else {
         SendStatusChunk({
             .session_id = session_id,
@@ -603,9 +607,12 @@ from pw_rpc.client import Client""",
   }
 #endif
 """
-    if transfer_content.count(start_marker) != 1:
-        raise RuntimeError("could not find unique StartTransfer role insertion point")
-    transfer_content = transfer_content.replace(start_marker, role_code, 1)
+    if start_block.count(notify) != 1:
+        raise RuntimeError("could not find unique StartTransfer NotifyEvent")
+    start_block = start_block.replace(notify, role_code + notify, 1)
+    transfer_content = (
+        transfer_content[:start_begin] + start_block + transfer_content[start_end:]
+    )
 
     # A newly accepted transfer event consumes the pending role reservation.
     handle_marker = """  if (event.type == EventType::kNewClientTransfer) {
@@ -622,6 +629,26 @@ from pw_rpc.client import Client""",
     if transfer_content.count(handle_marker) != 1:
         raise RuntimeError("could not find unique new-transfer handling point")
     transfer_content = transfer_content.replace(handle_marker, handle_replacement, 1)
+
+    # Release a pending role reservation if upstream could not allocate a context.
+    null_context_marker = """  if (ctx == nullptr) {
+    // No context was found. For new transfer events, report a
+    // RESOURCE_EXHAUSTED error with starting the transfer."""
+    null_context_replacement = """  if (ctx == nullptr) {
+#if defined(PW_TRANSFER_COOPERATIVE)
+    if (event.type == EventType::kNewClientTransfer ||
+        event.type == EventType::kNewServerTransfer) {
+      cooperative_start_pending_ = false;
+      UpdateCooperativeRole();
+    }
+#endif
+    // No context was found. For new transfer events, report a
+    // RESOURCE_EXHAUSTED error with starting the transfer."""
+    if transfer_content.count(null_context_marker) != 1:
+        raise RuntimeError("could not find unique null-context branch")
+    transfer_content = transfer_content.replace(
+        null_context_marker, null_context_replacement, 1
+    )
 
     # Update the global role after every state-machine event; it is released
     # only after both upstream context arrays are inactive.
@@ -664,6 +691,10 @@ Status TransferThread::Poll(size_t budget) {
     event_queue_head_ = event_queue_tail_;
     event_queue_size_ = 0;
     event_overflowed_ = false;
+    if (cooperative_start_pending_ && staged_on_completion_) {
+      staged_on_completion_(Status::ResourceExhausted());
+      staged_on_completion_ = nullptr;
+    }
     cooperative_start_pending_ = false;
     UpdateCooperativeRole();
     return Status::ResourceExhausted();
