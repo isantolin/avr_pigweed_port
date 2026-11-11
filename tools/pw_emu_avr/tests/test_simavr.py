@@ -103,7 +103,7 @@ class SimavrAdapterTest(unittest.TestCase):
                 self.assertIn(
                     b'PW_EMU_UART_PASS',
                     output,
-                    f'UART output missing; runner logs: {connector.get_logs()}',
+                    f'UART output missing: {output!r}; runner logs: {connector.get_logs()}',
                 )
 
                 # Reset must restart the ELF and emit the same UART marker again.
@@ -118,7 +118,7 @@ class SimavrAdapterTest(unittest.TestCase):
                 self.assertGreaterEqual(
                     output.count(b'PW_EMU_UART_PASS'),
                     2,
-                    f'UART marker missing after reset; runner logs: {connector.get_logs()}',
+                    f'UART marker missing after reset: {output!r}; runner logs: {connector.get_logs()}',
                 )
             finally:
                 if stream is not None:
