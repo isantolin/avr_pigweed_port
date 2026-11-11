@@ -24,6 +24,9 @@ static void uart_write(const char *message) {
 
 int main(void) {
   uart_init();
+  // Keep simavr's idle-loop detector from treating the UART RX wait as an
+  // intentional firmware halt while the host sends the next byte.
+  sei();
 
   // The host opens the PTY before resuming the MCU, so READY confirms that
   // UART RX is configured before the host sends its start byte.
@@ -37,7 +40,6 @@ int main(void) {
     uart_write("PW_EMU_UART_FAIL\r\n");
   }
 
-  cli();
   set_sleep_mode(SLEEP_MODE_IDLE);
   sleep_enable();
   for (;;) {
