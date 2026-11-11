@@ -365,6 +365,27 @@ add_custom_command(TARGET pw_transfer_upstream_probe.elf POST_BUILD
   COMMENT "Report upstream pw_transfer AVR probe memory usage (${AVR_MCU})"
 )
 
+# Production footprint probe: one Thread<1,1> shared by upstream client and
+# server objects, matching the Bridge's sequential-role architecture.
+add_executable(pw_transfer_avr_footprint_probe.elf EXCLUDE_FROM_ALL
+  tests/pw_transfer_avr_footprint_probe.cpp
+  src/cxx_abi_stubs.cpp
+)
+target_include_directories(pw_transfer_avr_footprint_probe.elf PRIVATE src)
+target_link_libraries(pw_transfer_avr_footprint_probe.elf PRIVATE
+  pw_transfer
+  pw_rpc.server
+  pw_rpc.client
+  pw_rpc.raw.server_api
+  pw_rpc.raw.client_api
+  pw_hdlc.rpc_channel_output
+  pw_sync.no_lock
+)
+add_custom_command(TARGET pw_transfer_avr_footprint_probe.elf POST_BUILD
+  COMMAND avr-size --format=avr --mcu=${AVR_MCU} $<TARGET_FILE:pw_transfer_avr_footprint_probe.elf>
+  COMMENT "Report shared-thread pw_transfer footprint (${AVR_MCU})"
+)
+
 # 7. Post-processing: extract .hex, assembly listing, and memory size audit
 add_custom_command(TARGET firmware.elf POST_BUILD
   COMMAND avr-objcopy -O ihex -R .eeprom -R .pw_tokenizer.entries -R .pw_tokenizer.info $<TARGET_FILE:firmware.elf> firmware.hex
