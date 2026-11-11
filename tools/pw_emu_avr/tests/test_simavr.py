@@ -92,9 +92,21 @@ class SimavrAdapterTest(unittest.TestCase):
                 connector.cont()
                 output = bytearray()
                 deadline = time.monotonic() + 20.0
+                self.assertTrue(connector.running(), connector.get_logs())
                 while b'[  PASSED  ]' not in output and time.monotonic() < deadline:
-                    output.extend(stream.read(256))
-                self.assertIn(b'[  PASSED  ]', output)
+                    try:
+                        chunk = stream.read(256)
+                    except OSError:
+                        # simavr may close the PTY after the firmware's main
+                        # function reaches its terminal sleep/exit state.
+                        break
+                    if chunk:
+                        output.extend(chunk)
+                self.assertIn(
+                    b'[  PASSED  ]',
+                    output,
+                    f'UART output missing; runner logs: {connector.get_logs()}',
+                )
             finally:
                 if stream is not None:
                     stream.close()
