@@ -147,7 +147,7 @@ jobs:
           echo "simavr exit status: ${simavr_status}; UART marker is authoritative"
           grep -q "PW_TRANSFER_PROBE_PASS" build-transfer/pw_transfer_probe.log
 
-      - name: Configure ATmega1284P shared-thread footprint
+      - name: Configure ATmega32U4 shared-thread footprint
         run: |
           cmake -B build-transfer-32u4 -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
