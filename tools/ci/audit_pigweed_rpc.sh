@@ -11,6 +11,12 @@ mkdir -p "$(dirname "$OUT")"
   echo "=== Protobuf compiler version references ==="
   grep -R -n -E "protoc.*version|PROTOC_VERSION|protobuf.*version|experimental_editions" "$PW_ROOT/pw_protobuf_compiler" "$PW_ROOT/pw_env_setup" 2>/dev/null | head -n 120 || true
   echo
+  echo "=== Proto Editions declarations in required modules ==="
+  grep -R -n -E '^[[:space:]]*edition[[:space:]]*=' "$PW_ROOT/pw_protobuf" "$PW_ROOT/pw_rpc" "$PW_ROOT/pw_transfer" --include='*.proto' 2>/dev/null || true
+  echo
+  echo "=== Protobuf AVR configuration references ==="
+  grep -R -n -E 'double|DOUBLE|FLOAT|PW_PROTOBUF_' "$PW_ROOT/pw_protobuf/public/pw_protobuf" 2>/dev/null | head -n 160 || true
+  echo
   echo "=== Relevant CMake target declarations ==="
   grep -R -n -E 'pw_add_library|pw_target_link_targets' "$PW_ROOT/pw_rpc" "$PW_ROOT/pw_transfer" 2>/dev/null || true
   echo
@@ -31,6 +37,18 @@ mkdir -p "$(dirname "$OUT")"
     pw_thread/public/pw_thread/thread_core.h \
     pw_protobuf_compiler/proto.cmake \
     pw_protobuf_compiler/py/pw_protobuf_compiler/generate_protos.py \
+    pw_protobuf/CMakeLists.txt \
+    pw_protobuf/public/pw_protobuf/internal/config.h \
+    pw_protobuf/public/pw_protobuf/decoder.h \
+    pw_protobuf/public/pw_protobuf/encoder.h \
+    pw_transfer/public/pw_transfer/internal/chunk.h \
+    pw_transfer/chunk.cc \
+    pw_protobuf/CMakeLists.txt \
+    pw_protobuf/public/pw_protobuf/internal/config.h \
+    pw_protobuf/public/pw_protobuf/decoder.h \
+    pw_protobuf/public/pw_protobuf/encoder.h \
+    pw_transfer/public/pw_transfer/internal/chunk.h \
+    pw_transfer/chunk.cc \
     pw_transfer/CMakeLists.txt \
     pw_transfer/public/pw_transfer/transfer.h \
     pw_transfer/public/pw_transfer/transfer_thread.h \
