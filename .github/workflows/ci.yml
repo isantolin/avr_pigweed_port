@@ -94,6 +94,17 @@ jobs:
         run: |
           cmake --build build --target all
 
+      - name: Build upstream pw_transfer probe (ATmega2560)
+        run: |
+          cmake -B build-transfer -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
+            -DAVR_MCU=atmega2560 \
+            -DAVR_F_CPU=16000000UL \
+            -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --build build-transfer --target pw_transfer_upstream_probe.elf
+
       - name: Run Pigweed AVR Test Suite in simavr
         run: |
           cmake --build build --target run_tests
