@@ -716,6 +716,7 @@ constexpr bool has_unique_object_representations_v = is_trivially_copyable<T>::v
 
     example_ino = """// Arduino Yún: upstream Pigweed pw_rpc over HDLC/UART.
 #include <Arduino.h>
+#include <array>
 #include <PigweedAVR.h>
 #include "avr_uart_stream.h"
 #include "pw_hdlc/rpc_channel.h"
@@ -732,7 +733,7 @@ std::array<pw::rpc::Channel, 1> channels = {
 pw::rpc::Server server(pw::span<pw::rpc::Channel>(channels.data(),
                                                    channels.size()));
 std::byte decoder_storage[128]{};
-pw::hdlc::Decoder decoder(pw::ByteSpan(decoder_storage));
+pw::hdlc::Decoder decoder{pw::ByteSpan(decoder_storage)};
 
 void PollUart() {
   while (Serial1.available() > 0) {
