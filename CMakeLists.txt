@@ -16,11 +16,23 @@ set(AVR_CRC32_IMPL "PW_CHECKSUM_CRC32_4BITS" CACHE STRING
 # Define compile definitions globally before evaluating Pigweed subdirectories
 add_compile_definitions(PW_CHECKSUM_CRC32_DEFAULT_IMPL=${AVR_CRC32_IMPL})
 add_compile_definitions(__cpp_lib_endian=201907L)
-add_compile_definitions(PW_RPC_USE_GLOBAL_MUTEX=0 PW_RPC_DYNAMIC_ALLOCATION=0)
+add_compile_definitions(PW_RPC_DYNAMIC_ALLOCATION=0)
 
 # 2. Locate Pigweed root and import its CMake utilities
 set(PW_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/pigweed")
 set(ENV{PW_ROOT} "${PW_ROOT}")
+
+# Apply only the reviewed compatibility delta for the pinned Pigweed revision.
+find_program(AVR_PYTHON3_EXECUTABLE NAMES python3 REQUIRED)
+execute_process(
+  COMMAND "${AVR_PYTHON3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/ci/apply_pigweed_patches.py"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  RESULT_VARIABLE _pw_patch_result
+)
+if(NOT _pw_patch_result EQUAL 0)
+  message(FATAL_ERROR "Failed to apply pinned Pigweed AVR compatibility patch")
+endif()
+
 
 # Architectural patch for 16-bit integer architectures (AVR: sizeof(int) == 2, sizeof(long) == 4)
 set(_ARG_TYPES_FILE "${PW_ROOT}/pw_tokenizer/public/pw_tokenizer/internal/argument_types.h")
