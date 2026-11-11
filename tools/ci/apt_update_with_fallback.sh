@@ -20,11 +20,15 @@ apt_update() {
   log="$(mktemp)"
   sudo timeout --signal=TERM --kill-after=15s 180s apt-get "${APT_OPTIONS[@]}" update 2>&1 | tee "$log" || status=$?
 
-  # apt-get can return zero while retaining stale indexes for failed sources.
-  if grep -Eqi 'Failed to fetch|Some index files failed|Temporary failure resolving' "$log"; then
-    status=1
+  # Only DNS resolution failures for Ubuntu repositories may trigger a mirror switch.
+  local dns_failure=false
+  if grep -Eqi "(Temporary failure resolving|Could not resolve|Name or service not known|Temporary failure in name resolution).*(ubuntu|archive|security)|(ubuntu|archive|security).*(Temporary failure resolving|Could not resolve|Name or service not known|Temporary failure in name resolution)" "$log"; then
+    dns_failure=true
   fi
   rm -f "$log"
+  if [[ "$dns_failure" == true ]]; then
+    return 10
+  fi
   return "$status"
 }
 
@@ -33,8 +37,14 @@ if apt_update; then
   echo "Configured Ubuntu mirrors are reachable."
   echo "::endgroup::"
   exit 0
+else
+  apt_status=$?
 fi
 echo "::endgroup::"
+if (( apt_status != 10 )); then
+  echo "::error::APT update failed for a reason other than Ubuntu DNS resolution; fallback mirrors were not changed."
+  exit "$apt_status"
+fi
 
 if ! command -v curl >/dev/null 2>&1; then
   echo "::error::curl is unavailable; cannot validate fallback mirrors."
@@ -124,9 +134,15 @@ PY
   if apt_update; then
     echo "APT update succeeded using $mirror."
     exit 0
+  else
+    apt_status=$?
   fi
   restore_sources
-  echo "::warning::APT update failed through $mirror; trying next candidate."
+  if (( apt_status != 10 )); then
+    echo "::error::APT failed through $mirror for a non-DNS reason; restored original Ubuntu sources."
+    exit "$apt_status"
+  fi
+  echo "::warning::DNS resolution failed through $mirror; trying the next candidate."
 done
 
 restore_sources
