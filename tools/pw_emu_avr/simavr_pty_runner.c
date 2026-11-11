@@ -22,6 +22,9 @@
 
 static volatile sig_atomic_t g_stop = 0;
 static int g_pty_master = -1;
+static uint8_t g_tx_queue[4096];
+static size_t g_tx_head = 0;
+static size_t g_tx_tail = 0;
 
 static void stop_handler(int signal_number) {
   (void)signal_number;
@@ -31,11 +34,14 @@ static void stop_handler(int signal_number) {
 static void uart_tx(struct avr_irq_t *irq, uint32_t value, void *opaque) {
   (void)irq;
   (void)opaque;
-  const uint8_t byte = (uint8_t)value;
-  if (g_pty_master >= 0) {
-    const ssize_t written = write(g_pty_master, &byte, 1);
-    (void)written;  // A full PTY is drained by the host client.
+  const size_t next = (g_tx_head + 1U) % sizeof(g_tx_queue);
+  if (next == g_tx_tail) {
+    fprintf(stderr, "UART TX queue overflow\\n");
+    g_stop = 1;
+    return;
   }
+  g_tx_queue[g_tx_head] = (uint8_t)value;
+  g_tx_head = next;
 }
 
 static void usage(const char *program) {
@@ -144,11 +150,27 @@ int main(int argc, char **argv) {
     if (count > 0) {
       for (ssize_t i = 0; i < count; ++i) avr_raise_irq(rx, input[i]);
     } else if (count < 0 && errno != EAGAIN && errno != EWOULDBLOCK &&
-               errno != EINTR) {
+               errno != EINTR && errno != EIO) {
       fprintf(stderr, "PTY read failed: %s\n", strerror(errno));
       break;
     }
     (void)avr_run(avr);
+
+    if (g_tx_tail != g_tx_head) {
+      size_t available = (g_tx_head + sizeof(g_tx_queue) - g_tx_tail) %
+                         sizeof(g_tx_queue);
+      size_t contiguous = sizeof(g_tx_queue) - g_tx_tail;
+      if (contiguous > available) contiguous = available;
+      const ssize_t written =
+          write(g_pty_master, &g_tx_queue[g_tx_tail], contiguous);
+      if (written > 0) {
+        g_tx_tail = (g_tx_tail + (size_t)written) % sizeof(g_tx_queue);
+      } else if (written < 0 && errno != EAGAIN && errno != EWOULDBLOCK &&
+                 errno != EINTR && errno != EIO) {
+        fprintf(stderr, "PTY write failed: %s\\n", strerror(errno));
+        break;
+      }
+    }
   }
 
   close(g_pty_master);
