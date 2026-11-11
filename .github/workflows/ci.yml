@@ -118,7 +118,11 @@ jobs:
             -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-          cmake --build build-transfer --target pw_transfer_upstream_probe.elf
+          if ! cmake --build build-transfer --target pw_transfer_upstream_probe.elf > build-transfer/transfer-build.log 2>&1; then
+            tail -n 160 build-transfer/transfer-build.log
+            exit 1
+          fi
+          tail -n 30 build-transfer/transfer-build.log
 
       - name: Run cooperative pw_transfer probe (ATmega2560)
         run: |
@@ -130,6 +134,24 @@ jobs:
           cat build-transfer/pw_transfer_probe.log
           echo "simavr exit status: ${simavr_status}; UART marker is authoritative"
           grep -q "PW_TRANSFER_PROBE_PASS" build-transfer/pw_transfer_probe.log
+
+      - name: Configure ATmega32U4 shared-thread footprint
+        run: |
+          cmake -B build-transfer-32u4 -G Ninja \\
+            -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \\
+            -DAVR_MCU=atmega32u4 \\
+            -DAVR_F_CPU=16000000UL \\
+            -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \\
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \\
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build ATmega32U4 shared-thread footprint
+        run: |
+          if ! cmake --build build-transfer-32u4 --target pw_transfer_avr_footprint_probe.elf > build-transfer-32u4/footprint-build.log 2>&1; then
+            tail -n 160 build-transfer-32u4/footprint-build.log
+            exit 1
+          fi
+          tail -n 30 build-transfer-32u4/footprint-build.log
 
       - name: Run Pigweed AVR Test Suite in simavr
         run: |
