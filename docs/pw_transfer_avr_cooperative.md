@@ -1,22 +1,20 @@
 # Cooperative `pw_transfer` backend for AVR
 
-## Scope and upstream revision
+## Scope and pinned upstream
 
-This design draft was written against the candidate Pigweed revision
-`55873baa1b37eaf7d0a830515a0846e3fc3a79e2`. The repository's `main`
-submodule gitlink still needs to be checked against that SHA before treating
-the source-level observations below as verified for the current checkout.
-Keep the upstream revision pinned; any upstream adaptation must be an
+This design targets the exact Pigweed submodule revision recorded by the
+repository's `main` gitlink: `55873baa1b37eaf7d0a830515a0846e3fc3a79e2`.
+The gitlink was verified in the `main` tree (mode `160000`, type `commit`).
+Keep this upstream revision pinned; any upstream adaptation must be an
 explicit, reviewable patch, not an untracked edit to the submodule.
 
 The initial integration target is a bare-metal AVR main loop. It must not
 create an OS thread, call a blocking wait, or require a heap-backed event queue.
 
-## Upstream constraints to verify
+## Verified upstream constraints
 
-The following constraints were identified while reviewing the candidate
-revision above. Revalidate each against the actual submodule gitlink before
-implementing the adaptation:
+The following constraints were identified while reviewing the pinned
+revision above. Keep source-level changes and tests tied to this revision:
 
 - `pw::transfer::Thread<ClientSlots, ServerSlots>` owns separate arrays of
   `ClientContext` and `ServerContext`. Therefore `Thread<1, 1>` allows one
