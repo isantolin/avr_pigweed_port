@@ -11,6 +11,7 @@ jobs:
   build-and-test:
     name: Build & Test (${{ matrix.crc_impl }})
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     strategy:
       matrix:
         crc_impl: [PW_CHECKSUM_CRC32_4BITS, PW_CHECKSUM_CRC32_1BITS]
@@ -24,14 +25,46 @@ jobs:
           git submodule update --init --recursive --depth 1
 
       - name: Install AVR Toolchain & simavr
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-avr avr-libc binutils-avr cmake ninja-build simavr libsimavr-dev protobuf-compiler python3-protobuf python3-jinja2
+          # Bound repository refresh and package installation so a transient
+          # Ubuntu mirror or lock cannot stall both matrix jobs indefinitely.
+          bash tools/ci/apt_update_with_fallback.sh
+
+          sudo timeout --signal=TERM --kill-after=30s 300s apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30 \
+            -o DPkg::Lock::Timeout=120 \
+            install -y --no-install-recommends \
+              gcc-avr avr-libc binutils-avr cmake ninja-build simavr \
+              libsimavr-dev protobuf-compiler libprotobuf-dev python3-protobuf python3-jinja2 ccache
+
+          avr-gcc --version
+          simavr --help >/dev/null 2>&1 || test "$?" -eq 1
+          ccache --set-config=max_size=500M
+
+      - name: Compute compiler and dependency cache identity
+        id: cache-identity
+        run: |
+          AVR_GCC_VERSION="$(avr-g++ -dumpfullversion -dumpversion)"
+          PIGWEED_REV="$(git rev-parse HEAD:third_party/pigweed)"
+          CCACHE_VERSION="$(ccache --version | head -n1 | tr ' ' '-')"
+          echo "value=avr-gcc-${AVR_GCC_VERSION}-pigweed-${PIGWEED_REV}-${CCACHE_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore compiler cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ccache
+          key: ${{ runner.os }}-ccache-${{ matrix.crc_impl }}-${{ steps.cache-identity.outputs.value }}-${{ hashFiles('CMakeLists.txt', 'avr-toolchain.cmake', 'tools/pw_emu_avr/CMakeLists.txt', 'tools/pw_emu_avr/simavr_pty_runner.c') }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-${{ matrix.crc_impl }}-${{ steps.cache-identity.outputs.value }}-
 
       - name: Build host-side pw_emu simavr runner
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: |
-          cmake -S tools/pw_emu_avr -B build/pw_emu_avr -G Ninja
+          cmake -S tools/pw_emu_avr -B build/pw_emu_avr -G Ninja -DCMAKE_C_COMPILER_LAUNCHER=ccache
           cmake --build build/pw_emu_avr
 
       - name: Configure CMake (${{ matrix.crc_impl }})
@@ -40,7 +73,9 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
             -DAVR_MCU=atmega328p \
             -DAVR_F_CPU=16000000UL \
-            -DAVR_CRC32_IMPL=${{ matrix.crc_impl }}
+            -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build Firmware and Test Runner
         run: |
@@ -49,6 +84,7 @@ jobs:
       - name: Run Pigweed AVR Test Suite in simavr
         run: |
           cmake --build build --target run_tests
+          ccache --show-stats
 
       - name: Verify Python Host Tools & Arduino Export
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
