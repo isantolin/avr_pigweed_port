@@ -66,7 +66,8 @@ from pathlib import Path as _PigweedPath
 # protoc may run plugins with an isolated working directory. Resolve generated
 # PWPB Python package roots from the repository's CMake build directory.
 _repo_root = _PigweedPath(__file__).resolve().parents[5]
-_build_roots = [*_repo_root.glob("build*"), _PigweedPath.cwd(), *_PigweedPath.cwd().parents]
+_build_roots = list(_repo_root.glob("build*"))
+_bootstrap_paths = []
 for _build_root in _build_roots:
     for _target in (
         "pw_protobuf.codegen_protos",
@@ -75,22 +76,25 @@ for _build_root in _build_roots:
         "pw_protobuf.field_options_proto",
     ):
         _python_root = _build_root / _target / "python"
+        if not _python_root.is_dir():
+            continue
         if str(_python_root) not in sys.path:
             sys.path.insert(0, str(_python_root))
+        _bootstrap_paths.append(str(_python_root))
         _package_name = (
             "pw_protobuf_codegen_protos"
             if _target == "pw_protobuf.codegen_protos"
             else "pw_protobuf_protos"
         )
         _package_dir = _python_root / _package_name
-        _package_dir.mkdir(parents=True, exist_ok=True)
-        _init_file = _package_dir / "__init__.py"
-        if not _init_file.exists():
-            _init_file.write_text(
-                "from pkgutil import extend_path\\n"
-                "__path__ = extend_path(__path__, __name__)\\n"
-            )
-print("PWPB_PLUGIN_BOOTSTRAP", _repo_root, sys.path[:12], file=sys.stderr)
+        if _package_dir.is_dir():
+            _init_file = _package_dir / "__init__.py"
+            if not _init_file.exists():
+                _init_file.write_text(
+                    "from pkgutil import extend_path\\n"
+                    "__path__ = extend_path(__path__, __name__)\\n"
+                )
+print("PWPB_PLUGIN_BOOTSTRAP", _repo_root, _bootstrap_paths, sys.path[:20], file=sys.stderr)
 """,
     )
     replace_once(
