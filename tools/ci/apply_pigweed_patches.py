@@ -13,7 +13,7 @@ EXPECTED_PIGWEED_SHA = "55873baa1b37eaf7d0a830515a0846e3fc3a79e2"
 def replace_once(relative_path: str, old: str, new: str) -> None:
     path = PW_ROOT / relative_path
     content = path.read_text()
-    if new in content and old not in content:
+    if new in content:
         print(f"already patched: {relative_path}")
         return
     count = content.count(old)
