@@ -306,7 +306,7 @@ def export_library(dest_dir: Path):
     transfer_thread_source = PW_ROOT / "pw_transfer" / "transfer_thread.cc"
     if (
         not transfer_thread_header.is_file()
-        or "Poll(size_t budget)" not in transfer_thread_header.read_text(encoding="utf-8")
+        or "Poll(size_t budget" not in transfer_thread_header.read_text(encoding="utf-8")
         or not transfer_thread_source.is_file()
         or "TransferThread::Poll(size_t budget)" not in transfer_thread_source.read_text(encoding="utf-8")
     ):
