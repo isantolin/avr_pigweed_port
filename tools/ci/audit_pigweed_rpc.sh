@@ -9,8 +9,7 @@ mkdir -p "$(dirname "$OUT")"
   git -C "$PW_ROOT" rev-parse HEAD
   echo
   echo "=== Relevant CMake target declarations ==="
-  grep -R -n -E 'pw_add_library|pw_target_link_targets' \\
-    "$PW_ROOT/pw_rpc" "$PW_ROOT/pw_transfer" 2>/dev/null || true
+  grep -R -n -E 'pw_add_library|pw_target_link_targets' "$PW_ROOT/pw_rpc" "$PW_ROOT/pw_transfer" 2>/dev/null || true
   echo
   echo "=== Relevant CMakeLists files ==="
   find "$PW_ROOT/pw_rpc" "$PW_ROOT/pw_transfer" "$PW_ROOT/pw_sync" \
