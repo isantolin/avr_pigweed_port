@@ -56,7 +56,7 @@ The port contains two different probes because the RPC endpoint and transfer end
 - Real HDLC encode/decode loopback between the client and server channel outputs.
 - Generated service registration and response completion.
 
-The probe is built for ATmega328P. Its UART result marker is emitted only after all runtime assertions pass.
+The two-endpoint HDLC/RPC runtime probe is built and executed on ATmega2560 because the combined upstream client/server call state exceeds the 2 KiB SRAM limit of ATmega328P. The ATmega328P build still compiles the port's normal firmware and test runner; the Bridge-class ATmega32U4 memory budget is checked by the separate shared-thread transfer footprint probe. Its UART result marker is emitted only after all runtime assertions pass.
 
 ### Upstream transfer probe
 
