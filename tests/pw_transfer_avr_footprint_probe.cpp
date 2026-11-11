@@ -29,8 +29,8 @@ void EmitResult() {
   UBRR0L = static_cast<uint8_t>(ubrr & 0xFF);
   UCSR0B = (1 << TXEN0);
   UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
-  const char marker[] = "PW_TRANSFER_FOOTPRINT_PASS\\r\\n";
-  for (size_t i = 0; marker[i] != '\\0'; ++i) {
+  const char marker[] = "PW_TRANSFER_FOOTPRINT_PASS\r\n";
+  for (size_t i = 0; marker[i] != '\0'; ++i) {
     while (!(UCSR0A & (1 << UDRE0))) {}
     UDR0 = static_cast<uint8_t>(marker[i]);
   }
