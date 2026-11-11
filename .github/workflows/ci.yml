@@ -80,7 +80,11 @@ jobs:
 
       - name: Build Firmware and Test Runner
         run: |
-          cmake --build build --target all
+          if ! cmake --build build --target all > build/build.log 2>&1; then
+            tail -n 120 build/build.log
+            exit 1
+          fi
+          tail -n 20 build/build.log
 
       - name: Run Pigweed AVR Test Suite in simavr
         run: |
