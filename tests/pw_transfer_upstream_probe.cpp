@@ -6,7 +6,6 @@
 #include <avr/interrupt.h>
 #include <avr/io.h>
 #include <util/delay.h>
-#include <avr/interrupt.h>
 #include <avr/sleep.h>
 
 #include "pw_bytes/span.h"
@@ -97,6 +96,7 @@ void EmitResult(bool success) {
   UBRR0H = static_cast<uint8_t>(ubrr >> 8);
   UBRR0L = static_cast<uint8_t>(ubrr & 0xFF);
   UCSR0B = (1 << TXEN0);
+  UCSR0A = (1 << TXC0);
   UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
   const char* marker = success ? "PW_TRANSFER_PROBE_PASS\r\n"
                                : "PW_TRANSFER_PROBE_FAIL\r\n";
@@ -125,6 +125,11 @@ class HdlcLoopbackWriter final : public pw::stream::NonSeekableWriter {
 
  private:
   pw::Status DoWrite(pw::ConstByteSpan data) override {
+    if (drop_all_frames_ || frames_to_drop_ > 0) {
+      if (frames_to_drop_ > 0) --frames_to_drop_;
+      ++dropped_frames_;
+      return pw::OkStatus();
+    }
     for (std::byte byte : data) {
       auto frame = decoder_.Process(byte);
       if (frame.status() == pw::Status::Unavailable()) continue;
