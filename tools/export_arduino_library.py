@@ -260,6 +260,8 @@ def export_library(dest_dir: Path):
         for cc_file in mod_path.glob("*.cc"):
             if mod == "pw_rpc" and cc_file.name not in {
                 "call.cc",
+                "client.cc",
+                "client_call.cc",
                 "channel.cc",
                 "channel_list.cc",
                 "endpoint.cc",
