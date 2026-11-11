@@ -41,9 +41,11 @@ The repository registers a `simavr` emulator in the root `pigweed.json` and
 provides a Python `Launcher`/`Connector` package at
 `tools/pw_emu_avr/python/pw_emu_avr`.
 
-Install the adapter and make the pinned Pigweed frontend importable:
+Install the pinned Pigweed environment packages and the local adapter:
 
 ```sh
+python3 -m pip install -e third_party/pigweed/pw_env_setup/py
+python3 -m pip install -e third_party/pigweed/pw_cli/py
 python3 -m pip install -e third_party/pigweed/pw_emu/py
 python3 -m pip install -e tools/pw_emu_avr
 ```
