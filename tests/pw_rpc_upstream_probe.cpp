@@ -61,30 +61,6 @@ void OnBidiResponse(pw::ConstByteSpan response) {
                      response[1] == expected_request[1];
 }
 
-class HdlcRpcIngress {
- public:
-  HdlcRpcIngress(pw::rpc::Server& server, pw::ByteSpan buffer)
-      : server_(server), decoder_(buffer) {}
-
-  pw::Status ProcessByte(std::byte byte) {
-    auto frame = decoder_.Process(byte);
-    if (frame.status() == pw::Status::Unavailable()) {
-      return pw::Status::Unavailable();
-    }
-    if (!frame.ok()) {
-      return frame.status();
-    }
-    if (frame->address() != kHdlcAddress) {
-      return pw::Status::NotFound();
-    }
-    return server_.ProcessPacket(frame->data());
-  }
-
- private:
-  pw::rpc::Server& server_;
-  pw::hdlc::Decoder decoder_;
-};
-
 class ProbeService final
     : public ::avr::port::rpc::pw_rpc::raw::RpcProbe::Service<ProbeService> {
  public:
