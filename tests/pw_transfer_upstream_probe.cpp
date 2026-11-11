@@ -55,7 +55,7 @@ void OnWriteComplete(pw::Status status) {
   write_complete = true;
 }
 
-[[noreturn]] void EmitResult(bool success) {
+void EmitResult(bool success) {
   const uint16_t ubrr =
       static_cast<uint16_t>((F_CPU / (16UL * 115200UL)) - 1UL);
   UBRR0H = static_cast<uint8_t>(ubrr >> 8);
@@ -71,9 +71,7 @@ void OnWriteComplete(pw::Status status) {
   while (!(UCSR0A & (1 << TXC0))) {}
   cli();
   sleep_enable();
-  for (;;) {
-    sleep_cpu();
-  }
+  sleep_cpu();
 }
 
 class HdlcLoopbackWriter final : public pw::stream::NonSeekableWriter {
@@ -229,4 +227,5 @@ int main() {
   }
 
   EmitResult(success);
+  return success ? 0 : 1;
 }
