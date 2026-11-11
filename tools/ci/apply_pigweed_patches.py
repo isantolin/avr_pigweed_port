@@ -48,14 +48,14 @@ def main() -> int:
 
     replace_once(
         "pw_protobuf/py/pw_protobuf/plugin.py",
-        "from pathlib import Path\nfrom shlex import shlex\n",
-        """from pathlib import Path
-from shlex import shlex
+        "import sys\\n",
+        """import sys
+from pathlib import Path as _PigweedPath
 
-# protoc may launch plugins with a working directory different from the
-# CMake module directory. Search the repository's out-of-source build roots.
-_repo_root = Path(__file__).resolve().parents[5]
-_build_roots = [*_repo_root.glob("build*"), Path.cwd(), *Path.cwd().parents]
+# protoc may run plugins with an isolated working directory. Resolve generated
+# PWPB Python package roots from the repository's CMake build directory.
+_repo_root = _PigweedPath(__file__).resolve().parents[5]
+_build_roots = [*_repo_root.glob("build*"), _PigweedPath.cwd(), *_PigweedPath.cwd().parents]
 for _build_root in _build_roots:
     for _target in (
         "pw_protobuf.codegen_protos",
@@ -65,7 +65,7 @@ for _build_root in _build_roots:
     ):
         _python_root = _build_root / _target / "python"
         if _python_root.is_dir() and str(_python_root) not in sys.path:
-            sys.path.append(str(_python_root))
+            sys.path.insert(0, str(_python_root))
 """,
     )
     replace_once(
