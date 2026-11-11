@@ -787,22 +787,14 @@ from pw_rpc.client import Client""",
     # Resource-status lookup is synchronous in the cooperative owner loop.
     # Do not reserve an event slot: this path dispatches inline and must leave
     # the bounded queue available for the subsequent transfer handshake.
-    resource_method = """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
-                                          ResourceStatusCallback&& callback) {
-  if (!TryWaitForEventToProcess()) {
-    internal::ResourceStatus stats;
-    callback(Status::Unavailable(), stats);
-    return;
-  }
-
-  next_event_.type = EventType::kGetResourceStatus;
-
-  resource_status_callback_ = std::move(callback);
-
-  next_event_.resource_status.resource_id = resource_id;
-
-  NotifyEvent();
-}"""
+    resource_start = transfer_content.index(
+        "void TransferThread::EnqueueResourceEvent("
+    )
+    resource_end = transfer_content.find(
+        "\\nvoid TransferThread::", resource_start + 1
+    )
+    if resource_end < 0:
+        raise RuntimeError("could not locate end of EnqueueResourceEvent")
     cooperative_resource_method = """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
                                           ResourceStatusCallback&& callback) {
 #if defined(PW_TRANSFER_COOPERATIVE)
@@ -827,11 +819,12 @@ from pw_rpc.client import Client""",
   NotifyEvent();
 #endif
 }"""
-    if cooperative_resource_method not in transfer_content:
-        if resource_method not in transfer_content:
-            raise RuntimeError("could not locate upstream EnqueueResourceEvent implementation")
-        transfer_content = transfer_content.replace(
-            resource_method, cooperative_resource_method, 1
+    current_resource_method = transfer_content[resource_start:resource_end]
+    if "GetResourceState(resource_id);" not in current_resource_method:
+        transfer_content = (
+            transfer_content[:resource_start]
+            + cooperative_resource_method
+            + transfer_content[resource_end:]
         )
 
     resource_state_start = transfer_content.index(
