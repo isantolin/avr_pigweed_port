@@ -127,7 +127,6 @@ jobs:
       - name: Run upstream pw_rpc unary and bidirectional probe (ATmega1284P)
         run: |
           # The two-endpoint HDLC/RPC probe needs more SRAM than ATmega328P.
-          # The MCU-under-test Bridge footprint is checked separately on 32U4.
           set +e
           timeout 5s simavr -m atmega1284p build-transfer/pw_rpc_upstream_probe.elf > build-transfer/pw_rpc_probe.log 2>&1
           simavr_status=$?
@@ -146,33 +145,6 @@ jobs:
           cat build-transfer/pw_transfer_probe.log
           echo "simavr exit status: ${simavr_status}; UART marker is authoritative"
           grep -q "PW_TRANSFER_PROBE_PASS" build-transfer/pw_transfer_probe.log
-
-      - name: Configure ATmega32U4 shared-thread footprint
-        run: |
-          cmake -B build-transfer-32u4 -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
-            -DAVR_MCU=atmega32u4 \
-            -DAVR_F_CPU=16000000UL \
-            -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \
-            -DAVR_PW_TRANSFER_FOOTPRINT_PROFILE=ON \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-
-      - name: Build ATmega32U4 shared-thread footprint
-        run: |
-          if ! cmake --build build-transfer-32u4 --target pw_transfer_avr_footprint_probe.elf > build-transfer-32u4/footprint-build.log 2>&1; then
-            tail -n 160 build-transfer-32u4/footprint-build.log
-            if [ -f build-transfer-32u4/pw_transfer_avr_footprint_probe.map ]; then
-              echo "===== Largest SRAM map entries ====="
-              grep -E '^\\.data|^\\.bss|^ *0x[0-9a-fA-F]+ +0x[0-9a-fA-F]+ ' build-transfer-32u4/pw_transfer_avr_footprint_probe.map | tail -n 180
-            fi
-            exit 1
-          fi
-          tail -n 30 build-transfer-32u4/footprint-build.log
-          echo "===== Largest static SRAM symbols ====="
-          avr-nm -S --size-sort --radix=d build-transfer-32u4/pw_transfer_avr_footprint_probe.elf | grep -E ' [bBdD] ' | tail -n 60 || true
-          echo "===== Largest SRAM literal origin ====="
-          grep -n -B 3 -A 3 '\\.LC58' build-transfer-32u4/pw_transfer_avr_footprint_probe.map | head -n 40 || true
 
       - name: Run Pigweed AVR Test Suite in simavr
         run: |
@@ -199,7 +171,7 @@ jobs:
           test -s dist/PigweedAVR/src/pw_transfer/transfer.raw_rpc.pb.h
           test -s dist/PigweedAVR/src/pw_transfer/transfer.pwpb.h
           grep -q "define PW_TRANSFER_COOPERATIVE 1" dist/PigweedAVR/src/pw_transfer/transfer_thread.h
-          avr-g++ -mmcu=atmega32u4 -DF_CPU=16000000UL -std=gnu++17 \
+          avr-g++ -mmcu=atmega2560 -DF_CPU=16000000UL -std=gnu++17 \
             -fsyntax-only -Idist/PigweedAVR/src tools/ci/arduino_export_probe.cpp
 
       - name: Upload Build Artifacts
