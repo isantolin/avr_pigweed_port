@@ -27,7 +27,7 @@ int main(void) {
 
   // The host opens the PTY before resuming the MCU, so READY confirms that
   // UART RX is configured before the host sends its start byte.
-  uart_write("PW_EMU_UART_READY\\r\\n");
+  uart_write("PW_EMU_UART_READY\r\n");
   while ((UCSR0A & (1U << RXC0)) == 0U) {
   }
   const uint8_t start = UDR0;
