@@ -809,7 +809,6 @@ Status TransferThread::Poll(size_t budget) {
     const size_t accepted_before_overflow = event_queue_size_;
     for (size_t i = 0; i < accepted_before_overflow; ++i) {
       if (event_queue_size_ == 0) break;
-      CooperativeEventSlot& pending = event_queue_[event_queue_head_];
       event_queue_head_ =
           (event_queue_head_ + 1) % PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY;
       --event_queue_size_;
