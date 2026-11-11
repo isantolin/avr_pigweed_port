@@ -8,7 +8,7 @@ mkdir -p "$(dirname "$OUT")"
   echo "=== Pigweed revision ==="
   git -C "$PW_ROOT" rev-parse HEAD
   echo
-  echo "=== Relevant CMake target declarations ==="
+  echo "=== Protobuf compiler version references ==="\n  grep -R -n -E "protoc.*version|PROTOC_VERSION|protobuf.*version|experimental_editions" "$PW_ROOT/pw_protobuf_compiler" "$PW_ROOT/pw_env_setup" 2>/dev/null | head -n 120 || true\n  echo\n  echo "=== Relevant CMake target declarations ==="
   grep -R -n -E 'pw_add_library|pw_target_link_targets' "$PW_ROOT/pw_rpc" "$PW_ROOT/pw_transfer" 2>/dev/null || true
   echo
   echo "=== Relevant CMakeLists files ==="
@@ -27,6 +27,8 @@ mkdir -p "$(dirname "$OUT")"
     pw_hdlc/public/pw_hdlc/rpc_channel.h \
     pw_hdlc/public/pw_hdlc/encoder.h \
     pw_thread/public/pw_thread/thread_core.h \
+    pw_protobuf_compiler/proto.cmake \
+    pw_protobuf_compiler/py/pw_protobuf_compiler/generate_protos.py \
     pw_transfer/CMakeLists.txt \
     pw_transfer/public/pw_transfer/transfer.h \
     pw_transfer/public/pw_transfer/transfer_thread.h \
