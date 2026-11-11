@@ -505,3 +505,27 @@ by CI artifacts/logs:
 
 Until these gates pass, retain `pw_rpc_avr` only as a test-only legacy target;
 do not delete it and do not expose it as the firmware RPC API.
+
+
+### Exact pinned-source audit from CI
+
+CI run 52 checked out the gitlink SHA `55873baa1b37eaf7d0a830515a0846e3fc3a79e2` and inspected the actual source files from that revision.
+
+The exact CMake/API findings are:
+
+- `pw::rpc::ChannelOutput` is declared in `pw_rpc/public/pw_rpc/channel.h`; there is no separate `channel_output.h` at this revision.
+- The relevant upstream targets are `pw_rpc.common`, `pw_rpc.server`, and `pw_rpc.raw.server_api`. The raw server target depends on `pw_rpc.server` and `pw_bytes`.
+- The server endpoint accepts a static channel span and exposes `Server::ProcessPacket(ConstByteSpan)`.
+- `pw_rpc.common` depends on `pw_sync.lock_annotations`; it conditionally links `pw_sync.mutex` only when a mutex backend is configured. Its configuration defaults `PW_RPC_USE_GLOBAL_MUTEX` to 1.
+- The RPC output contract requires `Send(span<const std::byte>)` to transmit or copy the packet before returning. The output callback must not call back into any RPC API.
+- The `pw_transfer.core` target includes `transfer_thread.cc` and publicly depends on `pw_rpc.client`, both raw RPC APIs, `pw_sync.binary_semaphore`, `pw_sync.timed_thread_notification`, and `pw_thread.thread_core`.
+- There is no cooperative transfer target in this pinned CMake graph. A plain link to `pw_transfer.core` would retain the thread/semaphore execution model.
+
+Consequences for the implementation:
+
+1. Integrate upstream RPC as a standalone server-only target first, with static channels and a bounded UART/HDLC egress path.
+2. Do not pull in `pw_rpc.client`, RPC test helpers, or threaded test targets for the initial server-only proof.
+3. Do not link `pw_transfer.core` into AVR firmware unchanged. The cooperative transfer work must refactor the upstream event/context implementation while preserving the protocol state machines and the normal threaded build.
+4. The exact `pw_rpc` lock configuration and the pinned `pw_hdlc` RPC transport API must be validated by the AVR compiler before the firmware target is changed.
+
+CI run 52 passed the existing AVR build and simavr suite while performing this source inspection. It did not compile or link upstream RPC; that remains a separate gate.
