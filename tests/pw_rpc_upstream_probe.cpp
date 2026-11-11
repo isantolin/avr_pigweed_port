@@ -54,6 +54,10 @@ size_t unary_response_size = 0;
 uint8_t unary_response_first = 0;
 uint8_t unary_response_last = 0;
 bool bidi_response_ok = false;
+bool bidi_response_called = false;
+size_t bidi_response_size = 0;
+uint8_t bidi_response_middle = 0;
+bool bidi_server_write_ok = false;
 
 void OnUnaryResponse(pw::ConstByteSpan response, pw::Status status) {
   unary_status_ok = status.ok();
@@ -69,6 +73,11 @@ void OnUnaryResponse(pw::ConstByteSpan response, pw::Status status) {
 }
 
 void OnBidiResponse(pw::ConstByteSpan response) {
+  bidi_response_called = true;
+  bidi_response_size = response.size();
+  if (response.size() > 1) {
+    bidi_response_middle = static_cast<uint8_t>(response[1]);
+  }
   bidi_response_ok = response.size() == expected_request.size() &&
                      response[1] == expected_request[1];
 }
@@ -87,7 +96,7 @@ class ProbeService final
     bidi_stream_ = std::move(stream);
     bidi_stream_.set_on_next([this](pw::ConstByteSpan payload) {
       bidi_server_received_ = true;
-      (void)bidi_stream_.Write(payload);
+      bidi_server_write_ok = bidi_stream_.Write(payload).ok();
     });
   }
 
@@ -190,7 +199,11 @@ int main() {
   bidi_call.set_on_next(OnBidiResponse);
   if (!bidi_call.Write(request).ok() && failure_code == 0) failure_code = 4;
   if (!service.bidi_server_received() && failure_code == 0) failure_code = 5;
-  if (!bidi_response_ok && failure_code == 0) failure_code = 6;
+  if (!bidi_server_write_ok && failure_code == 0) failure_code = 10;
+  if (!bidi_response_called && failure_code == 0) failure_code = 11;
+  if (bidi_response_size != request.size() && failure_code == 0) failure_code = 12;
+  if (bidi_response_middle != static_cast<uint8_t>(request[1]) &&
+      failure_code == 0) failure_code = 13;
   (void)bidi_call.Cancel();
 
   // The RPC calls above traversed both HDLC encoders and decoders.
