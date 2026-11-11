@@ -781,61 +781,9 @@ from pw_rpc.client import Client""",
             raise RuntimeError("could not find unique context event dispatch")
         transfer_content = transfer_content.replace(context_marker, context_replacement, 1)
 
-    # Resource-status requests originate inside the RPC server packet
-    # callback. In the cooperative build that callback already runs on the
-    # transfer owner loop, so dispatch the upstream resource lookup inline.
-    # Queuing it would defer the RPC responder while the same owner loop is
-    # waiting for that response, creating a cooperative progress deadlock.
-    transfer_thread_source = (
-        PW_ROOT / "pw_transfer" / "transfer_thread.cc"
-    ).read_text()
-    if "resource_status_pending_ = true;\\n  GetResourceState(resource_id);" not in transfer_thread_source:
-        replace_once(
-            "pw_transfer/transfer_thread.cc",
-            """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
-                                          ResourceStatusCallback&& callback) {
-  if (!TryWaitForEventToProcess()) {
-    internal::ResourceStatus stats;
-    callback(Status::Unavailable(), stats);
-    return;
-  }
-
-  next_event_.type = EventType::kGetResourceStatus;
-
-  resource_status_callback_ = std::move(callback);
-
-  next_event_.resource_status.resource_id = resource_id;
-
-  NotifyEvent();
-}""",
-            """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
-                                          ResourceStatusCallback&& callback) {
-#if defined(PW_TRANSFER_COOPERATIVE)
-  if (resource_status_pending_) {
-    internal::ResourceStatus stats{};
-    callback(Status::Unavailable(), stats);
-    return;
-  }
-  resource_status_callback_ = std::move(callback);
-  resource_status_pending_ = true;
-  GetResourceState(resource_id);
-#else
-  if (!TryWaitForEventToProcess()) {
-    internal::ResourceStatus stats;
-    callback(Status::Unavailable(), stats);
-    return;
-  }
-
-  next_event_.type = EventType::kGetResourceStatus;
-  resource_status_callback_ = std::move(callback);
-  next_event_.resource_status.resource_id = resource_id;
-  NotifyEvent();
-#endif
-}""",
-        )
-    else:
-        print("already patched: pw_transfer/transfer_thread.cc resource callback")
-
+    # The cooperative RPC server invokes resource-status handling from
+    # its packet callback. Resolve this lookup inline on the owner loop;
+    # deferring it to the event queue can strand the unary RPC responder.
     # The upstream resource-status callback is a single staged member. Keep
     # its original single-in-flight contract despite the bounded event queue.
     resource_start = transfer_content.index(
@@ -865,6 +813,19 @@ from pw_rpc.client import Client""",
 #if defined(PW_TRANSFER_COOPERATIVE)
   resource_status_pending_ = true;
 #endif"""
+
+    resource_id_assignment = "  next_event_.resource_status.resource_id = resource_id;"
+    inline_resource_dispatch = resource_id_assignment + """
+#if defined(PW_TRANSFER_COOPERATIVE)
+  GetResourceState(resource_id);
+  return;
+#endif"""
+    if inline_resource_dispatch not in transfer_content:
+        if transfer_content.count(resource_id_assignment) != 1:
+            raise RuntimeError("could not find unique resource-status event payload")
+        transfer_content = transfer_content.replace(
+            resource_id_assignment, inline_resource_dispatch, 1
+        )
     if resource_set_replacement not in transfer_content:
         if transfer_content.count(resource_set) != 1:
             raise RuntimeError("could not find unique resource-status callback staging")
