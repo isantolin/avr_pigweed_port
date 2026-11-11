@@ -180,3 +180,109 @@ Required tests before calling the port usable:
 - No rewrite of Pigweed's transfer protocol or chunk state machines.
 - No claim of end-to-end UART interoperability based solely on compiling the
   host simavr PTY runner.
+
+
+## Source-level review at the pinned revision
+
+The implementation was checked against the exact submodule commit
+`55873baa1b37eaf7d0a830515a0846e3fc3a79e2`, using the Pigweed mirror at
+the same commit. The following details refine the constraints above.
+
+### Transfer thread and context storage
+
+- `internal::TransferThread` directly derives from
+  `pw::thread::ThreadCore`.
+- `Thread<ClientSlots, ServerSlots>` owns two independent arrays:
+  `std::array<ClientContext, ClientSlots>` and
+  `std::array<ServerContext, ServerSlots>`. The two dimensions are not a
+  shared global transfer limit.
+- `FindNewTransfer()` searches the selected array for an already-active
+  matching session (restart), otherwise returns an inactive context. It does
+  not arbitrate across client and server arrays.
+- `Context::HandleEvent()` contains the protocol state machine. It should
+  remain the shared protocol implementation; the cooperative layer should
+  change scheduling and event delivery, not duplicate chunk handling,
+  retransmission, handshake, or completion logic.
+
+### Event handoff and observable failure behavior
+
+The upstream handoff is exactly one `Event next_event_`, one shared
+`chunk_buffer_`, a `BinarySemaphore next_event_ownership_`, and a
+`TimedThreadNotification event_notification_`.
+
+- Producers acquire ownership before writing `next_event_`; the consumer
+  releases ownership after `HandleEvent()`.
+- `ProcessChunk()` copies the incoming bytes into the shared chunk buffer
+  only after it acquires ownership. If acquisition times out, the function
+  returns without reporting failure to its caller.
+- `StartTransfer()`, `SendStatus()`, `EndTransfer()`, and
+  `UpdateClientTransfer()` likewise return silently when
+  `TryWaitForEventToProcess()` fails. Their public-facing paths therefore
+  cannot reliably report queue saturation or handoff failure today.
+- `TransferHandlerEvent()` is the exception: it returns false when it
+  cannot acquire the event slot. However, `AddTransferHandler()` and
+  `RemoveTransferHandler()` then wait for the consumer to process the event.
+- Client and server stream changes enqueue `kSetStream` and then wait for
+  processing. This is another synchronous dependency that must be replaced
+  for the cooperative backend.
+- `EnqueueResourceEvent()` reports `UNAVAILABLE` through its callback if
+  it cannot acquire the slot; it stores one callback member, so it is not a
+  multi-request queue.
+- `Event::ChunkEvent` stores a pointer and size, not owned bytes. The shared
+  chunk buffer is the backing storage. A replacement queue must own each
+  queued chunk's bytes until that event is consumed.
+
+Consequently, a non-blocking implementation cannot be achieved by changing
+only `Run()` or by making semaphore acquisition return immediately. Producer
+APIs need an explicit acceptance result or asynchronous completion contract,
+and the event storage must be redesigned as a bounded queue.
+
+### Execution and timeout behavior
+
+- `Run()` releases the initial event ownership and enters an infinite loop.
+  It waits on `event_notification_`, using the earliest context deadline when
+  one exists.
+- After every wake (including a timeout wake without an event), it scans all
+  client contexts and then all server contexts, calling
+  `Context::HandleEvent()` for each expired context.
+- `GetNextTransferTimeout()` also scans both context arrays. With AVR's
+  one-context-per-role configuration, this scan is bounded, but the current
+  `Run()` still blocks and never returns to the application loop.
+- Timeout processing is already expressed through the shared context state
+  machine. A cooperative driver can factor the scan into a bounded
+  `ProcessTimeouts(now)` operation without changing the protocol state
+  transitions.
+
+### Build dependency evidence
+
+At this pinned revision, the `pw_transfer.core` build target explicitly
+depends on `pw_sync:binary_semaphore`, `pw_sync:timed_thread_notification`,
+and `pw_thread:thread_core` in Bazel; GN and CMake also declare these
+dependencies. Removing the thread backend from the AVR link therefore
+requires an explicit cooperative core target or a cleanly factored common
+core. It is not enough to omit creation of a `pw::thread::Thread`.
+
+### Design consequences
+
+1. Keep `Context`, `ClientContext`, `ServerContext`, chunk encoding, and
+   protocol transitions shared with upstream.
+2. Factor the event consumer into reusable bounded operations, with the
+   threaded `Run()` retaining its existing wait-and-dispatch behavior.
+3. Give the cooperative path its own statically allocated event queue. Chunk
+   payloads must be copied into queue-owned storage at enqueue time.
+4. Change producer APIs used by AVR so enqueue failure is observable. In
+   particular, the current `void` start/chunk/end methods cannot guarantee
+   the requested explicit `UNAVAILABLE` behavior without an API adaptation.
+5. Keep handler and stream lifecycle changes ordered with transfer events, but
+   provide loop-owned immediate operations or asynchronous completion
+   callbacks instead of waiting for the thread.
+6. Apply the global client/server role arbiter at the point where a new session
+   is accepted, while allowing retransmissions/restarts for the already-owned
+   session. The current upstream lookup only checks session identity within
+   the selected role's context array.
+7. Preserve the existing threaded backend and its tests; add cooperative
+   tests for bounded polling, event ownership, queue overflow, cross-role
+   rejection, duplicate session chunks, and timeout cleanup.
+
+The source review confirms the architecture requirements; it does not yet
+constitute an implementation or a successful AVR build.
