@@ -42,6 +42,7 @@ mkdir -p "$(dirname "$OUT")"
     pw_rpc/public/pw_rpc/raw/server_reader_writer.h \
     pw_rpc/public/pw_rpc/internal/config.h \
     pw_rpc/public/pw_rpc/internal/lock.h \
+    pw_rpc/py/pw_rpc/plugin.py \
     pw_rpc/py/pw_rpc/plugin_raw.py \
     pw_rpc/py/pw_rpc/codegen_raw.py \
     pw_rpc2/py/pw_rpc2/plugin_raw.py \
