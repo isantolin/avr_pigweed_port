@@ -96,7 +96,7 @@ jobs:
         run: |
           cmake -B build -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
-            -DAVR_MCU=atmega328p \
+            -DAVR_MCU=atmega2560 \
             -DAVR_F_CPU=16000000UL \
             -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -169,7 +169,7 @@ jobs:
 
       - name: Run Pigweed AVR Test Suite in simavr
         run: |
-          if ! simavr -m atmega328p build/test_runner.elf > build/test_runner.log 2>&1; then
+          if ! simavr -m atmega2560 build/test_runner.elf > build/test_runner.log 2>&1; then
             cat build/test_runner.log
             exit 1
           fi
@@ -204,5 +204,4 @@ jobs:
             build/firmware.hex
             build/firmware.lst
             build/test_runner.elf
-            build-mega/firmware.elf
-            build-mega/test_runner.elf
+            
