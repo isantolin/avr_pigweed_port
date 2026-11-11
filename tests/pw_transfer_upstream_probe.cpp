@@ -1,4 +1,5 @@
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -14,6 +15,7 @@
 #include "pw_status/status.h"
 #include "pw_stream/memory_stream.h"
 #include "pw_transfer/client.h"
+#include "pw_transfer/internal/config.h"
 #include "pw_transfer/handler.h"
 #include "pw_transfer/internal/event.h"
 #include "pw_transfer/transfer.h"
@@ -25,6 +27,8 @@ constexpr uint32_t kRpcChannelId = 1;
 constexpr uint32_t kReadResourceId = 0x1234;
 constexpr uint32_t kWriteResourceId = 0x5678;
 constexpr uint32_t kCancelResourceId = 0x1235;
+constexpr uint32_t kRetryResourceId = 0x1236;
+constexpr uint32_t kTimeoutResourceId = 0x1237;
 constexpr size_t kHdlcDecoderBufferSize = 256;
 
 bool first_callback_called = false;
@@ -33,10 +37,14 @@ bool read_complete = false;
 bool write_complete = false;
 bool reverse_write_complete = false;
 bool cancel_complete = false;
+bool retry_complete = false;
+bool timeout_complete = false;
 pw::Status read_completion_status = pw::Status::Unknown();
 pw::Status write_completion_status = pw::Status::Unknown();
 pw::Status reverse_write_completion_status = pw::Status::Unknown();
 pw::Status cancel_completion_status = pw::Status::Unknown();
+pw::Status retry_completion_status = pw::Status::Unknown();
+pw::Status timeout_completion_status = pw::Status::Unknown();
 
 void OnFirstResourceStatus(
     pw::Status status,
@@ -70,6 +78,16 @@ void OnCancelComplete(pw::Status status) {
   cancel_complete = true;
 }
 
+void OnRetryComplete(pw::Status status) {
+  retry_completion_status = status;
+  retry_complete = true;
+}
+
+void OnTimeoutComplete(pw::Status status) {
+  timeout_completion_status = status;
+  timeout_complete = true;
+}
+
 void EmitResult(bool success) {
   const uint16_t ubrr =
       static_cast<uint16_t>((F_CPU / (16UL * 115200UL)) - 1UL);
@@ -98,6 +116,9 @@ class HdlcLoopbackWriter final : public pw::stream::NonSeekableWriter {
       : decoder_(pw::ByteSpan(decoder_storage_)) {}
 
   void set_client(pw::rpc::Client& client) { client_ = &client; }
+  void DropNextFrames(size_t count) { frames_to_drop_ = count; }
+  void SetDropAll(bool enabled) { drop_all_frames_ = enabled; }
+  size_t dropped_frames() const { return dropped_frames_; }
 
  private:
   pw::Status DoWrite(pw::ConstByteSpan data) override {
@@ -121,6 +142,9 @@ class HdlcLoopbackWriter final : public pw::stream::NonSeekableWriter {
 
   pw::rpc::Server* server_ = nullptr;
   pw::rpc::Client* client_ = nullptr;
+  size_t frames_to_drop_ = 0;
+  size_t dropped_frames_ = 0;
+  bool drop_all_frames_ = false;
   std::array<std::byte, kHdlcDecoderBufferSize> decoder_storage_{};
   pw::hdlc::Decoder decoder_;
 };
@@ -268,6 +292,66 @@ int main() {
     }
   }
   if (cancel_completion_status != pw::Status::Cancelled()) success = false;
+
+  // Drop one server response. A zero initial-chunk timeout forces an upstream
+  // retry; the next response is delivered and the transfer must complete.
+  std::array<std::byte, 32> retry_data{};
+  for (size_t i = 0; i < retry_data.size(); ++i) {
+    retry_data[i] = static_cast<std::byte>(0x60 + i);
+  }
+  pw::stream::MemoryReader retry_source{pw::ConstByteSpan(retry_data)};
+  pw::transfer::ReadOnlyHandler retry_handler(kRetryResourceId, retry_source);
+  if (!transfer_service.RegisterHandler(retry_handler)) success = false;
+  std::array<std::byte, 64> retry_output_buffer{};
+  pw::stream::MemoryWriter retry_output{pw::ByteSpan(retry_output_buffer)};
+  server_to_client_writer.DropNextFrames(1);
+  if (!transfer_client.set_max_retries(2).ok()) success = false;
+  retry_complete = false;
+  auto retry_result = transfer_client.Read(
+      kRetryResourceId,
+      retry_output,
+      OnRetryComplete,
+      pw::transfer::cfg::kDefaultClientTimeout,
+      pw::chrono::SystemClock::for_at_least(std::chrono::milliseconds(0)));
+  if (!retry_result.ok()) {
+    success = false;
+  } else if (!PumpTransfers(client_thread, server_thread, retry_complete)) {
+    success = false;
+  }
+  if (!retry_completion_status.ok() ||
+      retry_output.bytes_written() != retry_data.size() ||
+      std::memcmp(retry_output.data(), retry_data.data(), retry_data.size()) != 0 ||
+      server_to_client_writer.dropped_frames() != 1) {
+    success = false;
+  }
+
+  // Drop every server response and exhaust the retry budget. The cooperative
+  // Poll path must complete the client with DEADLINE_EXCEEDED.
+  std::array<std::byte, 32> timeout_data{};
+  pw::stream::MemoryReader timeout_source{pw::ConstByteSpan(timeout_data)};
+  pw::transfer::ReadOnlyHandler timeout_handler(kTimeoutResourceId,
+                                                 timeout_source);
+  if (!transfer_service.RegisterHandler(timeout_handler)) success = false;
+  std::array<std::byte, 64> timeout_output_buffer{};
+  pw::stream::MemoryWriter timeout_output{pw::ByteSpan(timeout_output_buffer)};
+  server_to_client_writer.SetDropAll(true);
+  if (!transfer_client.set_max_retries(1).ok()) success = false;
+  timeout_complete = false;
+  auto timeout_result = transfer_client.Read(
+      kTimeoutResourceId,
+      timeout_output,
+      OnTimeoutComplete,
+      pw::transfer::cfg::kDefaultClientTimeout,
+      pw::chrono::SystemClock::for_at_least(std::chrono::milliseconds(0)));
+  if (!timeout_result.ok()) {
+    success = false;
+  } else if (!PumpTransfers(client_thread, server_thread, timeout_complete)) {
+    success = false;
+  }
+  server_to_client_writer.SetDropAll(false);
+  if (timeout_completion_status != pw::Status::DeadlineExceeded()) {
+    success = false;
+  }
 
   // Reuse the same two TransferThread instances with their roles reversed.
   // The first endpoint now serves transfers and the second endpoint is client.
