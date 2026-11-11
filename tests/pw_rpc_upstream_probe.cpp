@@ -26,15 +26,17 @@ constexpr uint64_t kHdlcAddress = 1;
 constexpr uint32_t kRpcChannelId = 1;
 constexpr size_t kHdlcDecoderBufferSize = 128;
 
-void EmitResult(bool success) {
+void EmitResult(uint8_t failure_code) {
   const uint16_t ubrr =
       static_cast<uint16_t>((F_CPU / (16UL * 115200UL)) - 1UL);
   UBRR0H = static_cast<uint8_t>(ubrr >> 8);
   UBRR0L = static_cast<uint8_t>(ubrr & 0xFF);
   UCSR0B = (1 << TXEN0);
   UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
-  const char* marker = success ? "PW_RPC_PROBE_PASS\r\n"
-                               : "PW_RPC_PROBE_FAIL\r\n";
+  char failure_marker[] = "PW_RPC_PROBE_FAIL_0\r\n";
+  failure_marker[18] = static_cast<char>('0' + failure_code);
+  const char* marker =
+      failure_code == 0 ? "PW_RPC_PROBE_PASS\r\n" : failure_marker;
   while (*marker != '\0') {
     while (!(UCSR0A & (1 << UDRE0))) {}
     UDR0 = static_cast<uint8_t>(*marker++);
@@ -128,7 +130,7 @@ class HdlcLoopbackWriter final : public pw::stream::NonSeekableWriter {
 }  // namespace
 
 int main() {
-  bool success = true;
+  uint8_t failure_code = 0;
 
   // Keep the physical AVR UART/HDLC output in the link and verify that the
   // decoder accepts an incomplete frame without dispatching a packet.
@@ -164,19 +166,19 @@ int main() {
   expected_request = request;
   auto unary_call = raw_client.Unary(request, OnUnaryResponse);
   (void)unary_call;
-  if (!service.unary_called() ||
-      service.unary_request_size() != request.size() ||
-      !unary_response_ok) {
-    success = false;
-  }
+  if (!service.unary_called()) failure_code = 1;
+  if (failure_code == 0 &&
+      service.unary_request_size() != request.size()) failure_code = 2;
+  if (failure_code == 0 && !unary_response_ok) failure_code = 3;
 
   auto bidi_call = raw_client.Bidi();
   bidi_call.set_on_next(OnBidiResponse);
-  if (!bidi_call.Write(request).ok()) success = false;
-  if (!service.bidi_server_received() || !bidi_response_ok) success = false;
+  if (!bidi_call.Write(request).ok() && failure_code == 0) failure_code = 4;
+  if (!service.bidi_server_received() && failure_code == 0) failure_code = 5;
+  if (!bidi_response_ok && failure_code == 0) failure_code = 6;
   (void)bidi_call.Cancel();
 
   // The RPC calls above traversed both HDLC encoders and decoders.
-  EmitResult(success);
-  return success ? 0 : 1;
+  EmitResult(failure_code);
+  return failure_code == 0 ? 0 : 1;
 }
