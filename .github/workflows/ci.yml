@@ -113,12 +113,12 @@ jobs:
       - name: Build and measure application firmware on ATmega2560
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: |
-          cmake -B build-mega -G Ninja \\
-            -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \\
-            -DAVR_MCU=atmega2560 \\
-            -DAVR_F_CPU=16000000UL \\
-            -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \\
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \\
+          cmake -B build-mega -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
+            -DAVR_MCU=atmega2560 \
+            -DAVR_F_CPU=16000000UL \
+            -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           cmake --build build-mega --target firmware.elf test_runner.elf
           echo "=== ATmega2560 application firmware ==="
