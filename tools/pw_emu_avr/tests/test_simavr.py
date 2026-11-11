@@ -91,7 +91,15 @@ class SimavrAdapterTest(unittest.TestCase):
             stream = None
             try:
                 stream = connector.get_channel_stream('uart0', timeout=1.0)
-                connector.cont()
+                input_fd = os.open(
+                    connector.get_channel_path('uart0'),
+                    os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK,
+                )
+                try:
+                    connector.cont()
+                    os.write(input_fd, b'G')
+                finally:
+                    os.close(input_fd)
                 output = bytearray()
                 deadline = time.monotonic() + 5.0
                 self.assertTrue(connector.running(), connector.get_logs())
@@ -108,7 +116,15 @@ class SimavrAdapterTest(unittest.TestCase):
 
                 # Reset must restart the ELF and emit the same UART marker again.
                 connector.reset()
-                connector.cont()
+                input_fd = os.open(
+                    connector.get_channel_path('uart0'),
+                    os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK,
+                )
+                try:
+                    connector.cont()
+                    os.write(input_fd, b'G')
+                finally:
+                    os.close(input_fd)
                 deadline = time.monotonic() + 5.0
                 while output.count(b'PW_EMU_UART_PASS') < 2 and time.monotonic() < deadline:
                     try:
