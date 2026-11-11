@@ -79,10 +79,36 @@ for mirror in "${FALLBACK_MIRRORS[@]}"; do
     continue
   fi
 
-  # Preserve deb822 suites/components/signing settings; change only Ubuntu URIs.
-  if ! sudo sed -i -E \
-      "s#^URIs:[[:space:]]*https?://[^[:space:]]*ubuntu[^[:space:]]*/ubuntu/?[[:space:]]*\$#URIs: $mirror/#I" \
-      "$SOURCES_FILE"; then
+  # The hosted runner uses deb822 with a mirror+file: URI. Replace that
+  # indirection as well as direct Canonical/Azure Ubuntu archive URIs.
+  if ! MIRROR="$mirror" python3 - "$SOURCES_FILE" <<'PY'
+import os
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+mirror = os.environ["MIRROR"].rstrip("/") + "/"
+lines = path.read_text().splitlines()
+replaced = 0
+for index, line in enumerate(lines):
+    if not line.lstrip().lower().startswith("uris:"):
+        continue
+    prefix, value = line.split(":", 1)
+    uris = value.split()
+    updated = []
+    for uri in uris:
+        if uri.startswith("mirror+file:") or "archive.ubuntu.com/ubuntu" in uri:
+            updated.append(mirror)
+            replaced += 1
+        else:
+            updated.append(uri)
+    lines[index] = prefix + ": " + " ".join(updated)
+if replaced == 0:
+    raise SystemExit("No mirror+file or Canonical/Azure Ubuntu URI found")
+path.write_text("\\n".join(lines) + "\\n")
+print(f"Replaced {replaced} Ubuntu URI(s) with {mirror}")
+PY
+  then
     restore_sources
     echo "::warning::Could not update Ubuntu source URI; trying next mirror."
     continue
