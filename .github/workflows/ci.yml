@@ -39,7 +39,7 @@ jobs:
             -o DPkg::Lock::Timeout=120 \
             install -y --no-install-recommends \
               gcc-avr avr-libc binutils-avr cmake ninja-build simavr \
-              libsimavr-dev protobuf-compiler libprotobuf-dev python3-protobuf python3-jinja2 ccache
+              libsimavr-dev protobuf-compiler libprotobuf-dev python3-protobuf python3-jinja2 \\\n              python3-psutil python3-serial python3-yaml ccache
 
           avr-gcc --version
           simavr --help >/dev/null 2>&1 || test "$?" -eq 1
@@ -85,6 +85,14 @@ jobs:
         run: |
           cmake --build build --target run_tests
           ccache --show-stats
+
+      - name: Test pw_emu simavr launcher and UART integration
+        if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
+        env:
+          PYTHONPATH: third_party/pigweed/pw_emu/py:third_party/pigweed/pw_env_setup/py:tools/pw_emu_avr/python
+        run: |
+          python3 -m py_compile tools/pw_emu_avr/python/pw_emu_avr/simavr.py tools/pw_emu_avr/tests/test_simavr.py
+          python3 -m unittest discover -s tools/pw_emu_avr/tests -v
 
       - name: Verify Python Host Tools & Arduino Export
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
