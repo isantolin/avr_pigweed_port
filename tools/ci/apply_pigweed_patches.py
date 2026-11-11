@@ -599,6 +599,33 @@ from pw_rpc.client import Client""",
             + transfer_content[run_end:]
         )
 
+    stream_methods = (
+        "void TransferThread::SetClientReadStream(",
+        "void TransferThread::CloseClientReadStream(",
+        "void TransferThread::SetClientWriteStream(",
+        "void TransferThread::CloseClientWriteStream(",
+        "void TransferThread::SetServerReadStream(",
+        "void TransferThread::SetServerWriteStream(",
+    )
+    old_reserve = "  if (!TryWaitForEventToProcess()) { return; }"
+    new_reserve = """#if !defined(PW_TRANSFER_COOPERATIVE)
+  if (!TryWaitForEventToProcess()) { return; }
+#endif"""
+    for signature in stream_methods:
+        method_start = transfer_content.index(signature)
+        next_method = transfer_content.find(
+            "\\nvoid TransferThread::", method_start + len(signature)
+        )
+        method_end = len(transfer_content) if next_method < 0 else next_method
+        method_block = transfer_content[method_start:method_end]
+        if old_reserve in method_block:
+            method_block = method_block.replace(old_reserve, new_reserve, 1)
+        elif new_reserve not in method_block:
+            raise RuntimeError(f"could not find stream reservation in {signature}")
+        transfer_content = (
+            transfer_content[:method_start] + method_block + transfer_content[method_end:]
+        )
+
     stream_start = transfer_content.index("void TransferThread::SetClientReadStream")
     stream_tail = transfer_content[stream_start:]
     old_wait = "  NotifyEvent();\n  WaitUntilEventIsProcessed();"
