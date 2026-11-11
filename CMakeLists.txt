@@ -33,6 +33,24 @@ if(NOT _pw_patch_result EQUAL 0)
   message(FATAL_ERROR "Failed to apply pinned Pigweed AVR compatibility patch")
 endif()
 
+# Pigweed's PWPB plugin imports Python protos generated into the build tree.
+# Pass those package roots to generate_protos.py through its PYTHONPATH hook.
+set(_pw_generated_python_paths
+  "${CMAKE_BINARY_DIR}/pw_protobuf.codegen_protos/python"
+  "${CMAKE_BINARY_DIR}/pw_protobuf.common_proto/python"
+  "${CMAKE_BINARY_DIR}/pw_protobuf.status_proto/python"
+  "${CMAKE_BINARY_DIR}/pw_protobuf.field_options_proto/python"
+)
+if(DEFINED ENV{PYTHONPATH} AND NOT "$ENV{PYTHONPATH}" STREQUAL "")
+  list(APPEND _pw_generated_python_paths "$ENV{PYTHONPATH}")
+endif()
+if(WIN32)
+  list(JOIN _pw_generated_python_paths ";" _pw_generated_pythonpath)
+else()
+  list(JOIN _pw_generated_python_paths ":" _pw_generated_pythonpath)
+endif()
+set(ENV{PYTHONPATH} "${_pw_generated_pythonpath}")
+
 
 # Architectural patch for 16-bit integer architectures (AVR: sizeof(int) == 2, sizeof(long) == 4)
 set(_ARG_TYPES_FILE "${PW_ROOT}/pw_tokenizer/public/pw_tokenizer/internal/argument_types.h")
