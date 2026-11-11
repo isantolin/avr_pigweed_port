@@ -85,7 +85,7 @@ void EmitResult() {
 }  // namespace
 
 int main() {
-  static std::array<std::byte, 128> chunk_storage{};
+  static std::array<std::byte, PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE> chunk_storage{};
   static std::array<std::byte, 128> encode_storage{};
   static pw::transfer::Thread<1, 1> transfer_thread{
       pw::ByteSpan(chunk_storage), pw::ByteSpan(encode_storage)};
