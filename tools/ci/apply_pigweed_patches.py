@@ -605,7 +605,7 @@ from pw_rpc.client import Client""",
 
     stream_start = transfer_content.index("void TransferThread::SetClientReadStream")
     stream_tail = transfer_content[stream_start:]
-    old_wait = "  NotifyEvent();\\n  WaitUntilEventIsProcessed();"
+    old_wait = "  NotifyEvent();\n  WaitUntilEventIsProcessed();"
     new_wait = """#if defined(PW_TRANSFER_COOPERATIVE)
   // In the cooperative build this callback runs on the same owner loop as
   // Poll(). Install the RPC stream synchronously so the first incoming
