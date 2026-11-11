@@ -109,3 +109,18 @@ The existing `FileSystemService.Read` server stream is not automatically equival
 - Integrate the validated port revision into `arduino-yun-bridge2`, then test the MCU and MPU implementations together over the real UART/HDLC transport.
 
 No production-readiness claim should be made until those gates pass.
+
+
+## AVR memory-class compatibility
+
+The combined upstream `pw_rpc` + `pw_transfer` probe instantiates one shared
+`Thread<1,1>`, the RPC client and server, and both transfer directions. The
+measured ATmega32U4 image requires approximately 63 KB of Flash and 9 KB of
+SRAM. It therefore cannot run on ATmega32U4 (32 KB Flash / 2.5 KB SRAM) or
+ATmega2560 (256 KB Flash / 8 KB SRAM) in this configuration.
+
+The complete combined implementation is validated on ATmega1284P (128 KB
+Flash / 16 KB SRAM). This is a build/footprint validation, not a claim that
+the full transfer stack is deployable on the Arduino Yún's ATmega32U4. Smaller
+AVR targets need a reduced role/configuration or must keep transfer orchestration
+on the OpenWrt side rather than instantiate both RPC endpoints on the MCU.
