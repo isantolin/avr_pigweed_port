@@ -66,7 +66,7 @@ from pathlib import Path as _PigweedPath
 # protoc may run plugins with an isolated working directory. Resolve generated
 # PWPB Python package roots from the repository's CMake build directory.
 _repo_root = _PigweedPath(__file__).resolve().parents[5]
-_build_roots = list(_repo_root.glob("build*"))
+_build_roots = [_repo_root / "build"]
 _bootstrap_paths = []
 for _build_root in _build_roots:
     for _target in (
