@@ -61,27 +61,44 @@ from pw_rpc.client import Client""",
         "pw_protobuf/py/pw_protobuf/plugin.py",
         "import sys\n",
         """import sys
+import types as _PigweedTypes
 from pathlib import Path as _PigweedPath
 
-# The protoc plugin inherits the generated Python roots through PYTHONPATH.
-# Make the generated directories regular, extendable packages before imports.
-_bootstrap_paths = []
-for _entry in list(sys.path):
+# The protoc plugin runs as a separate process. Resolve the generated Python
+# package roots explicitly and register namespace packages before importing
+# Pigweed's generated options modules.
+_package_roots = {}
+for _entry in sys.path:
     _python_root = _PigweedPath(_entry)
     if _python_root.name != "python" or not any(
         _part.startswith("pw_protobuf.") for _part in _python_root.parts
     ):
         continue
-    _bootstrap_paths.append(str(_python_root))
     for _package_name in ("pw_protobuf_codegen_protos", "pw_protobuf_protos"):
         _package_dir = _python_root / _package_name
-        _package_dir.mkdir(parents=True, exist_ok=True)
-        _init_file = _package_dir / "__init__.py"
-        _init_file.write_text(
-            "from pkgutil import extend_path\\n"
-            "__path__ = extend_path(__path__, __name__)\\n"
-        )
-print("PWPB_PLUGIN_BOOTSTRAP", _bootstrap_paths, sys.path[:20], file=sys.stderr)
+        if _package_dir.is_dir():
+            _package_roots.setdefault(_package_name, []).append(str(_package_dir))
+
+for _package_name, _package_paths in _package_roots.items():
+    _package = _PigweedTypes.ModuleType(_package_name)
+    _package.__path__ = _package_paths
+    _package.__package__ = _package_name
+    sys.modules[_package_name] = _package
+
+_codegen_module = next(
+    (
+        _path / "pw_protobuf_codegen_protos" / "codegen_options_pb2.py"
+        for _path in map(_PigweedPath, sys.path)
+        if (_path / "pw_protobuf_codegen_protos" / "codegen_options_pb2.py").is_file()
+    ),
+    None,
+)
+if _codegen_module is None:
+    raise ModuleNotFoundError(
+        "codegen_options_pb2.py not found; searched Python roots: "
+        + repr(sys.path)
+    )
+print("PWPB_PLUGIN_PACKAGE", _codegen_module, _package_roots, file=sys.stderr)
 """,    )
     replace_once(
         "pw_protobuf/public/pw_protobuf/wire_format.h",
