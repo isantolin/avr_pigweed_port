@@ -791,7 +791,7 @@ from pw_rpc.client import Client""",
         "void TransferThread::EnqueueResourceEvent("
     )
     resource_end = transfer_content.find(
-        "\\nvoid TransferThread::", resource_start + 1
+        "\nvoid TransferThread::", resource_start + 1
     )
     if resource_end < 0:
         raise RuntimeError("could not locate end of EnqueueResourceEvent")
