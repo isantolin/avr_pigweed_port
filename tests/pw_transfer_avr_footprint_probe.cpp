@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <avr/io.h>
 
+#include "PigweedAVR.h"
 #include "pw_bytes/span.h"
 #include "pw_hdlc/rpc_channel.h"
 #include "pw_rpc/client.h"
