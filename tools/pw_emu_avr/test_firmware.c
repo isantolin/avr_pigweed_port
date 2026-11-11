@@ -31,9 +31,9 @@ int main(void) {
   }
   const uint8_t start = UDR0;
   if (start == 'G') {
-    uart_write("PW_EMU_UART_PASS\\r\\n");
+    uart_write("PW_EMU_UART_PASS\r\n");
   } else {
-    uart_write("PW_EMU_UART_FAIL\\r\\n");
+    uart_write("PW_EMU_UART_FAIL\r\n");
   }
 
   cli();
