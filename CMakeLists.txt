@@ -178,6 +178,14 @@ add_subdirectory("${PW_ROOT}/pw_hdlc" pw_hdlc EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_rpc" pw_rpc EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_transfer" pw_transfer EXCLUDE_FROM_ALL)
 
+# Generate a real upstream raw RPC service used by the UART/HDLC integration
+# probe. This exercises generated service dispatch, unary responders and
+# bidirectional raw streams rather than only linking the RPC server.
+pw_proto_library(avr_rpc_probe
+  SOURCES
+    tests/rpc_probe.proto
+)
+
 # The AVR uses a cooperative event pump, not Pigweed's blocking thread
 # notification/semaphore backends. Keep all transfer state in upstream code.
 function(avr_remove_target_deps target)
@@ -322,7 +330,10 @@ add_executable(pw_rpc_upstream_probe.elf
 target_include_directories(pw_rpc_upstream_probe.elf PRIVATE src)
 target_link_libraries(pw_rpc_upstream_probe.elf PRIVATE
   pw_rpc.server
+  pw_rpc.client
   pw_rpc.raw.server_api
+  pw_rpc.raw.client_api
+  avr_rpc_probe.raw_rpc
   pw_hdlc.rpc_channel_output
   pw_sync.no_lock
 )
