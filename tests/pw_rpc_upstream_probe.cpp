@@ -199,11 +199,11 @@ int main() {
   bidi_call.set_on_next(OnBidiResponse);
   if (!bidi_call.Write(request).ok() && failure_code == 0) failure_code = 4;
   if (!service.bidi_server_received() && failure_code == 0) failure_code = 5;
-  if (!bidi_server_write_ok && failure_code == 0) failure_code = 10;
-  if (!bidi_response_called && failure_code == 0) failure_code = 11;
-  if (bidi_response_size != request.size() && failure_code == 0) failure_code = 12;
+  if (!bidi_server_write_ok && failure_code == 0) failure_code = 6;
+  if (!bidi_response_called && failure_code == 0) failure_code = 7;
+  if (bidi_response_size != request.size() && failure_code == 0) failure_code = 8;
   if (bidi_response_middle != static_cast<uint8_t>(request[1]) &&
-      failure_code == 0) failure_code = 13;
+      failure_code == 0) failure_code = 9;
   (void)bidi_call.Cancel();
 
   // The RPC calls above traversed both HDLC encoders and decoders.
