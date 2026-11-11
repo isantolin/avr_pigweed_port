@@ -11,6 +11,7 @@ jobs:
   build-and-test:
     name: Build & Test (${{ matrix.crc_impl }})
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     strategy:
       matrix:
         crc_impl: [PW_CHECKSUM_CRC32_4BITS, PW_CHECKSUM_CRC32_1BITS]
@@ -24,9 +25,29 @@ jobs:
           git submodule update --init --recursive --depth 1
 
       - name: Install AVR Toolchain & simavr
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-avr avr-libc binutils-avr cmake ninja-build simavr libsimavr-dev protobuf-compiler python3-protobuf python3-jinja2
+          # Bound repository refresh and package installation so a transient
+          # Ubuntu mirror or lock cannot stall both matrix jobs indefinitely.
+          sudo timeout --signal=TERM --kill-after=30s 300s apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30 \
+            -o DPkg::Lock::Timeout=120 \
+            update
+
+          sudo timeout --signal=TERM --kill-after=30s 300s apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30 \
+            -o DPkg::Lock::Timeout=120 \
+            install -y --no-install-recommends \
+              gcc-avr avr-libc binutils-avr cmake ninja-build simavr \
+              libsimavr-dev protobuf-compiler python3-protobuf python3-jinja2
+
+          avr-gcc --version
+          simavr --help >/dev/null 2>&1 || test "$?" -eq 1
 
       - name: Build host-side pw_emu simavr runner
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
