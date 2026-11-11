@@ -53,6 +53,9 @@ using byte = std::byte;
 #include "pw_checksum/crc16_ccitt.h"
 #include "pw_hdlc/encoder.h"
 #include "pw_hdlc/decoder.h"
+#include "pw_hdlc/rpc_channel.h"
+#include "pw_rpc/server.h"
+#include "pw_rpc/raw/server_reader_writer.h"
 #include "arduino_stream.h"
 
 // 3. Tokenization and Utilities
