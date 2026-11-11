@@ -154,6 +154,20 @@ from pw_rpc.client import Client""",
         "enum class endian {",
         "enum class endian : std::uint32_t {",
     )
+    # The endian enumerators are 32-bit on AVR, where unsigned int is only
+    # 16-bit. Keep the non-type template parameters and constexpr result wide
+    # enough; otherwise the enum initializer narrows both template arguments
+    # and the returned value.
+    replace_once(
+        "third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/internal/bit.h",
+        "#include <limits>",
+        "#include <cstdint>\\n#include <limits>",
+    )
+    replace_once(
+        "third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/internal/bit.h",
+        "template <unsigned little, unsigned big>\\nconstexpr unsigned native_endianess() {",
+        "template <std::uint32_t little, std::uint32_t big>\\nconstexpr std::uint32_t native_endianess() {",
+    )
     replace_once(
         "pw_protobuf/public/pw_protobuf/wire_format.h",
         "inline constexpr static uint32_t kMaxFieldNumber = (1u << 29) - 1;",
