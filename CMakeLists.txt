@@ -398,6 +398,10 @@ target_link_libraries(pw_transfer_avr_footprint_probe.elf PRIVATE
   pw_hdlc.rpc_channel_output
   pw_sync.no_lock
 )
+target_link_options(pw_transfer_avr_footprint_probe.elf PRIVATE
+  "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/pw_transfer_avr_footprint_probe.map"
+  "-Wl,--print-memory-usage"
+)
 add_custom_command(TARGET pw_transfer_avr_footprint_probe.elf POST_BUILD
   COMMAND avr-size --format=avr --mcu=${AVR_MCU} $<TARGET_FILE:pw_transfer_avr_footprint_probe.elf>
   COMMENT "Report shared-thread pw_transfer footprint (${AVR_MCU})"
