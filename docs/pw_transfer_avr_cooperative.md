@@ -286,3 +286,68 @@ core. It is not enough to omit creation of a `pw::thread::Thread`.
 
 The source review confirms the architecture requirements; it does not yet
 constitute an implementation or a successful AVR build.
+
+### Public API call-chain hazards
+
+The pinned source also exposes failure paths above the internal event mailbox:
+
+- `Client::Read()` and `Client::Write()` allocate and return a valid-looking
+  handle after calling `StartClientTransfer()`. That internal method returns
+  `void`; if event ownership acquisition times out, the transfer is not
+  enqueued, but the public call still returns the handle. The cooperative API
+  must return a `Result<Handle>` that reflects actual acceptance.
+- `TransferService::HandleChunk()` calls `StartServerTransfer()` for an
+  initial chunk and then invokes `on_server_transfer_started_`. Since the
+  current start method can silently fail to enqueue, the start callback can
+  report a start that was never accepted. The cooperative path must invoke
+  this callback only after successful context initialization.
+- `TransferService::HandleChunk()` also calls `ProcessServerChunk()` for
+  non-initial chunks. That path currently has no return status if the event
+  handoff fails.
+- `Client::OpenReadStream()` and `Client::OpenWriteStream()` call
+  `SetClientReadStream()` / `SetClientWriteStream()`. Those methods wait for
+  the transfer thread after enqueueing the stream event. Therefore the first
+  client Read/Write operation can block before the transfer itself starts.
+- Server RPC stream setup similarly calls `SetServerReadStream()` /
+  `SetServerWriteStream()`, which wait for event processing.
+- `TransferService::GetResourceStatus()` already allows only one outstanding
+  responder and protects it with a mutex. The transfer thread separately
+  stores only one `resource_status_callback_`. For a single-loop AVR backend,
+  preserve the one-request limit but replace the mutex/thread handoff with
+  owner-loop sequencing and an asynchronous response.
+
+These call chains mean the AVR adaptation must not be limited to adding a
+new public `Poll()` method. The public client and service wrappers must be
+adapted so their return values and callbacks accurately reflect whether work
+was accepted.
+
+### Reconsidering the event queue for a single-owner AVR loop
+
+The current design specifies a general event queue. The source review suggests
+a smaller and safer first implementation is possible if the AVR integration
+guarantees that all RPC decoding and `pw_transfer` API calls execute on the
+same main-loop owner context, and UART interrupts only place raw bytes into
+the UART driver's existing bounded RX buffer:
+
+- Execute transfer events synchronously on the owner loop by calling the
+  shared event dispatcher, rather than enqueueing every event into a second
+  queue.
+- Add a reentrancy guard. A callback invoked while dispatching must not
+  recursively mutate the transfer thread; either reject that operation with
+  `FAILED_PRECONDITION` or defer it through a small, typed, statically
+  allocated deferred-action queue.
+- Incoming chunk bytes remain valid for the duration of the synchronous
+  dispatcher call, so the single shared chunk buffer can remain the scratch
+  buffer. If any chunk can originate from an ISR or be deferred, it must be
+  copied into owned queue storage.
+- Polling then needs only to process deferred actions (if enabled) and scan
+  deadlines. It must have a fixed per-call budget and return.
+- This model avoids copying stream wrappers, callbacks, and handler pointers
+  into generic queue slots. Those are non-trivial objects with lifetimes and
+  ownership semantics; a byte-copy event ring would be unsafe.
+
+This is a conditional simplification, not an assumption: before adopting it,
+verify that the AVR RPC transport invokes service/client callbacks synchronously
+from the main loop and never from an ISR or another execution context. If that
+cannot be guaranteed, use a typed bounded queue with explicit ownership for
+each event payload, not a generic memcpy queue.
