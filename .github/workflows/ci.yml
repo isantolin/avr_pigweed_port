@@ -57,7 +57,7 @@ jobs:
             -o DPkg::Lock::Timeout=120 \
             install -y --no-install-recommends \
               gcc-avr avr-libc binutils-avr cmake ninja-build simavr \
-              libsimavr-dev protobuf-compiler libprotobuf-dev python3-protobuf python3-jinja2 python3-serial ccache
+              libsimavr-dev protobuf-compiler libprotobuf-dev python3-protobuf python3-jinja2 python3-serial python3-psutil ccache
 
           avr-gcc --version
           protoc --version
