@@ -88,15 +88,22 @@ from pw_rpc.client import Client""",
         macro_end += 2
         call = context_content[macro_start:macro_end]
         id_offset = call.find("id_for_log()")
-        format_offset = call.find("%u")
-        if format_offset >= 0 and format_offset < id_offset:
-            call = call[:format_offset] + "%lu" + call[format_offset + 2:]
-            context_content = (
-                context_content[:macro_start] + call + context_content[macro_end:]
-            )
-            patched_log_formats += 1
-        elif "%lu" not in call[:id_offset]:
-            raise RuntimeError("id_for_log() log call has no matching %u format")
+        # The CMake configure step may run more than once in the same checkout
+        # (for example, the 328P and Mega2560 probe builds). If the ID's first
+        # format slot is already %lu, do not rewrite the next %u argument.
+        format_prefix = call[:id_offset]
+        if "%lu" in format_prefix:
+            pass
+        else:
+            format_offset = call.find("%u")
+            if format_offset >= 0 and format_offset < id_offset:
+                call = call[:format_offset] + "%lu" + call[format_offset + 2:]
+                context_content = (
+                    context_content[:macro_start] + call + context_content[macro_end:]
+                )
+                patched_log_formats += 1
+            else:
+                raise RuntimeError("id_for_log() log call has no matching %u format")
         cursor = macro_start + len(call)
     if patched_log_formats:
         context_cc.write_text(context_content)
