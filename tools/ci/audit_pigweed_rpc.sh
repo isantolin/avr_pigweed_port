@@ -20,6 +20,12 @@ mkdir -p "$(dirname "$OUT")"
   echo "=== AVR protobuf static assertions and integer-width assumptions ==="
   grep -R -n -E 'four words|1 << (16|29)|sizeof\(double\)|sizeof\(uintptr_t\)|sizeof\(void\*)' "$PW_ROOT/pw_protobuf/public/pw_protobuf" 2>/dev/null | head -n 200 || true
   echo
+  echo "=== Transfer thread/synchronization dependencies ==="
+  grep -R -n -E 'sync::Mutex|BinarySemaphore|TimedThreadNotification|ThreadCore|event_notification_' "$PW_ROOT/pw_transfer" 2>/dev/null | head -n 200 || true
+  echo
+  echo "=== Double fields in RPC and transfer protocol schemas ==="
+  grep -R -n -E '(^|[[:space:]])double[[:space:]]' "$PW_ROOT/pw_rpc" "$PW_ROOT/pw_transfer" --include='*.proto' 2>/dev/null || true
+  echo
   echo "=== Relevant CMake target declarations ==="
   grep -R -n -E 'pw_add_library|pw_target_link_targets' "$PW_ROOT/pw_rpc" "$PW_ROOT/pw_transfer" 2>/dev/null || true
   echo
@@ -75,6 +81,8 @@ mkdir -p "$(dirname "$OUT")"
     pw_transfer/chunk.cc \
     pw_transfer/CMakeLists.txt \
     pw_transfer/public/pw_transfer/transfer.h \
+    pw_transfer/public/pw_transfer/client.h \
+    pw_transfer/public/pw_transfer/handler.h \
     pw_transfer/public/pw_transfer/transfer_thread.h \
     pw_transfer/transfer_thread.cc \
     pw_transfer/client.cc \
