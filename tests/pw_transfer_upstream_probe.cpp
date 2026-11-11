@@ -34,9 +34,9 @@ void EmitResult(bool success) {
   UBRR0L = static_cast<uint8_t>(ubrr & 0xFF);
   UCSR0B = (1 << TXEN0);
   UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
-  const char* marker = success ? "PW_TRANSFER_PROBE_PASS\\r\\n"
-                               : "PW_TRANSFER_PROBE_FAIL\\r\\n";
-  while (*marker != '\\0') {
+  const char* marker = success ? "PW_TRANSFER_PROBE_PASS\r\n"
+                               : "PW_TRANSFER_PROBE_FAIL\r\n";
+  while (*marker != '\0') {
     while (!(UCSR0A & (1 << UDRE0))) {}
     UDR0 = static_cast<uint8_t>(*marker++);
   }
