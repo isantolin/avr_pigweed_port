@@ -73,7 +73,7 @@ for _build_root in _build_roots:
                     _init_file = _package_dir / "__init__.py"
                     if not _init_file.exists():
                         _init_file.write_text(
-                            "from pkgutil import extend_path\\n"
+                            "from pkgutil import extend_path\n"
                             "__path__ = extend_path(__path__, __name__)\\n"
                         )
 print("PWPB_PLUGIN_BOOTSTRAP", _repo_root, _build_roots, file=sys.stderr)
