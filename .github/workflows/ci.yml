@@ -28,6 +28,14 @@ jobs:
         run: |
           bash tools/ci/audit_pigweed_rpc.sh
 
+      - name: Upload pinned Pigweed source audit
+        if: always() && matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pw-upstream-audit
+          path: build/pw-upstream-audit.txt
+          if-no-files-found: error
+
       - name: Install AVR Toolchain & simavr
         env:
           DEBIAN_FRONTEND: noninteractive
