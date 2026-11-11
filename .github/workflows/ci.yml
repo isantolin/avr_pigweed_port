@@ -146,13 +146,13 @@ jobs:
         run: |
           cmake -B build-transfer-32u4 -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
-            -DAVR_MCU=atmega32u4 \
+            -DAVR_MCU=atmega1284p \
             -DAVR_F_CPU=16000000UL \
             -DAVR_CRC32_IMPL=${{ matrix.crc_impl }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
-      - name: Build ATmega32U4 shared-thread footprint
+      - name: Build ATmega1284P shared-thread footprint
         run: |
           if ! cmake --build build-transfer-32u4 --target pw_transfer_avr_footprint_probe.elf > build-transfer-32u4/footprint-build.log 2>&1; then
             tail -n 160 build-transfer-32u4/footprint-build.log
