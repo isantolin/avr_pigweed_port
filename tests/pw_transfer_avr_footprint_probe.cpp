@@ -29,16 +29,31 @@ class NullWriter final : public pw::stream::NonSeekableWriter {
 void EmitResult() {
   const uint16_t ubrr =
       static_cast<uint16_t>((F_CPU / (16UL * 115200UL)) - 1UL);
+#if defined(UBRR0H)
   UBRR0H = static_cast<uint8_t>(ubrr >> 8);
   UBRR0L = static_cast<uint8_t>(ubrr & 0xFF);
   UCSR0B = (1 << TXEN0);
   UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
-  const char marker[] = "PW_TRANSFER_FOOTPRINT_PASS\r\n";
-  for (size_t i = 0; marker[i] != '\0'; ++i) {
+  const char marker[] = "PW_TRANSFER_FOOTPRINT_PASS\\r\\n";
+  for (size_t i = 0; marker[i] != '\\0'; ++i) {
     while (!(UCSR0A & (1 << UDRE0))) {}
     UDR0 = static_cast<uint8_t>(marker[i]);
   }
   while (!(UCSR0A & (1 << TXC0))) {}
+#elif defined(UBRR1H)
+  UBRR1H = static_cast<uint8_t>(ubrr >> 8);
+  UBRR1L = static_cast<uint8_t>(ubrr & 0xFF);
+  UCSR1B = (1 << TXEN1);
+  UCSR1C = (1 << UCSZ11) | (1 << UCSZ10);
+  const char marker[] = "PW_TRANSFER_FOOTPRINT_PASS\\r\\n";
+  for (size_t i = 0; marker[i] != '\\0'; ++i) {
+    while (!(UCSR1A & (1 << UDRE1))) {}
+    UDR1 = static_cast<uint8_t>(marker[i]);
+  }
+  while (!(UCSR1A & (1 << TXC1))) {}
+#else
+#error "No supported USART register bank found for footprint probe"
+#endif
 }
 
 }  // namespace
