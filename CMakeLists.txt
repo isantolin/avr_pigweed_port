@@ -16,6 +16,7 @@ set(AVR_CRC32_IMPL "PW_CHECKSUM_CRC32_4BITS" CACHE STRING
 # Define compile definitions globally before evaluating Pigweed subdirectories
 add_compile_definitions(PW_CHECKSUM_CRC32_DEFAULT_IMPL=${AVR_CRC32_IMPL})
 add_compile_definitions(__cpp_lib_endian=201907L)
+add_compile_definitions(PW_RPC_USE_GLOBAL_MUTEX=0 PW_RPC_DYNAMIC_ALLOCATION=0)
 
 # 2. Locate Pigweed root and import its CMake utilities
 set(PW_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/pigweed")
@@ -118,10 +119,13 @@ add_subdirectory("${PW_ROOT}/pw_base64" pw_base64 EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_tokenizer" pw_tokenizer EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_chrono" pw_chrono EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_stream" pw_stream EXCLUDE_FROM_ALL)
+add_subdirectory("${PW_ROOT}/pw_protobuf" pw_protobuf EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_checksum" pw_checksum EXCLUDE_FROM_ALL)
 # Enable pw_sync interfaces
 add_subdirectory("${PW_ROOT}/pw_sync" pw_sync EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_hdlc" pw_hdlc EXCLUDE_FROM_ALL)
+add_subdirectory("${PW_ROOT}/pw_rpc" pw_rpc EXCLUDE_FROM_ALL)
+target_link_libraries(pw_rpc.common PUBLIC pw_sync.no_lock)
 
 # pw_log_avr (Tokenized logging backend for AVR)
 pw_add_library(pw_log_avr STATIC
@@ -228,6 +232,24 @@ target_link_libraries(firmware.elf PRIVATE
   pw_stream
   pw_checksum
   pw_hdlc.encoder
+)
+
+# 6a. Isolated upstream pw_rpc + Pigweed HDLC integration proof.
+# Kept separate from firmware until ingress and streaming tests pass.
+add_executable(pw_rpc_upstream_probe.elf
+  tests/pw_rpc_upstream_probe.cpp
+  src/cxx_abi_stubs.cpp
+)
+target_include_directories(pw_rpc_upstream_probe.elf PRIVATE src)
+target_link_libraries(pw_rpc_upstream_probe.elf PRIVATE
+  pw_rpc.server
+  pw_rpc.raw.server_api
+  pw_hdlc.rpc_channel_output
+  pw_sync.no_lock
+)
+add_custom_command(TARGET pw_rpc_upstream_probe.elf POST_BUILD
+  COMMAND avr-size --format=avr --mcu=${AVR_MCU} $<TARGET_FILE:pw_rpc_upstream_probe.elf>
+  COMMENT "Report upstream pw_rpc AVR probe memory usage"
 )
 
 # 7. Post-processing: extract .hex, assembly listing, and memory size audit
