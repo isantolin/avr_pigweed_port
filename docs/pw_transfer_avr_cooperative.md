@@ -56,7 +56,7 @@ The port contains two different probes because the RPC endpoint and transfer end
 - Real HDLC encode/decode loopback between the client and server channel outputs.
 - Generated service registration and response completion.
 
-The two-endpoint HDLC/RPC runtime probe is built and executed on ATmega2560 because the combined upstream client/server call state exceeds the 2 KiB SRAM limit of ATmega328P. The ATmega328P build still compiles the port's normal firmware and test runner; the Bridge-class ATmega32U4 memory budget is checked by the separate shared-thread transfer footprint probe. Its UART result marker is emitted only after all runtime assertions pass.
+The two-endpoint HDLC/RPC runtime probe is built and executed on ATmega1284P because the combined upstream client/server call state exceeds the 2 KiB SRAM limit of ATmega328P. The ATmega328P build still compiles the port's normal firmware and test runner; the Bridge-class ATmega32U4 memory budget is checked by the separate shared-thread transfer footprint probe. Its UART result marker is emitted only after all runtime assertions pass.
 
 ### Upstream transfer probe
 
@@ -71,7 +71,7 @@ The two-endpoint HDLC/RPC runtime probe is built and executed on ATmega2560 beca
 
 The loopback probe uses separate `Thread<1, 1>` instances for the two simulated endpoints. That is intentional: one endpoint is a client and the other is a server during a transfer. A single AVR `Thread<1, 1>` is not permitted to run both roles concurrently.
 
-The end-to-end transfer probe is built for ATmega2560 to provide enough SRAM for both simulated endpoints. The runtime probe also deliberately fills the bounded event queue, verifies an explicit RESOURCE_EXHAUSTED result, and confirms that polling resets the queue for later transfers. A separate shared-thread footprint probe is built for ATmega32U4, instantiating the production arrangement (one RPC channel, both RPC endpoints, one `Thread<1, 1>`, both transfer service/client objects, read/write handlers, and retained client `Read()`/`Write()` call paths). The complete Bridge firmware footprint, worst-case stack, and hardware UART/HDLC validation remain release gates.
+The end-to-end transfer probe is built for ATmega1284P (16 KiB SRAM) to provide enough memory for both simulated endpoints and the complete upstream RPC/transfer state. The runtime probe also deliberately fills the bounded event queue, verifies an explicit RESOURCE_EXHAUSTED result, and confirms that polling resets the queue for later transfers. A separate shared-thread footprint probe is built for ATmega32U4, instantiating the production arrangement (one RPC channel, both RPC endpoints, one `Thread<1, 1>`, both transfer service/client objects, read/write handlers, and retained client `Read()`/`Write()` call paths). The complete Bridge firmware footprint, worst-case stack, and hardware UART/HDLC validation remain release gates.
 
 CI runs both `PW_CHECKSUM_CRC32_1BITS` and `PW_CHECKSUM_CRC32_4BITS`. The firmware UART pass marker, rather than simavr's terminal process status after firmware shutdown, is the runtime-probe result.
 
@@ -103,7 +103,7 @@ The existing `FileSystemService.Read` server stream is not automatically equival
 
 - Complete CI for both CRC configurations after the latest source/export changes.
 - Verify the exported Arduino library links a sketch that uses upstream `pw_transfer`.
-- Measure flash, static SRAM, and worst-case stack on ATmega32U4 (the Bridge target), not only ATmega328P/ATmega2560 probes.
+- Measure flash, static SRAM, and worst-case stack on ATmega32U4 (the Bridge target), not only ATmega328P/ATmega1284P probes.
 - Exercise sequential client-to-server and server-to-client role reuse on one `Thread<1, 1>`.
 
 - Integrate the validated port revision into `arduino-yun-bridge2`, then test the MCU and MPU implementations together over the real UART/HDLC transport.
