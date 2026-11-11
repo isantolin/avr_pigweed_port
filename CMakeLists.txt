@@ -346,6 +346,14 @@ add_custom_command(TARGET pw_rpc_upstream_probe.elf POST_BUILD
 # The combined client+server Transfer image does not fit the ATmega328P.
 # Keep it out of the default 328P build; CI builds this target in a separate
 # ATmega2560 configuration to verify the complete upstream implementation.
+# The probe-only queue injector is enabled consistently for all translation
+# units that include TransferThread, avoiding divergent class definitions.
+if(TARGET pw_transfer.core)
+  target_compile_definitions(pw_transfer.core PUBLIC
+    PW_TRANSFER_COOPERATIVE_TEST=1
+  )
+endif()
+
 add_executable(pw_transfer_upstream_probe.elf EXCLUDE_FROM_ALL
   tests/pw_transfer_upstream_probe.cpp
   src/cxx_abi_stubs.cpp
