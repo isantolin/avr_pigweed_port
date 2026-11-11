@@ -733,11 +733,11 @@ from pw_rpc.client import Client""",
 
     # The upstream resource-status callback is a single staged member. Keep
     # its original single-in-flight contract despite the bounded event queue.
-    resource_marker = """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
-                                          ResourceStatusCallback&& callback) {
-  if (!TryWaitForEventToProcess()) {"""
-    resource_replacement = """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
-                                          ResourceStatusCallback&& callback) {
+    resource_start = transfer_content.index(
+        "void TransferThread::EnqueueResourceEvent("
+    )
+    resource_brace = transfer_content.index("{", resource_start) + 1
+    resource_guard = """
 #if defined(PW_TRANSFER_COOPERATIVE)
   if (resource_status_pending_) {
     internal::ResourceStatus stats;
@@ -745,40 +745,45 @@ from pw_rpc.client import Client""",
     return;
   }
 #endif
-  if (!TryWaitForEventToProcess()) {"""
-    if resource_replacement not in transfer_content:
-        if transfer_content.count(resource_marker) != 1:
-            raise RuntimeError("could not find unique resource-status enqueue")
-        transfer_content = transfer_content.replace(
-            resource_marker, resource_replacement, 1
+"""
+    if resource_guard.strip() not in transfer_content[
+        resource_brace:resource_brace + 300
+    ]:
+        transfer_content = (
+            transfer_content[:resource_brace]
+            + resource_guard
+            + transfer_content[resource_brace:]
         )
-    resource_set_marker = """  resource_status_callback_ = std::move(callback);
 
-  next_event_.resource_status.resource_id = resource_id;"""
-    resource_set_replacement = """  resource_status_callback_ = std::move(callback);
+    resource_set = "  resource_status_callback_ = std::move(callback);"
+    resource_set_replacement = resource_set + """
 #if defined(PW_TRANSFER_COOPERATIVE)
   resource_status_pending_ = true;
-#endif
-
-  next_event_.resource_status.resource_id = resource_id;"""
+#endif"""
     if resource_set_replacement not in transfer_content:
-        if transfer_content.count(resource_set_marker) != 1:
-            raise RuntimeError("could not find resource-status callback staging")
+        if transfer_content.count(resource_set) != 1:
+            raise RuntimeError("could not find unique resource-status callback staging")
         transfer_content = transfer_content.replace(
-            resource_set_marker, resource_set_replacement, 1
+            resource_set, resource_set_replacement, 1
         )
-    resource_done_marker = """  resource_status_callback_ = nullptr;
-}"""
-    resource_done_replacement = """  resource_status_callback_ = nullptr;
+
+    resource_state_start = transfer_content.index(
+        "void TransferThread::GetResourceState("
+    )
+    resource_clear = "  resource_status_callback_ = nullptr;"
+    clear_index = transfer_content.index(resource_clear, resource_state_start)
+    clear_end = clear_index + len(resource_clear)
+    clear_replacement = resource_clear + """
 #if defined(PW_TRANSFER_COOPERATIVE)
   resource_status_pending_ = false;
-#endif
-}"""
-    if resource_done_replacement not in transfer_content:
-        if transfer_content.count(resource_done_marker) != 1:
-            raise RuntimeError("could not find resource-status callback completion")
-        transfer_content = transfer_content.replace(
-            resource_done_marker, resource_done_replacement, 1
+#endif"""
+    if "resource_status_pending_ = false;" not in transfer_content[
+        clear_index:clear_index + 250
+    ]:
+        transfer_content = (
+            transfer_content[:clear_index]
+            + clear_replacement
+            + transfer_content[clear_end:]
         )
 
     insert_marker = "std::optional<chrono::SystemClock::time_point>\nTransferThread::GetNextTransferTimeout() const {"
