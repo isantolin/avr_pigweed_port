@@ -348,10 +348,14 @@ int main() {
   } else if (!PumpTransfers(client_thread, server_thread, write_complete)) {
     MarkFailure(success, failure_code, 11);
   }
-  if (!write_completion_status.ok() ||
-      write_sink.bytes_written() != write_data.size() ||
-      std::memcmp(write_sink.data(), write_data.data(), write_data.size()) != 0) {
-    MarkFailure(success, failure_code, 12);
+  if (!write_completion_status.ok()) {
+    MarkFailure(success, failure_code, 22);
+  } else if (write_sink.bytes_written() != write_data.size()) {
+    MarkFailure(success, failure_code, 23);
+  } else if (std::memcmp(write_sink.data(),
+                         write_data.data(),
+                         write_data.size()) != 0) {
+    MarkFailure(success, failure_code, 24);
   }
 
   // Cancel an in-flight read before its payload is drained. The transfer
