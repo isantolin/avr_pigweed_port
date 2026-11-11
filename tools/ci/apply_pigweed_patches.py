@@ -48,7 +48,7 @@ def main() -> int:
 
     replace_once(
         "pw_protobuf/py/pw_protobuf/plugin.py",
-        "import sys\\n",
+        "import sys\n",
         """import sys
 from pathlib import Path as _PigweedPath
 
