@@ -318,6 +318,11 @@ int main() {
   // and resets the queue so subsequent transfer events can proceed.
   bool success = true;
   uint8_t failure_code = 0;
+  const uint32_t clock_before = pw_chrono_avr_GetMillis();
+  pw_chrono_avr_StepMillis(1);
+  if (pw_chrono_avr_GetMillis() != clock_before + 1U) {
+    MarkFailure(success, failure_code, 32);
+  }
   client_thread.EnqueueTestEvent();
   client_thread.EnqueueTestEvent();
   client_thread.EnqueueTestEvent();
