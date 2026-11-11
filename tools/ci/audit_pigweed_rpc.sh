@@ -109,5 +109,5 @@ mkdir -p "$(dirname "$OUT")"
   done
 } > "$OUT"
 echo "Pigweed source audit written to: $OUT"
-echo "Audit lines: $(wc -l < \"$OUT\")"
+echo "Audit lines: $(wc -l < "$OUT")"
 sha256sum "$OUT"
