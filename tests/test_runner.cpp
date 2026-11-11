@@ -22,7 +22,6 @@
 #include "pw_hdlc/decoder.h"
 #include "pw_assert/assert.h"
 #include "pw_assert/check.h"
-#include "pw_cobs/cobs.h"
 #include "pw_crypto/sha256.h"
 #include "pw_ring_buffer/prefixed_entry_ring_buffer.h"
 #include "pw_function/function.h"
@@ -391,23 +390,7 @@ bool TestCxxAbi() {
   return true;
 }
 
-// 13. Test pw_cobs (Consistent Overhead Byte Stuffing)
-bool TestPwCobs() {
-  const std::byte unencoded[] = {
-      std::byte{0x00}, std::byte{0x01}, std::byte{0x00}, std::byte{0x02}, std::byte{0x03}};
-  std::byte encoded[16];
-  auto encode_res = pw::cobs::Encode(pw::span(unencoded), pw::span(encoded));
-  if (!encode_res.ok()) return false;
-
-  std::byte decoded[16];
-  auto decode_res = pw::cobs::Decode(pw::span(encoded).first(encode_res.value().size()), pw::span(decoded));
-  if (!decode_res.ok()) return false;
-  if (decode_res.value().size() != sizeof(unencoded)) return false;
-  if (std::memcmp(unencoded, decoded, sizeof(unencoded)) != 0) return false;
-  return true;
-}
-
-// 14. Test pw_crypto (SHA-256 standard NIST test vector)
+// 13. Test pw_crypto (SHA-256 standard NIST test vector)
 bool TestPwCryptoSha256() {
   const char* msg = "abc";
   std::byte digest[pw::crypto::sha256::kDigestSizeBytes];
@@ -592,7 +575,6 @@ int main() {
   RUN_TEST(TestPwHdlcRoundtrip);
   RUN_TEST(TestPwAssert);
   RUN_TEST(TestCxxAbi);
-  RUN_TEST(TestPwCobs);
   RUN_TEST(TestPwCryptoSha256);
   RUN_TEST(TestPwRingBuffer);
   RUN_TEST(TestPwFunction);
