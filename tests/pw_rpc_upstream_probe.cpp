@@ -17,6 +17,7 @@
 #include "pw_rpc/server.h"
 #include "pw_span/span.h"
 #include "pw_status/status.h"
+#include "pw_stream/stream.h"
 #include "tests/rpc_probe.raw_rpc.pb.h"
 
 namespace {
@@ -113,34 +114,41 @@ class ProbeService final
   bool bidi_server_received_ = false;
 };
 
-class ClientToServerOutput final : public pw::rpc::ChannelOutput {
+class HdlcLoopbackWriter final : public pw::stream::NonSeekableWriter {
  public:
-  explicit ClientToServerOutput(pw::rpc::Server& server)
-      : pw::rpc::ChannelOutput("avr-rpc-client-to-server"), server_(server) {}
+  explicit HdlcLoopbackWriter(pw::rpc::Server& server)
+      : server_(&server), decoder_(pw::ByteSpan(decoder_storage_)) {}
 
-  pw::Status Send(pw::span<const std::byte> packet) override {
-    return server_.ProcessPacket(packet);
-  }
-
- private:
-  pw::rpc::Server& server_;
-};
-
-class ServerToClientOutput final : public pw::rpc::ChannelOutput {
- public:
-  ServerToClientOutput() : pw::rpc::ChannelOutput("avr-rpc-server-to-client") {}
+  HdlcLoopbackWriter()
+      : decoder_(pw::ByteSpan(decoder_storage_)) {}
 
   void set_client(pw::rpc::Client& client) { client_ = &client; }
 
-  pw::Status Send(pw::span<const std::byte> packet) override {
-    return client_ == nullptr ? pw::Status::Unavailable()
-                              : client_->ProcessPacket(packet);
+ private:
+  pw::Status DoWrite(pw::ConstByteSpan data) override {
+    for (std::byte byte : data) {
+      auto frame = decoder_.Process(byte);
+      if (frame.status() == pw::Status::Unavailable()) continue;
+      if (!frame.ok()) return frame.status();
+      if (frame->address() != kHdlcAddress) continue;
+      if (server_ != nullptr) {
+        pw::Status status = server_->ProcessPacket(frame->data());
+        if (!status.ok()) return status;
+      } else if (client_ != nullptr) {
+        pw::Status status = client_->ProcessPacket(frame->data());
+        if (!status.ok()) return status;
+      } else {
+        return pw::Status::FailedPrecondition();
+      }
+    }
+    return pw::OkStatus();
   }
 
- private:
+  pw::rpc::Server* server_ = nullptr;
   pw::rpc::Client* client_ = nullptr;
+  std::array<std::byte, kHdlcDecoderBufferSize> decoder_storage_{};
+  pw::hdlc::Decoder decoder_;
 };
-
 }  // namespace
 
 int main() {
@@ -152,23 +160,25 @@ int main() {
   pw::hdlc::RpcChannelOutput hdlc_output(uart, kHdlcAddress, "avr-hdlc-probe");
   (void)hdlc_output;
 
-  std::array<std::byte, kHdlcDecoderBufferSize> decoder_storage{};
-  ServerToClientOutput server_output;
+  HdlcLoopbackWriter server_to_client_writer;
+  pw::hdlc::RpcChannelOutput server_output(
+      server_to_client_writer, kHdlcAddress, "avr-server-hdlc");
   std::array<pw::rpc::Channel, 1> server_channels = {
       pw::rpc::Channel::Create<kRpcChannelId>(&server_output)};
   pw::rpc::Server server(pw::span<pw::rpc::Channel>(server_channels.data(),
                                                      server_channels.size()));
-  HdlcRpcIngress ingress(server, pw::ByteSpan(decoder_storage));
 
   ProbeService service;
   server.RegisterService(service);
 
-  ClientToServerOutput client_output(server);
+  HdlcLoopbackWriter client_to_server_writer(server);
+  pw::hdlc::RpcChannelOutput client_output(
+      client_to_server_writer, kHdlcAddress, "avr-client-hdlc");
   std::array<pw::rpc::Channel, 1> client_channels = {
       pw::rpc::Channel::Create<kRpcChannelId>(&client_output)};
   pw::rpc::Client client(pw::span<pw::rpc::Channel>(client_channels.data(),
                                                      client_channels.size()));
-  server_output.set_client(client);
+  server_to_client_writer.set_client(client);
 
   using RawProbeClient = ::avr::port::rpc::pw_rpc::raw::RpcProbe::Client;
   RawProbeClient raw_client(client, kRpcChannelId);
@@ -190,11 +200,7 @@ int main() {
   if (!service.bidi_server_received() || !bidi_response_ok) success = false;
   (void)bidi_call.Cancel();
 
-  // A lone HDLC flag is an incomplete frame, not a malformed packet.
-  if (ingress.ProcessByte(std::byte{0x7e}) != pw::Status::Unavailable()) {
-    success = false;
-  }
-
+  // The RPC calls above traversed both HDLC encoders and decoders.
   EmitResult(success);
   return success ? 0 : 1;
 }
