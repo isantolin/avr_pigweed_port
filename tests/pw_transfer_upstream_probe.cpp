@@ -25,7 +25,7 @@ constexpr uint32_t kRpcChannelId = 1;
 constexpr uint32_t kReadResourceId = 0x1234;
 constexpr uint32_t kWriteResourceId = 0x5678;
 constexpr uint32_t kCancelResourceId = 0x1235;
-constexpr size_t kHdlcDecoderBufferSize = 128;
+constexpr size_t kHdlcDecoderBufferSize = 256;
 
 bool first_callback_called = false;
 bool duplicate_rejected = false;
