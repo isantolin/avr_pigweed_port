@@ -42,6 +42,8 @@ bool cancel_complete = false;
 bool retry_complete = false;
 bool timeout_complete = false;
 uint8_t g_pump_failure_reason = 0;
+size_t g_client_to_server_frames = 0;
+size_t g_server_to_client_frames = 0;
 pw::Status read_completion_status = pw::Status::Unknown();
 pw::Status write_completion_status = pw::Status::Unknown();
 pw::Status reverse_write_completion_status = pw::Status::Unknown();
@@ -148,9 +150,11 @@ class HdlcLoopbackWriter final : public pw::stream::NonSeekableWriter {
       if (!frame.ok()) return frame.status();
       if (frame->address() != kHdlcAddress) continue;
       if (server_ != nullptr) {
+        ++g_client_to_server_frames;
         pw::Status status = server_->ProcessPacket(frame->data());
         if (!status.ok()) return status;
       } else if (client_ != nullptr) {
+        ++g_server_to_client_frames;
         pw::Status status = client_->ProcessPacket(frame->data());
         if (!status.ok()) return status;
       } else {
@@ -198,7 +202,15 @@ bool PumpTransfers(pw::transfer::Thread<1, 1>& client_thread,
     // under simavr rather than depending on host-side wall-clock timing.
     _delay_ms(1);
   }
-  if (!complete) g_pump_failure_reason = 5;
+  if (!complete) {
+    if (g_client_to_server_frames == 0) {
+      g_pump_failure_reason = 5;
+    } else if (g_server_to_client_frames == 0) {
+      g_pump_failure_reason = 6;
+    } else {
+      g_pump_failure_reason = 7;
+    }
+  }
   return complete;
 }
 
@@ -273,6 +285,8 @@ int main() {
   std::array<std::byte, 64> read_output_buffer{};
   pw::stream::MemoryWriter read_output{pw::ByteSpan(read_output_buffer)};
   read_complete = false;
+  g_client_to_server_frames = 0;
+  g_server_to_client_frames = 0;
   auto read_result =
       transfer_client.Read(kReadResourceId, read_output, OnReadComplete);
   if (!read_result.ok()) {
