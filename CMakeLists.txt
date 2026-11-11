@@ -36,6 +36,7 @@ endif()
 # Pigweed's PWPB plugin imports Python protos generated into the build tree.
 # apply_pigweed_patches.py mirrors these roots into the plugin's sys.path.
 # Pass those package roots to generate_protos.py through its PYTHONPATH hook.
+# pw_protobuf's binary directory is build/pw_protobuf, not build/.
 set(_pw_generated_python_paths
   "${CMAKE_BINARY_DIR}/pw_protobuf/pw_protobuf.codegen_protos/python"
   "${CMAKE_BINARY_DIR}/pw_protobuf/pw_protobuf.common_proto/python"
