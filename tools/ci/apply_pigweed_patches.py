@@ -603,6 +603,30 @@ from pw_rpc.client import Client""",
     start_begin = transfer_content.index("void TransferThread::StartTransfer(")
     start_end = transfer_content.index("void TransferThread::ProcessChunk(", start_begin)
     start_block = transfer_content[start_begin:start_end]
+    no_slot = """  if (!TryWaitForEventToProcess()) {
+    return;
+  }"""
+    no_slot_replacement = """  if (!TryWaitForEventToProcess()) {
+#if defined(PW_TRANSFER_COOPERATIVE)
+    if (stream != nullptr) {
+      if (on_completion) on_completion(Status::ResourceExhausted());
+    } else {
+      SendStatusChunk({
+          .session_id = session_id,
+          .protocol_version = version,
+          .status = Status::ResourceExhausted().code(),
+          .stream = type == TransferType::kTransmit
+                        ? TransferStream::kServerRead
+                        : TransferStream::kServerWrite,
+      });
+    }
+#endif
+    return;
+  }"""
+    if no_slot_replacement not in start_block:
+        if start_block.count(no_slot) != 1:
+            raise RuntimeError("could not find StartTransfer queue-full path")
+        start_block = start_block.replace(no_slot, no_slot_replacement, 1)
     notify = "  NotifyEvent();"
     role_code = """#if defined(PW_TRANSFER_COOPERATIVE)
   if (next_event_.type == EventType::kNewClientTransfer ||
@@ -752,6 +776,27 @@ from pw_rpc.client import Client""",
         poll_code = '''#if defined(PW_TRANSFER_COOPERATIVE)
 Status TransferThread::Poll(size_t budget) {
   if (event_overflowed_) {
+    // Preserve accepted event ordering and consume staged objects before
+    // aborting sessions after a dropped event. The initial count bounds work.
+    const size_t accepted_before_overflow = event_queue_size_;
+    for (size_t i = 0; i < accepted_before_overflow; ++i) {
+      if (event_queue_size_ == 0) break;
+      CooperativeEventSlot& pending = event_queue_[event_queue_head_];
+      const EventType pending_type = pending.event.type;
+      HandleEvent(pending.event);
+      if (pending_type == EventType::kSetStream) {
+        cooperative_stream_pending_ = false;
+      }
+      event_queue_head_ =
+          (event_queue_head_ + 1) % PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY;
+      --event_queue_size_;
+    }
+    event_queue_head_ = event_queue_tail_;
+    if (resource_status_pending_ && resource_status_callback_) {
+      internal::ResourceStatus stats;
+      resource_status_callback_(Status::ResourceExhausted(), stats);
+      resource_status_callback_ = nullptr;
+    }
     Event abort_event{};
     abort_event.type = EventType::kClientEndTransfer;
     abort_event.end_transfer = {
