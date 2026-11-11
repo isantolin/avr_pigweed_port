@@ -143,7 +143,12 @@ jobs:
           python3 tools/export_arduino_library.py
           test -s dist/PigweedAVR/src/pw_rpc/internal/packet.pwpb.h
           test -s dist/PigweedAVR/src/pw_rpc/server.h
+          test -s dist/PigweedAVR/src/pw_rpc/client.h
           test -s dist/PigweedAVR/src/pw_protobuf/encoder.h
+          test -s dist/PigweedAVR/src/pw_transfer/transfer_thread.h
+          test -s dist/PigweedAVR/src/pw_transfer/transfer.raw_rpc.pb.h
+          test -s dist/PigweedAVR/src/pw_transfer/transfer.pwpb.h
+          grep -q "define PW_TRANSFER_COOPERATIVE 1" dist/PigweedAVR/src/pw_transfer/transfer_thread.h
 
       - name: Upload Build Artifacts
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
