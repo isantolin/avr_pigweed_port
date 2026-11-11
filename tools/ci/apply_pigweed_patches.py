@@ -493,9 +493,6 @@ from pw_rpc.client import Client""",
         slot.event.new_transfer.raw_chunk_data = slot.chunk_storage.data();
       }
     }
-    if (slot.event.type == EventType::kSetStream) {
-      cooperative_stream_pending_ = true;
-    }
     event_queue_tail_ =
         (event_queue_tail_ + 1) % PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY;
     ++event_queue_size_;
@@ -544,7 +541,6 @@ from pw_rpc.client import Client""",
   size_t event_queue_size_ = 0;
   bool event_slot_available_ = true;
   bool event_overflowed_ = false;
-  bool cooperative_stream_pending_ = false;
   bool resource_status_pending_ = false;
   enum class CooperativeRole : uint8_t { kIdle, kClient, kServer };
   CooperativeRole cooperative_role_ = CooperativeRole::kIdle;
@@ -814,11 +810,6 @@ Status TransferThread::Poll(size_t budget) {
     for (size_t i = 0; i < accepted_before_overflow; ++i) {
       if (event_queue_size_ == 0) break;
       CooperativeEventSlot& pending = event_queue_[event_queue_head_];
-      const EventType pending_type = pending.event.type;
-      HandleEvent(pending.event);
-      if (pending_type == EventType::kSetStream) {
-        cooperative_stream_pending_ = false;
-      }
       event_queue_head_ =
           (event_queue_head_ + 1) % PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY;
       --event_queue_size_;
@@ -852,7 +843,6 @@ Status TransferThread::Poll(size_t budget) {
     }
     event_queue_head_ = event_queue_tail_;
     event_queue_size_ = 0;
-    cooperative_stream_pending_ = false;
     resource_status_pending_ = false;
     event_overflowed_ = false;
     if (cooperative_start_pending_ && staged_on_completion_) {
@@ -868,9 +858,6 @@ Status TransferThread::Poll(size_t budget) {
   while (event_queue_size_ != 0 && processed < budget) {
     CooperativeEventSlot& slot = event_queue_[event_queue_head_];
     HandleEvent(slot.event);
-    if (slot.event.type == EventType::kSetStream) {
-      cooperative_stream_pending_ = false;
-    }
     event_queue_head_ =
         (event_queue_head_ + 1) % PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY;
     --event_queue_size_;
