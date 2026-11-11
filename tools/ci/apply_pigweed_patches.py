@@ -362,9 +362,10 @@ from pw_rpc.client import Client""",
         '''  // For testing only: terminates the transfer thread with a kTerminate event.
   void Terminate();''',
         '''#if defined(PW_TRANSFER_COOPERATIVE)
-  // Process at most one queued event and any expired deadlines. Call from the
-  // single owner loop after RPC packet dispatch and on every loop iteration.
-  bool Poll();
+  // Process the pending event and expired deadlines from the single owner loop.
+  // ResourceExhausted reports an event source that hit the occupied handoff slot.
+  Status Poll();
+  void ClearEventOverflow() { event_overflowed_ = false; }
 #endif
 
   // For testing only: terminates the transfer thread with a kTerminate event.
@@ -414,8 +415,10 @@ from pw_rpc.client import Client""",
 
   bool TryWaitForEventToProcess() {
 #if defined(PW_TRANSFER_COOPERATIVE)
-    PW_CHECK(event_slot_available_,
-             "Transfer event slot full; call Poll() after each event source");
+    if (!event_slot_available_) {
+      event_overflowed_ = true;
+      return false;
+    }
     event_slot_available_ = false;
     return true;
 #else
@@ -436,6 +439,7 @@ from pw_rpc.client import Client""",
         '''#if defined(PW_TRANSFER_COOPERATIVE)
   bool event_pending_ = false;
   bool event_slot_available_ = true;
+  bool event_overflowed_ = false;
 #else
   sync::TimedThreadNotification event_notification_;
   sync::BinarySemaphore next_event_ownership_;
