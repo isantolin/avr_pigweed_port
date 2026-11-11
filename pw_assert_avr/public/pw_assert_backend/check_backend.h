@@ -5,10 +5,10 @@
 
 // Halts execution with line diagnostics without consuming any SRAM for strings
 #define PW_HANDLE_CRASH(...) \
-  pw_assert_avr_HandleFailure(__LINE__)
+  pw_assert_avr_HandleFailure(__FILE__, __LINE__, 0)
 
 #define PW_HANDLE_ASSERT_FAILURE(condition_string, message, ...) \
-  pw_assert_avr_HandleFailure(__LINE__)
+  pw_assert_avr_HandleFailure(__FILE__, __LINE__, condition_string)
 
 #define PW_HANDLE_ASSERT_BINARY_COMPARE_FAILURE(arg_a_str,         \
                                                 arg_a_val,         \
@@ -18,4 +18,4 @@
                                                 type_fmt,          \
                                                 message,           \
                                                 ...)               \
-  pw_assert_avr_HandleFailure(__LINE__)
+  pw_assert_avr_HandleFailure(__FILE__, __LINE__, message)
