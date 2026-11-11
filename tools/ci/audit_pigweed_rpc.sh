@@ -8,17 +8,18 @@ mkdir -p "$(dirname "$OUT")"
   echo "=== Pigweed revision ==="
   git -C "$PW_ROOT" rev-parse HEAD
   echo
-  echo "=== Protobuf compiler version references ==="\n  grep -R -n -E "protoc.*version|PROTOC_VERSION|protobuf.*version|experimental_editions" "$PW_ROOT/pw_protobuf_compiler" "$PW_ROOT/pw_env_setup" 2>/dev/null | head -n 120 || true\n  echo\n  echo "=== Relevant CMake target declarations ==="
+  echo "=== Protobuf compiler version references ==="
+  grep -R -n -E "protoc.*version|PROTOC_VERSION|protobuf.*version|experimental_editions" "$PW_ROOT/pw_protobuf_compiler" "$PW_ROOT/pw_env_setup" 2>/dev/null | head -n 120 || true
+  echo
+  echo "=== Relevant CMake target declarations ==="
   grep -R -n -E 'pw_add_library|pw_target_link_targets' "$PW_ROOT/pw_rpc" "$PW_ROOT/pw_transfer" 2>/dev/null || true
   echo
   echo "=== Relevant CMakeLists files ==="
-  find "$PW_ROOT/pw_rpc" "$PW_ROOT/pw_transfer" "$PW_ROOT/pw_sync" \
-    -name CMakeLists.txt -type f -print 2>/dev/null | sort
+  find "$PW_ROOT/pw_rpc" "$PW_ROOT/pw_transfer" "$PW_ROOT/pw_sync" -name CMakeLists.txt -type f -print 2>/dev/null | sort
   for file in \
     pw_rpc/CMakeLists.txt \
     pw_rpc/raw/CMakeLists.txt \
     pw_rpc/public/pw_rpc/channel.h \
-    pw_rpc/public/pw_rpc/channel_output.h \
     pw_rpc/public/pw_rpc/server.h \
     pw_rpc/public/pw_rpc/raw/server_reader_writer.h \
     pw_rpc/public/pw_rpc/internal/config.h \
@@ -26,6 +27,7 @@ mkdir -p "$(dirname "$OUT")"
     pw_hdlc/CMakeLists.txt \
     pw_hdlc/public/pw_hdlc/rpc_channel.h \
     pw_hdlc/public/pw_hdlc/encoder.h \
+    pw_hdlc/public/pw_hdlc/decoder.h \
     pw_thread/public/pw_thread/thread_core.h \
     pw_protobuf_compiler/proto.cmake \
     pw_protobuf_compiler/py/pw_protobuf_compiler/generate_protos.py \
@@ -40,7 +42,7 @@ mkdir -p "$(dirname "$OUT")"
     path="$PW_ROOT/$file"
     echo
     echo "===== $file ====="
-    if [[ -f "$path" ]]; then sed -n '1,320p' "$path"; else echo "NOT PRESENT AT PINNED REVISION"; fi
+    if [[ -f "$path" ]]; then sed -n '1,1200p' "$path"; else echo "NOT PRESENT AT PINNED REVISION"; fi
   done
 } | tee "$OUT"
 echo "Pigweed source audit written to: $OUT"
