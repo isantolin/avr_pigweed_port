@@ -22,6 +22,22 @@ constexpr uint64_t kHdlcAddress = 1;
 constexpr uint32_t kRpcChannelId = 1;
 constexpr size_t kHdlcDecoderBufferSize = 128;
 
+std::array<std::byte, 3> expected_request{};
+bool unary_response_ok = false;
+bool bidi_response_ok = false;
+
+void OnUnaryResponse(pw::ConstByteSpan response, pw::Status status) {
+  unary_response_ok = status.ok() &&
+                      response.size() == expected_request.size() &&
+                      response[0] == expected_request[0] &&
+                      response[2] == expected_request[2];
+}
+
+void OnBidiResponse(pw::ConstByteSpan response) {
+  bidi_response_ok = response.size() == expected_request.size() &&
+                     response[1] == expected_request[1];
+}
+
 class HdlcRpcIngress {
  public:
   HdlcRpcIngress(pw::rpc::Server& server, pw::ByteSpan buffer)
@@ -142,26 +158,16 @@ int main() {
 
   const std::array<std::byte, 3> request = {
       std::byte{0x11}, std::byte{0x22}, std::byte{0x33}};
-  bool unary_response_ok = false;
-  auto unary_call = raw_client.Unary(
-      request,
-      [&](pw::ConstByteSpan response, pw::Status status) {
-        unary_response_ok = status.ok() && response.size() == request.size() &&
-                            response[0] == request[0] &&
-                            response[2] == request[2];
-      });
+  expected_request = request;
+  auto unary_call = raw_client.Unary(request, OnUnaryResponse);
   (void)unary_call;
   if (!service.unary_called() || service.unary_request_size() != request.size() ||
       !unary_response_ok) {
     return 1;
   }
 
-  bool bidi_response_ok = false;
   auto bidi_call = raw_client.Bidi();
-  bidi_call.set_on_next([&](pw::ConstByteSpan response) {
-    bidi_response_ok = response.size() == request.size() &&
-                       response[1] == request[1];
-  });
+  bidi_call.set_on_next(OnBidiResponse);
   if (!bidi_call.Write(request).ok()) return 1;
   if (!service.bidi_server_received() || !bidi_response_ok) return 1;
   (void)bidi_call.Cancel();
