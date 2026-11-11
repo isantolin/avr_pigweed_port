@@ -638,9 +638,10 @@ from pw_rpc.client import Client""",
   }
 #endif
 """
-    if start_block.count(notify) != 1:
-        raise RuntimeError("could not find unique StartTransfer NotifyEvent")
-    start_block = start_block.replace(notify, role_code + notify, 1)
+    if role_code.strip() not in start_block:
+        if start_block.count(notify) != 1:
+            raise RuntimeError("could not find unique StartTransfer NotifyEvent")
+        start_block = start_block.replace(notify, role_code + notify, 1)
     transfer_content = (
         transfer_content[:start_begin] + start_block + transfer_content[start_end:]
     )
@@ -657,9 +658,10 @@ from pw_rpc.client import Client""",
 
   if (event.type == EventType::kNewClientTransfer) {
     // TODO(frolv): This is terrible."""
-    if transfer_content.count(handle_marker) != 1:
-        raise RuntimeError("could not find unique new-transfer handling point")
-    transfer_content = transfer_content.replace(handle_marker, handle_replacement, 1)
+    if handle_replacement not in transfer_content:
+        if transfer_content.count(handle_marker) != 1:
+            raise RuntimeError("could not find unique new-transfer handling point")
+        transfer_content = transfer_content.replace(handle_marker, handle_replacement, 1)
 
     # Release a pending role reservation if upstream could not allocate a context.
     null_context_marker = """  if (ctx == nullptr) {
@@ -675,11 +677,12 @@ from pw_rpc.client import Client""",
 #endif
     // No context was found. For new transfer events, report a
     // RESOURCE_EXHAUSTED error with starting the transfer."""
-    if transfer_content.count(null_context_marker) != 1:
-        raise RuntimeError("could not find unique null-context branch")
-    transfer_content = transfer_content.replace(
-        null_context_marker, null_context_replacement, 1
-    )
+    if null_context_replacement not in transfer_content:
+        if transfer_content.count(null_context_marker) != 1:
+            raise RuntimeError("could not find unique null-context branch")
+        transfer_content = transfer_content.replace(
+            null_context_marker, null_context_replacement, 1
+        )
 
     # Update the global role after every state-machine event; it is released
     # only after both upstream context arrays are inactive.
@@ -689,9 +692,10 @@ from pw_rpc.client import Client""",
   UpdateCooperativeRole();
 #endif
 }"""
-    if transfer_content.count(context_marker) != 1:
-        raise RuntimeError("could not find unique context event dispatch")
-    transfer_content = transfer_content.replace(context_marker, context_replacement, 1)
+    if context_replacement not in transfer_content:
+        if transfer_content.count(context_marker) != 1:
+            raise RuntimeError("could not find unique context event dispatch")
+        transfer_content = transfer_content.replace(context_marker, context_replacement, 1)
 
     # The upstream resource-status callback is a single staged member. Keep
     # its original single-in-flight contract despite the bounded event queue.
@@ -708,11 +712,12 @@ from pw_rpc.client import Client""",
   }
 #endif
   if (!TryWaitForEventToProcess()) {"""
-    if transfer_content.count(resource_marker) != 1:
-        raise RuntimeError("could not find unique resource-status enqueue")
-    transfer_content = transfer_content.replace(
-        resource_marker, resource_replacement, 1
-    )
+    if resource_replacement not in transfer_content:
+        if transfer_content.count(resource_marker) != 1:
+            raise RuntimeError("could not find unique resource-status enqueue")
+        transfer_content = transfer_content.replace(
+            resource_marker, resource_replacement, 1
+        )
     resource_set_marker = """  resource_status_callback_ = std::move(callback);
 
   next_event_.resource_status.resource_id = resource_id;"""
@@ -722,11 +727,12 @@ from pw_rpc.client import Client""",
 #endif
 
   next_event_.resource_status.resource_id = resource_id;"""
-    if transfer_content.count(resource_set_marker) != 1:
-        raise RuntimeError("could not find resource-status callback staging")
-    transfer_content = transfer_content.replace(
-        resource_set_marker, resource_set_replacement, 1
-    )
+    if resource_set_replacement not in transfer_content:
+        if transfer_content.count(resource_set_marker) != 1:
+            raise RuntimeError("could not find resource-status callback staging")
+        transfer_content = transfer_content.replace(
+            resource_set_marker, resource_set_replacement, 1
+        )
     resource_done_marker = """  resource_status_callback_ = nullptr;
 }"""
     resource_done_replacement = """  resource_status_callback_ = nullptr;
@@ -734,14 +740,15 @@ from pw_rpc.client import Client""",
   resource_status_pending_ = false;
 #endif
 }"""
-    if transfer_content.count(resource_done_marker) != 1:
-        raise RuntimeError("could not find resource-status callback completion")
-    transfer_content = transfer_content.replace(
-        resource_done_marker, resource_done_replacement, 1
-    )
+    if resource_done_replacement not in transfer_content:
+        if transfer_content.count(resource_done_marker) != 1:
+            raise RuntimeError("could not find resource-status callback completion")
+        transfer_content = transfer_content.replace(
+            resource_done_marker, resource_done_replacement, 1
+        )
 
     insert_marker = "std::optional<chrono::SystemClock::time_point>\nTransferThread::GetNextTransferTimeout() const {"
-    if "Status TransferThread::Poll()" not in transfer_content:
+    if "Status TransferThread::Poll(size_t budget)" not in transfer_content:
         poll_code = '''#if defined(PW_TRANSFER_COOPERATIVE)
 Status TransferThread::Poll(size_t budget) {
   if (event_overflowed_) {
@@ -837,7 +844,7 @@ bool TransferThread::HandleTimeouts() {
 
     transfer_header = PW_ROOT / "pw_transfer" / "public" / "pw_transfer" / "transfer_thread.h"
     header_content = transfer_header.read_text()
-    if "Status Poll();" not in header_content:
+    if "Status Poll(size_t budget = 1);" not in header_content:
         raise RuntimeError("cooperative Status Poll declaration was not applied")
 
     subprocess.run(
