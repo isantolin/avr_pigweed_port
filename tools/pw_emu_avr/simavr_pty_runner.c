@@ -178,6 +178,8 @@ int main(int argc, char **argv) {
   while (!g_stop && avr->state != cpu_Done && avr->state != cpu_Crashed) {
     if (g_reset) {
       g_reset = 0;
+      g_tx_head = 0;
+      g_tx_tail = 0;
       avr_reset(avr);
     }
     if (g_continue) {
