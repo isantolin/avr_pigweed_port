@@ -449,6 +449,9 @@ from pw_rpc.client import Client""",
         slot.event.new_transfer.raw_chunk_data = slot.chunk_storage.data();
       }
     }
+    if (slot.event.type == EventType::kSetStream) {
+      cooperative_stream_pending_ = true;
+    }
     event_queue_tail_ =
         (event_queue_tail_ + 1) % PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY;
     ++event_queue_size_;
@@ -497,6 +500,8 @@ from pw_rpc.client import Client""",
   size_t event_queue_size_ = 0;
   bool event_slot_available_ = true;
   bool event_overflowed_ = false;
+  bool cooperative_stream_pending_ = false;
+  bool resource_status_pending_ = false;
   enum class CooperativeRole : uint8_t { kIdle, kClient, kServer };
   CooperativeRole cooperative_role_ = CooperativeRole::kIdle;
   uint32_t cooperative_session_id_ = 0;
@@ -566,6 +571,32 @@ from pw_rpc.client import Client""",
             f"expected six stream callback waits or six already-patched waits; found {wait_count}"
         )
     transfer_content = transfer_content[:stream_start] + stream_tail
+
+    # Stream objects and callbacks are staged in single upstream members.
+    # Prevent a second stream mutation from overwriting them before Poll().
+    stream_methods = (
+        "void TransferThread::SetClientReadStream(",
+        "void TransferThread::CloseClientReadStream(",
+        "void TransferThread::SetClientWriteStream(",
+        "void TransferThread::CloseClientWriteStream(",
+        "void TransferThread::SetServerReadStream(",
+        "void TransferThread::SetServerWriteStream(",
+    )
+    for signature in stream_methods:
+        method_start = transfer_content.index(signature)
+        method_brace = transfer_content.index("{", method_start) + 1
+        guard = """
+#if defined(PW_TRANSFER_COOPERATIVE)
+  if (cooperative_stream_pending_) {
+    event_overflowed_ = true;
+    return;
+  }
+#endif
+"""
+        if guard.strip() not in transfer_content[method_brace:method_brace + 250]:
+            transfer_content = (
+                transfer_content[:method_brace] + guard + transfer_content[method_brace:]
+            )
 
     # Claim the single global transfer role only after StartTransfer has
     # staged its event and resolved the server handler.
@@ -662,6 +693,53 @@ from pw_rpc.client import Client""",
         raise RuntimeError("could not find unique context event dispatch")
     transfer_content = transfer_content.replace(context_marker, context_replacement, 1)
 
+    # The upstream resource-status callback is a single staged member. Keep
+    # its original single-in-flight contract despite the bounded event queue.
+    resource_marker = """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
+                                          ResourceStatusCallback&& callback) {
+  if (!TryWaitForEventToProcess()) {"""
+    resource_replacement = """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
+                                          ResourceStatusCallback&& callback) {
+#if defined(PW_TRANSFER_COOPERATIVE)
+  if (resource_status_pending_) {
+    internal::ResourceStatus stats;
+    callback(Status::Unavailable(), stats);
+    return;
+  }
+#endif
+  if (!TryWaitForEventToProcess()) {"""
+    if transfer_content.count(resource_marker) != 1:
+        raise RuntimeError("could not find unique resource-status enqueue")
+    transfer_content = transfer_content.replace(
+        resource_marker, resource_replacement, 1
+    )
+    resource_set_marker = """  resource_status_callback_ = std::move(callback);
+
+  next_event_.resource_status.resource_id = resource_id;"""
+    resource_set_replacement = """  resource_status_callback_ = std::move(callback);
+#if defined(PW_TRANSFER_COOPERATIVE)
+  resource_status_pending_ = true;
+#endif
+
+  next_event_.resource_status.resource_id = resource_id;"""
+    if transfer_content.count(resource_set_marker) != 1:
+        raise RuntimeError("could not find resource-status callback staging")
+    transfer_content = transfer_content.replace(
+        resource_set_marker, resource_set_replacement, 1
+    )
+    resource_done_marker = """  resource_status_callback_ = nullptr;
+}"""
+    resource_done_replacement = """  resource_status_callback_ = nullptr;
+#if defined(PW_TRANSFER_COOPERATIVE)
+  resource_status_pending_ = false;
+#endif
+}"""
+    if transfer_content.count(resource_done_marker) != 1:
+        raise RuntimeError("could not find resource-status callback completion")
+    transfer_content = transfer_content.replace(
+        resource_done_marker, resource_done_replacement, 1
+    )
+
     insert_marker = "std::optional<chrono::SystemClock::time_point>\nTransferThread::GetNextTransferTimeout() const {"
     if "Status TransferThread::Poll()" not in transfer_content:
         poll_code = '''#if defined(PW_TRANSFER_COOPERATIVE)
@@ -690,6 +768,8 @@ Status TransferThread::Poll(size_t budget) {
     }
     event_queue_head_ = event_queue_tail_;
     event_queue_size_ = 0;
+    cooperative_stream_pending_ = false;
+    resource_status_pending_ = false;
     event_overflowed_ = false;
     if (cooperative_start_pending_ && staged_on_completion_) {
       staged_on_completion_(Status::ResourceExhausted());
@@ -704,6 +784,9 @@ Status TransferThread::Poll(size_t budget) {
   while (event_queue_size_ != 0 && processed < budget) {
     CooperativeEventSlot& slot = event_queue_[event_queue_head_];
     HandleEvent(slot.event);
+    if (slot.event.type == EventType::kSetStream) {
+      cooperative_stream_pending_ = false;
+    }
     event_queue_head_ =
         (event_queue_head_ + 1) % PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY;
     --event_queue_size_;
