@@ -25,7 +25,7 @@ constexpr uint64_t kHdlcAddress = 1;
 constexpr uint32_t kRpcChannelId = 1;
 constexpr size_t kHdlcDecoderBufferSize = 64;
 
-void EmitResult(uint8_t failure_code) {
+[[noreturn]] void EmitResult(uint8_t failure_code) {
   const uint16_t ubrr =
       static_cast<uint16_t>((F_CPU / (16UL * 115200UL)) - 1UL);
   UBRR0H = static_cast<uint8_t>(ubrr >> 8);
@@ -43,7 +43,9 @@ void EmitResult(uint8_t failure_code) {
   while (!(UCSR0A & (1 << TXC0))) {}
   cli();
   sleep_enable();
-  sleep_cpu();
+  for (;;) {
+    sleep_cpu();
+  }
 }
 
 std::array<std::byte, 3> expected_request{};
@@ -202,5 +204,4 @@ int main() {
 
   // The RPC calls above traversed both HDLC encoders and decoders.
   EmitResult(failure_code);
-  return failure_code == 0 ? 0 : 1;
 }
