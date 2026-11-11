@@ -392,6 +392,24 @@ from pw_rpc.client import Client""",
     next_event_.end_transfer.send_status_chunk = false;
     NotifyEvent();
   }
+
+  size_t PendingEventsForTest() const { return event_queue_size_; }
+
+  size_t ActiveClientTransfersForTest() const {
+    size_t count = 0;
+    for (const ClientContext& context : client_transfers_) {
+      if (context.active()) ++count;
+    }
+    return count;
+  }
+
+  size_t ActiveServerTransfersForTest() const {
+    size_t count = 0;
+    for (const ServerContext& context : server_transfers_) {
+      if (context.active()) ++count;
+    }
+    return count;
+  }
 #endif
 #endif
 
