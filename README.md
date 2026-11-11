@@ -1,6 +1,6 @@
 # Pigweed port for 8-bit AVR
 
-A CMake-based port of selected upstream Pigweed modules for bare-metal AVR MCUs, including ATmega328P and ATmega2560; Arduino Mega 2560 is the minimum supported application target.
+A CMake-based port of selected upstream Pigweed modules for bare-metal AVR MCUs, including ATmega328P for constrained probes and ATmega2560 as the minimum supported application target.
 
 The port uses upstream **`pw_rpc`** and **`pw_transfer`**. The former custom `pw_rpc_avr` dispatcher has been removed; there is no parallel or fallback RPC implementation.
 
@@ -17,7 +17,7 @@ The Pigweed revision used by the current RPC/transfer work is:
 
 `55873baa1b37eaf7d0a830515a0846e3fc3a79e2`
 
-## Build the ATmega328P port
+## Build for the minimum supported application target (ATmega2560)
 
 Initialize all submodules:
 
@@ -42,7 +42,7 @@ To use the smaller CRC implementation, configure with `-DAVR_CRC32_IMPL=PW_CHECK
 
 ## Upstream RPC validation
 
-`pw_rpc_upstream_probe.elf` is built as part of the default ATmega328P build. It exercises unary request/response and bidirectional raw streaming through upstream `pw_rpc` and an HDLC encode/decode loopback.
+`pw_rpc_upstream_probe.elf` is an isolated diagnostic target; CI builds and runs it on ATmega1284P because it contains both RPC endpoints. It exercises unary request/response and bidirectional raw streaming through upstream `pw_rpc` and an HDLC encode/decode loopback.
 
 Run it with:
 
@@ -122,6 +122,6 @@ See [tools/pw_emu_avr/README.md](tools/pw_emu_avr/README.md) for setup and usage
 
 ## Current validation boundary
 
-The port's CI is intended to validate both CRC32 configurations, the ATmega328P RPC runtime probe, the ATmega2560 transfer runtime probe, the Arduino Mega 2560 export syntax check, and Arduino export contents.
+The port's CI validates both CRC32 configurations and runs the full module test suite on the ATmega2560 minimum application target. Isolated upstream RPC and transfer runtime probes run on ATmega1284P; CI also checks the Arduino Mega 2560 export syntax and export contents.
 
 Physical UART/HDLC interoperability on the Bridge hardware, complete Bridge firmware memory/stack measurements, and application-level migration of the Bridge's file operations remain separate integration gates. Do not treat the isolated probes as proof that the complete Bridge firmware is production-ready.
