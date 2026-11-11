@@ -3,6 +3,32 @@
 #include <cstdint>
 #include <avr/io.h>
 
+#if defined(__AVR_ATmega32U4__)
+#define PW_TRANSFER_UART_UBRRH UBRR1H
+#define PW_TRANSFER_UART_UBRRL UBRR1L
+#define PW_TRANSFER_UART_UCSRB UCSR1B
+#define PW_TRANSFER_UART_TXEN TXEN1
+#define PW_TRANSFER_UART_UCSRC UCSR1C
+#define PW_TRANSFER_UART_UCSZ1 UCSZ11
+#define PW_TRANSFER_UART_UCSZ0 UCSZ10
+#define PW_TRANSFER_UART_UCSRA UCSR1A
+#define PW_TRANSFER_UART_UDRE UDRE1
+#define PW_TRANSFER_UART_UDR UDR1
+#define PW_TRANSFER_UART_TXC TXC1
+#else
+#define PW_TRANSFER_UART_UBRRH UBRR0H
+#define PW_TRANSFER_UART_UBRRL UBRR0L
+#define PW_TRANSFER_UART_UCSRB UCSR0B
+#define PW_TRANSFER_UART_TXEN TXEN0
+#define PW_TRANSFER_UART_UCSRC UCSR0C
+#define PW_TRANSFER_UART_UCSZ1 UCSZ01
+#define PW_TRANSFER_UART_UCSZ0 UCSZ00
+#define PW_TRANSFER_UART_UCSRA UCSR0A
+#define PW_TRANSFER_UART_UDRE UDRE0
+#define PW_TRANSFER_UART_UDR UDR0
+#define PW_TRANSFER_UART_TXC TXC0
+#endif
+
 #include "PigweedAVR.h"
 #include "pw_bytes/span.h"
 #include "pw_hdlc/rpc_channel.h"
@@ -29,17 +55,17 @@ class NullWriter final : public pw::stream::NonSeekableWriter {
 void EmitResult() {
   const uint16_t ubrr =
       static_cast<uint16_t>((F_CPU / (16UL * 115200UL)) - 1UL);
-#if defined(UBRR0H)
-  UBRR0H = static_cast<uint8_t>(ubrr >> 8);
-  UBRR0L = static_cast<uint8_t>(ubrr & 0xFF);
-  UCSR0B = (1 << TXEN0);
-  UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+#if defined(PW_TRANSFER_UART_UBRRH)
+  PW_TRANSFER_UART_UBRRH = static_cast<uint8_t>(ubrr >> 8);
+  PW_TRANSFER_UART_UBRRL = static_cast<uint8_t>(ubrr & 0xFF);
+  PW_TRANSFER_UART_UCSRB = (1 << PW_TRANSFER_UART_TXEN);
+  PW_TRANSFER_UART_UCSRC = (1 << PW_TRANSFER_UART_UCSZ1) | (1 << PW_TRANSFER_UART_UCSZ0);
   const char marker[] = "PW_TRANSFER_FOOTPRINT_PASS\\r\\n";
   for (size_t i = 0; marker[i] != '\\0'; ++i) {
-    while (!(UCSR0A & (1 << UDRE0))) {}
-    UDR0 = static_cast<uint8_t>(marker[i]);
+    while (!(PW_TRANSFER_UART_UCSRA & (1 << PW_TRANSFER_UART_UDRE))) {}
+    PW_TRANSFER_UART_UDR = static_cast<uint8_t>(marker[i]);
   }
-  while (!(UCSR0A & (1 << TXC0))) {}
+  while (!(PW_TRANSFER_UART_UCSRA & (1 << PW_TRANSFER_UART_TXC))) {}
 #elif defined(UBRR1H)
   UBRR1H = static_cast<uint8_t>(ubrr >> 8);
   UBRR1L = static_cast<uint8_t>(ubrr & 0xFF);
