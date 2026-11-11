@@ -786,9 +786,13 @@ from pw_rpc.client import Client""",
     # transfer owner loop, so dispatch the upstream resource lookup inline.
     # Queuing it would defer the RPC responder while the same owner loop is
     # waiting for that response, creating a cooperative progress deadlock.
-    replace_once(
-        "pw_transfer/transfer_thread.cc",
-        """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
+    transfer_thread_source = (
+        PW_ROOT / "pw_transfer" / "transfer_thread.cc"
+    ).read_text()
+    if "resource_status_pending_ = true;\\n  GetResourceState(resource_id);" not in transfer_thread_source:
+        replace_once(
+            "pw_transfer/transfer_thread.cc",
+            """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
                                           ResourceStatusCallback&& callback) {
   if (!TryWaitForEventToProcess()) {
     internal::ResourceStatus stats;
@@ -804,7 +808,7 @@ from pw_rpc.client import Client""",
 
   NotifyEvent();
 }""",
-        """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
+            """void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
                                           ResourceStatusCallback&& callback) {
 #if defined(PW_TRANSFER_COOPERATIVE)
   if (resource_status_pending_) {
@@ -828,7 +832,9 @@ from pw_rpc.client import Client""",
   NotifyEvent();
 #endif
 }""",
-    )
+        )
+    else:
+        print("already patched: pw_transfer/transfer_thread.cc resource callback")
 
     # The upstream resource-status callback is a single staged member. Keep
     # its original single-in-flight contract despite the bounded event queue.
