@@ -175,10 +175,10 @@ int main() {
       client_channels.data(), client_channels.size()));
   server_to_client_writer.set_client(rpc_client);
 
-  static pw::transfer::TransferService transfer_service(server_thread, 128);
+  static pw::transfer::TransferService transfer_service(server_thread, 256);
   server.RegisterService(transfer_service);
   static pw::transfer::Client transfer_client(
-      rpc_client, kRpcChannelId, client_thread, 128);
+      rpc_client, kRpcChannelId, client_thread, 256);
 
   std::array<std::byte, 32> read_data{};
   for (size_t i = 0; i < read_data.size(); ++i) {
