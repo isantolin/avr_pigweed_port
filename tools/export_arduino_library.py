@@ -330,15 +330,15 @@ def export_library(dest_dir: Path):
         )
 
     cooperative_transfer_defines = (
-        "#ifndef PW_TRANSFER_COOPERATIVE\\n"
-        "#define PW_TRANSFER_COOPERATIVE 1\\n"
-        "#endif\\n"
-        "#ifndef PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY\\n"
-        "#define PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY 2\\n"
-        "#endif\\n"
-        "#ifndef PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE\\n"
-        "#define PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE 128\\n"
-        "#endif\\n"
+        "#ifndef PW_TRANSFER_COOPERATIVE\n"
+        "#define PW_TRANSFER_COOPERATIVE 1\n"
+        "#endif\n"
+        "#ifndef PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY\n"
+        "#define PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY 2\n"
+        "#endif\n"
+        "#ifndef PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE\n"
+        "#define PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE 128\n"
+        "#endif\n"
     )
     for relative_path in (
         "pw_transfer/transfer.h",
@@ -347,14 +347,14 @@ def export_library(dest_dir: Path):
         path = src_dir / relative_path
         content = path.read_text(encoding="utf-8")
         if "define PW_TRANSFER_COOPERATIVE 1" not in content:
-            if "#pragma once\\n" not in content:
+            if "#pragma once\n" not in content:
                 raise RuntimeError(
                     f"Cannot enable cooperative pw_transfer in {relative_path}: "
                     "missing #pragma once"
                 )
             content = content.replace(
-                "#pragma once\\n",
-                "#pragma once\\n\\n" + cooperative_transfer_defines,
+                "#pragma once\n",
+                "#pragma once\n\n" + cooperative_transfer_defines,
                 1,
             )
             path.write_text(content, encoding="utf-8")
