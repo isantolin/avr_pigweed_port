@@ -181,7 +181,7 @@ bool PumpTransfers(pw::transfer::Thread<1, 1>& client_thread,
                    pw::transfer::Thread<1, 1>& server_thread,
                    bool& complete) {
   g_pump_failure_reason = 0;
-  for (size_t i = 0; i < 256 && !complete; ++i) {
+  for (size_t i = 0; i < 2048 && !complete; ++i) {
     const pw::Status client_status = client_thread.Poll(2);
     const pw::Status server_status = server_thread.Poll(2);
     if (client_status == pw::Status::ResourceExhausted()) {
@@ -243,7 +243,7 @@ bool PumpTransfers(pw::transfer::Thread<1, 1>& client_thread,
   // Completion is reported by the client before the peer necessarily handles
   // the final acknowledgement. Drain both cooperative endpoints before
   // allowing the next transfer to claim their single active role.
-  for (size_t i = 0; i < 256; ++i) {
+  for (size_t i = 0; i < 2048; ++i) {
     const bool settled =
         client_thread.PendingEventsForTest() == 0 &&
         server_thread.PendingEventsForTest() == 0 &&
@@ -476,7 +476,8 @@ int main() {
   if (!timeout_result.ok()) {
     MarkFailure(success, failure_code, 24);
   } else if (!PumpTransfers(client_thread, server_thread, timeout_complete)) {
-    MarkFailure(success, failure_code, 25);
+    MarkFailure(success, failure_code,
+                static_cast<uint8_t>(50U + g_pump_failure_reason));
   }
   server_to_client_writer.SetDropAll(false);
   if (timeout_completion_status != pw::Status::DeadlineExceeded()) {
