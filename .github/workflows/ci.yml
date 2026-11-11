@@ -89,7 +89,7 @@ jobs:
       - name: Test pw_emu simavr runner and UART PTY lifecycle
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: |
-          PYTHONPATH=tools/pw_emu_avr/python python3 -m unittest discover -s tools/pw_emu_avr/tests -v
+          PYTHONPATH="$GITHUB_WORKSPACE/tools/pw_emu_avr/python:$GITHUB_WORKSPACE/third_party/pigweed/pw_emu/py:$GITHUB_WORKSPACE/third_party/pigweed/pw_env_setup/py" python3 -m unittest discover -s tools/pw_emu_avr/tests -v
 
       - name: Configure CMake (${{ matrix.crc_impl }})
         run: |
@@ -147,7 +147,7 @@ jobs:
           echo "simavr exit status: ${simavr_status}; UART marker is authoritative"
           grep -q "PW_TRANSFER_PROBE_PASS" build-transfer/pw_transfer_probe.log
 
-      - name: Configure ATmega32U4 shared-thread footprint
+      - name: Configure ATmega1284P shared-thread footprint
         run: |
           cmake -B build-transfer-1284p -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
