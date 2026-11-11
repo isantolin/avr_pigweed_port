@@ -58,6 +58,16 @@ __path__ = extend_path(__path__, __name__)
 from pw_rpc.client import Client""",
     )
     replace_once(
+        "pw_transfer/public/pw_transfer/internal/context.h",
+        """  // The session ID as unsigned instead of uint32_t so it can be used with %u.
+  unsigned id_for_log() const {
+    static_assert(sizeof(unsigned) >= sizeof(session_id_));
+    return static_cast<unsigned>(session_id_);
+  }""",
+        """  // Preserve the full session ID on targets with 16-bit unsigned.
+  uint32_t id_for_log() const { return session_id_; }""",
+    )
+    replace_once(
         "pw_protobuf/public/pw_protobuf/wire_format.h",
         "inline constexpr static uint32_t kMaxFieldNumber = (1u << 29) - 1;",
         "inline constexpr static uint32_t kMaxFieldNumber = (uint32_t{1} << 29) - 1;",
