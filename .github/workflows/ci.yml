@@ -89,7 +89,7 @@ jobs:
       - name: Test pw_emu simavr runner and UART PTY lifecycle
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: |
-          PYTHONPATH=tools/pw_emu_avr python3 -m unittest discover -s tools/pw_emu_avr/tests -v
+          PYTHONPATH=tools/pw_emu_avr/python python3 -m unittest discover -s tools/pw_emu_avr/tests -v
 
       - name: Configure CMake (${{ matrix.crc_impl }})
         run: |
