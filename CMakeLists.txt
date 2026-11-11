@@ -13,9 +13,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(AVR_CRC32_IMPL "PW_CHECKSUM_CRC32_4BITS" CACHE STRING
     "CRC32 variant for pw_checksum (PW_CHECKSUM_CRC32_4BITS or PW_CHECKSUM_CRC32_1BITS)")
 
-option(AVR_PW_TRANSFER_PROBE_SHORT_SERVER_TIMEOUT
-  "Use a short server timeout for the cooperative pw_transfer simulation probe"
-  OFF)
 
 # Define compile definitions globally before evaluating Pigweed subdirectories
 add_compile_definitions(PW_CHECKSUM_CRC32_DEFAULT_IMPL=${AVR_CRC32_IMPL})
@@ -356,14 +353,6 @@ if(TARGET pw_transfer.core)
   target_compile_definitions(pw_transfer.core PUBLIC
     PW_TRANSFER_COOPERATIVE_TEST=1
   )
-  if(AVR_PW_TRANSFER_PROBE_SHORT_SERVER_TIMEOUT)
-    target_compile_definitions(pw_transfer.core PUBLIC
-      PW_TRANSFER_DEFAULT_SERVER_TIMEOUT_MS=100
-    )
-    target_compile_definitions(pw_transfer PUBLIC
-      PW_TRANSFER_DEFAULT_SERVER_TIMEOUT_MS=100
-    )
-  endif()
 endif()
 
 add_executable(pw_transfer_upstream_probe.elf EXCLUDE_FROM_ALL
