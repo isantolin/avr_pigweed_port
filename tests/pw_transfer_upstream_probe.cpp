@@ -314,7 +314,9 @@ int main() {
   client_thread.EnqueueResourceEvent(0x999A, OnDuplicateResourceStatus);
 
   if (!duplicate_rejected) MarkFailure(success, failure_code, 31);
-  if (client_thread.Poll(0) != pw::Status::Unavailable()) MarkFailure(success, failure_code, 2);
+  // Resource-status lookup is dispatched inline on the cooperative owner
+  // loop; it must not leave a deferred queue event or block waiting for Poll.
+  if (!client_thread.Poll(0).ok()) MarkFailure(success, failure_code, 2);
   if (!client_thread.Poll(1).ok()) MarkFailure(success, failure_code, 3);
   if (!first_callback_called) MarkFailure(success, failure_code, 4);
 
