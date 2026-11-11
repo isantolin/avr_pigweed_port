@@ -1,0 +1,20 @@
+{
+  "targets": {
+    "atmega328p": {
+      "simavr": {
+        "executable": "build/pw_emu_avr/simavr_pty_runner",
+        "mcu": "atmega328p",
+        "frequency": 16000000,
+        "uart": "0"
+      }
+    },
+    "atmega2560": {
+      "simavr": {
+        "executable": "build/pw_emu_avr/simavr_pty_runner",
+        "mcu": "atmega2560",
+        "frequency": 16000000,
+        "uart": "0"
+      }
+    }
+  }
+}

@@ -18,3 +18,20 @@ endif()
 target_compile_options(simavr_pty_runner PRIVATE
   -Wall -Wextra -Werror -Wconversion -Wno-sign-conversion
 )
+
+find_program(AVR_GCC_EXECUTABLE avr-gcc REQUIRED)
+set(PW_EMU_TEST_FIRMWARE ${CMAKE_CURRENT_BINARY_DIR}/pw_emu_test_firmware.elf)
+add_custom_command(
+  OUTPUT ${PW_EMU_TEST_FIRMWARE}
+  COMMAND ${AVR_GCC_EXECUTABLE}
+    -mmcu=atmega328p
+    -DF_CPU=16000000UL
+    -std=gnu11
+    -Os
+    -Wall -Wextra -Werror
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_firmware.c
+    -o ${PW_EMU_TEST_FIRMWARE}
+  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/test_firmware.c
+  VERBATIM
+)
+add_custom_target(pw_emu_test_firmware ALL DEPENDS ${PW_EMU_TEST_FIRMWARE})

@@ -21,8 +21,12 @@
 #include "sim_irq.h"
 
 static volatile sig_atomic_t g_stop = 0;
+static volatile sig_atomic_t g_reset = 0;
+static volatile sig_atomic_t g_continue = 0;
+static int g_failure = 0;
 static int g_pty_master = -1;
-static uint8_t g_tx_queue[4096];
+// Host-side buffering absorbs UART bursts while the PTY consumer is scheduled.
+static uint8_t g_tx_queue[65536];
 static size_t g_tx_head = 0;
 static size_t g_tx_tail = 0;
 
@@ -31,12 +35,23 @@ static void stop_handler(int signal_number) {
   g_stop = 1;
 }
 
+static void reset_handler(int signal_number) {
+  (void)signal_number;
+  g_reset = 1;
+}
+
+static void continue_handler(int signal_number) {
+  (void)signal_number;
+  g_continue = 1;
+}
+
 static void uart_tx(struct avr_irq_t *irq, uint32_t value, void *opaque) {
   (void)irq;
   (void)opaque;
   const size_t next = (g_tx_head + 1U) % sizeof(g_tx_queue);
   if (next == g_tx_tail) {
-    fprintf(stderr, "UART TX queue overflow\\n");
+    fprintf(stderr, "UART TX queue overflow\n");
+    g_failure = 1;
     g_stop = 1;
     return;
   }
@@ -46,14 +61,16 @@ static void uart_tx(struct avr_irq_t *irq, uint32_t value, void *opaque) {
 
 static void usage(const char *program) {
   fprintf(stderr, "Usage: %s --firmware FILE [--mcu atmega328p] "
-                  "[--frequency HZ] [--uart 0]\n", program);
+                  "[--frequency HZ] [--uart 0] [--pty-file PATH]\n", program);
 }
 
 int main(int argc, char **argv) {
   const char *firmware_path = NULL;
+  const char *pty_file_path = NULL;
   const char *mcu = "atmega328p";
   uint32_t frequency = 16000000;
   char uart = '0';
+  bool paused = false;
 
   for (int i = 1; i < argc; ++i) {
     if (!strcmp(argv[i], "--firmware") && i + 1 < argc) {
@@ -68,6 +85,10 @@ int main(int argc, char **argv) {
         return 2;
       }
       frequency = (uint32_t)parsed;
+    } else if (!strcmp(argv[i], "--pty-file") && i + 1 < argc) {
+      pty_file_path = argv[++i];
+    } else if (!strcmp(argv[i], "--pause")) {
+      paused = true;
     } else if (!strcmp(argv[i], "--uart") && i + 1 < argc) {
       const char *value = argv[++i];
       if (strlen(value) != 1 || value[0] < '0' || value[0] > '3') {
@@ -114,11 +135,23 @@ int main(int argc, char **argv) {
     return 1;
   }
   struct termios settings;
-  if (tcgetattr(pty_slave, &settings) == 0) {
-    cfmakeraw(&settings);
-    (void)tcsetattr(pty_slave, TCSANOW, &settings);
+  if (tcgetattr(pty_slave, &settings) != 0) {
+    fprintf(stderr, "tcgetattr failed: %s\n", strerror(errno));
+    close(pty_slave);
+    close(g_pty_master);
+    avr_terminate(avr);
+    return 1;
+  }
+  cfmakeraw(&settings);
+  if (tcsetattr(pty_slave, TCSANOW, &settings) != 0) {
+    fprintf(stderr, "tcsetattr failed: %s\n", strerror(errno));
+    close(pty_slave);
+    close(g_pty_master);
+    avr_terminate(avr);
+    return 1;
   }
   close(pty_slave);
+
   const int flags = fcntl(g_pty_master, F_GETFL, 0);
   if (flags >= 0) (void)fcntl(g_pty_master, F_SETFL, flags | O_NONBLOCK);
 
@@ -141,17 +174,56 @@ int main(int argc, char **argv) {
 
   signal(SIGINT, stop_handler);
   signal(SIGTERM, stop_handler);
+  signal(SIGUSR1, reset_handler);
+  signal(SIGUSR2, continue_handler);
+  if (pty_file_path) {
+    FILE *pty_file = fopen(pty_file_path, "w");
+    if (!pty_file) {
+      fprintf(stderr, "Unable to write PTY path file %s: %s\n",
+              pty_file_path, strerror(errno));
+      close(g_pty_master);
+      g_pty_master = -1;
+      avr_terminate(avr);
+      return 1;
+    }
+    const int path_write_failed =
+        fprintf(pty_file, "%s\n", pty_path) < 0 || fflush(pty_file) != 0;
+    const int path_close_failed = fclose(pty_file) != 0;
+    if (path_write_failed || path_close_failed) {
+      fprintf(stderr, "Unable to persist PTY path to %s\n", pty_file_path);
+      close(g_pty_master);
+      g_pty_master = -1;
+      avr_terminate(avr);
+      return 1;
+    }
+  }
+
   printf("%s\n", pty_path);
   fflush(stdout);
 
   uint8_t input[256];
   while (!g_stop && avr->state != cpu_Done && avr->state != cpu_Crashed) {
+    if (g_reset) {
+      g_reset = 0;
+      g_tx_head = 0;
+      g_tx_tail = 0;
+      avr_reset(avr);
+    }
+    if (g_continue) {
+      g_continue = 0;
+      paused = false;
+    }
+    if (paused) {
+      usleep(10000);
+      continue;
+    }
     const ssize_t count = read(g_pty_master, input, sizeof(input));
     if (count > 0) {
       for (ssize_t i = 0; i < count; ++i) avr_raise_irq(rx, input[i]);
     } else if (count < 0 && errno != EAGAIN && errno != EWOULDBLOCK &&
                errno != EINTR && errno != EIO) {
       fprintf(stderr, "PTY read failed: %s\n", strerror(errno));
+      g_failure = 1;
       break;
     }
     (void)avr_run(avr);
@@ -167,14 +239,49 @@ int main(int argc, char **argv) {
         g_tx_tail = (g_tx_tail + (size_t)written) % sizeof(g_tx_queue);
       } else if (written < 0 && errno != EAGAIN && errno != EWOULDBLOCK &&
                  errno != EINTR && errno != EIO) {
-        fprintf(stderr, "PTY write failed: %s\\n", strerror(errno));
+        fprintf(stderr, "PTY write failed: %s\n", strerror(errno));
+        g_failure = 1;
         break;
       }
     }
   }
 
+  // Drain UART bytes queued by the final AVR instructions before closing
+  // the PTY. The firmware may enter sleep or terminate immediately after its
+  // final UART write, while the host-side queue still contains bytes.
+  for (unsigned attempt = 0;
+       g_tx_tail != g_tx_head && attempt < 2000;
+       ++attempt) {
+    size_t available = (g_tx_head + sizeof(g_tx_queue) - g_tx_tail) %
+                       sizeof(g_tx_queue);
+    size_t contiguous = sizeof(g_tx_queue) - g_tx_tail;
+    if (contiguous > available) contiguous = available;
+    const ssize_t written =
+        write(g_pty_master, &g_tx_queue[g_tx_tail], contiguous);
+    if (written > 0) {
+      g_tx_tail = (g_tx_tail + (size_t)written) % sizeof(g_tx_queue);
+    } else if (written < 0 &&
+               (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+      usleep(1000);
+    } else if (written < 0 && errno == EIO) {
+      break;
+    } else {
+      fprintf(stderr, "Final PTY flush failed: %s\n", strerror(errno));
+      g_failure = 1;
+      break;
+    }
+  }
+  if (g_tx_tail != g_tx_head) {
+    fprintf(stderr, "Warning: dropping %zu queued UART bytes on shutdown\n",
+            (g_tx_head + sizeof(g_tx_queue) - g_tx_tail) % sizeof(g_tx_queue));
+  }
+
   close(g_pty_master);
   g_pty_master = -1;
+  if (avr->state == cpu_Crashed) {
+    fprintf(stderr, "AVR simulation crashed\n");
+    g_failure = 1;
+  }
   avr_terminate(avr);
-  return 0;
+  return g_failure ? 1 : 0;
 }
