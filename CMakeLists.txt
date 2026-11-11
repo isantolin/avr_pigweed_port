@@ -221,19 +221,7 @@ pw_add_library(pw_log_avr STATIC
 )
 target_link_libraries(pw_log INTERFACE pw_log_avr)
 
-# pw_rpc_avr (Lightweight Pigweed RPC Server for 8-bit AVR)
-pw_add_library(pw_rpc_avr STATIC
-  SOURCES
-    pw_rpc_avr/src/rpc_server.cpp
-  PUBLIC_INCLUDES
-    pw_rpc_avr/public
-  PUBLIC_DEPS
-    pw_bytes
-    pw_varint
-    pw_containers
-    pw_status
-    pw_result
-)
+# RPC is provided by upstream pw_rpc; no parallel AVR dispatcher is built.
 
 # pw_cobs (Consistent Overhead Byte Stuffing)
 pw_add_library(pw_cobs STATIC
@@ -386,7 +374,6 @@ target_link_libraries(test_runner.elf PRIVATE
   pw_tokenizer
   pw_chrono.system_clock
   pw_log
-  pw_rpc_avr
 )
 
 add_custom_command(TARGET test_runner.elf POST_BUILD
