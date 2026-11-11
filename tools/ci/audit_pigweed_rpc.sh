@@ -51,6 +51,9 @@ mkdir -p "$(dirname "$OUT")"
     pw_protobuf/public/pw_protobuf/message.h \
     pw_protobuf/public/pw_protobuf/config.h \
     pw_protobuf/public/pw_protobuf/serialized_size.h \
+    pw_protobuf/py/pw_protobuf/plugin.py \
+    pw_protobuf/py/pw_protobuf/options.py \
+    pw_protobuf/py/pw_protobuf/__init__.py \
     pw_status/public/pw_status/status_with_size.h \
     pw_protobuf/decoder.cc \
     pw_protobuf/encoder.cc \
