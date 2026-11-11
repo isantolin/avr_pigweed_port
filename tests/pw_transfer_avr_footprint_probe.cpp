@@ -60,8 +60,8 @@ void EmitResult() {
   PW_TRANSFER_UART_UBRRL = static_cast<uint8_t>(ubrr & 0xFF);
   PW_TRANSFER_UART_UCSRB = (1 << PW_TRANSFER_UART_TXEN);
   PW_TRANSFER_UART_UCSRC = (1 << PW_TRANSFER_UART_UCSZ1) | (1 << PW_TRANSFER_UART_UCSZ0);
-  const char marker[] = "PW_TRANSFER_FOOTPRINT_PASS\\r\\n";
-  for (size_t i = 0; marker[i] != '\\0'; ++i) {
+  const char marker[] = "PW_TRANSFER_FOOTPRINT_PASS\r\n";
+  for (size_t i = 0; marker[i] != '\0'; ++i) {
     while (!(PW_TRANSFER_UART_UCSRA & (1 << PW_TRANSFER_UART_UDRE))) {}
     PW_TRANSFER_UART_UDR = static_cast<uint8_t>(marker[i]);
   }
@@ -71,8 +71,8 @@ void EmitResult() {
   UBRR1L = static_cast<uint8_t>(ubrr & 0xFF);
   UCSR1B = (1 << TXEN1);
   UCSR1C = (1 << UCSZ11) | (1 << UCSZ10);
-  const char marker[] = "PW_TRANSFER_FOOTPRINT_PASS\\r\\n";
-  for (size_t i = 0; marker[i] != '\\0'; ++i) {
+  const char marker[] = "PW_TRANSFER_FOOTPRINT_PASS\r\n";
+  for (size_t i = 0; marker[i] != '\0'; ++i) {
     while (!(UCSR1A & (1 << UDRE1))) {}
     UDR1 = static_cast<uint8_t>(marker[i]);
   }
