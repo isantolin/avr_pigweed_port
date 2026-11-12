@@ -264,6 +264,10 @@ def export_library(dest_dir: Path):
             "pw_containers_var_len_entry_queue_iterator.cc",
             "pw_log_rate_limited.cc",
             "pw_transfer_atomic_file_transfer_handler.cc",
+        # The Bridge uses fixed-lifetime stream handlers, not allocator-backed
+        # file handlers; excluding this unused source avoids pulling in a
+        # platform mutex backend solely for an unused allocation API.
+        "pw_transfer_handler_allocator.cc",
         }
 
         # Copy .cc sources for compilation
@@ -367,14 +371,9 @@ def export_library(dest_dir: Path):
         for source in src_dir.glob("pw_transfer_*.cc"):
             source.unlink()
     else:
-        # The allocator-backed transfer handler needs the public allocator
-        # contract, not the allocator implementation catalogue.
-        allocator_public = PW_ROOT / "pw_allocator" / "public"
-        if not allocator_public.is_dir():
-            raise FileNotFoundError(
-                f"Missing Pigweed allocator public headers: {allocator_public}"
-            )
-        shutil.copytree(allocator_public, src_dir, dirs_exist_ok=True)
+        # The Bridge uses the upstream stream-backed handlers and does not
+        # expose the allocator-backed file-handler API.
+        (src_dir / "pw_transfer" / "handler_allocator.h").unlink(missing_ok=True)
 
         pwpb_package = generated_transfer_root / "pwpb" / "pw_transfer"
         shutil.copytree(
