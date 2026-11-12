@@ -3,9 +3,9 @@
 
 #include "pw_assert_avr/assert_avr.h"
 
-// Halts execution with line diagnostics without consuming any SRAM for strings
-#define PW_HANDLE_CRASH(...) \
-  pw_assert_avr_HandleFailure(__FILE__, __LINE__, 0)
+// The AVR backend reports the expression and halts; it does not format varargs.
+#define PW_HANDLE_CRASH(message, ...) \
+  pw_assert_avr_HandleFailure(__FILE__, __LINE__, message)
 
 #define PW_HANDLE_ASSERT_FAILURE(condition_string, message, ...) \
   pw_assert_avr_HandleFailure(__FILE__, __LINE__, condition_string)
@@ -18,4 +18,5 @@
                                                 type_fmt,          \
                                                 message,           \
                                                 ...)               \
-  pw_assert_avr_HandleFailure(__FILE__, __LINE__, message)
+  pw_assert_avr_HandleFailure(                                     \
+      __FILE__, __LINE__, arg_a_str " " comparison_op_str " " arg_b_str)

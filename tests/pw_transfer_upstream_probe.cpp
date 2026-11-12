@@ -312,9 +312,11 @@ int main() {
   sei();
 
   static std::array<std::byte, 128> client_chunk{};
-  static std::array<std::byte, 128> client_encode{};
+  static std::array<std::byte, 256> client_encode{};
   static std::array<std::byte, 128> server_chunk{};
-  static std::array<std::byte, 128> server_encode{};
+  static std::array<std::byte, 256> server_encode{};
+  static_assert(sizeof(client_encode) > sizeof(client_chunk));
+  static_assert(sizeof(server_encode) > sizeof(server_chunk));
   static pw::transfer::Thread<1, 1> client_thread{
       pw::ByteSpan(client_chunk), pw::ByteSpan(client_encode)};
   static pw::transfer::Thread<1, 1> server_thread{

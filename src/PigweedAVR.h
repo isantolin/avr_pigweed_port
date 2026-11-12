@@ -68,10 +68,15 @@ using byte = std::byte;
 #include "pw_rpc/server.h"
 #include "pw_rpc/raw/client_reader_writer.h"
 #include "pw_rpc/raw/server_reader_writer.h"
+// The generated pw_transfer PWPB/raw-RPC bindings are produced by the
+// AVR transfer CMake probe. Keep host and non-Mega Arduino exports independent
+// of those optional generated headers.
+#if defined(__AVR_ATmega2560__)
 #include "pw_transfer/handler.h"
 #include "pw_transfer/transfer_thread.h"
 #include "pw_transfer/transfer.h"
 #include "pw_transfer/client.h"
+#endif
 #include "arduino_stream.h"
 
 // 3. Tokenization and Utilities

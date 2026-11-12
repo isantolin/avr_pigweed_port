@@ -9,9 +9,9 @@ The port uses upstream **`pw_rpc`** and **`pw_transfer`**. The former custom `pw
 - **Transport:** upstream `pw_hdlc` over a bounded UART `pw::stream` adapter.
 - **RPC:** upstream `pw::rpc::Server`, `pw::rpc::Client`, and raw streaming APIs.
 - **Transfer:** upstream `pw_transfer::TransferService` and `pw_transfer::Client`, adapted for cooperative bare-metal execution.
-- **AVR backends:** local implementations only where hardware-specific behavior is required, including clock, logging, assertions, crypto, and UART.
+- **AVR backends:** local implementations only where hardware-specific behavior is required, including clock, logging, assertions, and UART. The standalone SHA-256 backend uses a 16-word rolling schedule; CI emits compiler-measured stack-usage metadata for it.
 - **Simulation:** a `pw_emu` launcher/connector backed by `simavr` and a PTY UART.
-- **Build:** CMake + `avr-gcc`; Pigweed and the AVR C++ standard-library support are pinned submodules.
+- **Build:** CMake + `avr-gcc`; Pigweed and the AVR C++ standard-library support are pinned submodules. ATmega2560 is the minimum supported application target; smaller AVRs are used only for isolated component probes.
 
 The Pigweed revision used by the current RPC/transfer work is:
 
@@ -30,7 +30,7 @@ Configure and build:
 ```sh
 cmake -B build -G Ninja \
   -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
-  -DAVR_MCU=atmega328p \
+  -DAVR_MCU=atmega2560 \
   -DAVR_F_CPU=16000000UL \
   -DAVR_CRC32_IMPL=PW_CHECKSUM_CRC32_4BITS
 
@@ -47,7 +47,7 @@ To use the smaller CRC implementation, configure with `-DAVR_CRC32_IMPL=PW_CHECK
 Run it with:
 
 ```sh
-simavr -m atmega328p build/pw_rpc_upstream_probe.elf
+simavr -m atmega1284p build-transfer/pw_rpc_upstream_probe.elf
 ```
 
 The firmware emits `PW_RPC_PROBE_PASS` only after the runtime assertions succeed.
@@ -77,7 +77,7 @@ Detailed design, constraints, and validation status: [Cooperative upstream pw_tr
 
 ### End-to-end transfer probe
 
-The full read/write transfer probe is built separately for ATmega2560:
+The full read/write transfer probe is an isolated ATmega1284P component test (not an application target):
 
 ```sh
 cmake -B build-transfer -G Ninja \
@@ -87,22 +87,22 @@ cmake -B build-transfer -G Ninja \
   -DAVR_CRC32_IMPL=PW_CHECKSUM_CRC32_4BITS
 
 cmake --build build-transfer --target pw_transfer_upstream_probe.elf
-simavr -m atmega2560 build-transfer/pw_transfer_upstream_probe.elf
+simavr -m atmega1284p build-transfer/pw_transfer_upstream_probe.elf
 ```
 
 The probe exercises read/write transfers, cancellation, recovery after a dropped response, retry exhaustion/deadline handling, and sequential client/server role reversal on the same two transfer-thread objects.
 
 ## Arduino library export
 
-The exporter packages upstream RPC client/server sources and cooperative transfer sources and generated protocol headers:
+The exporter packages upstream RPC client/server sources and, when generated bindings are available, cooperative transfer sources and generated protocol headers:
 
 ```sh
 python3 tools/export_arduino_library.py
 ```
 
-Run the CMake configure/build steps above first, including the ATmega2560 transfer probe, so the generated `pw_transfer` PWPB and raw-RPC headers exist. The exporter fails if the cooperative source patch or generated headers are missing.
+Run the CMake configure/build steps above first, including the ATmega1284P transfer probe, so the generated `pw_transfer` PWPB and raw-RPC headers exist. Host-only and non-Mega exports may omit those generated bindings; the exporter warns when they are absent. `PigweedAVR.h` exposes the transfer API only when compiling for ATmega2560.
 
-The exported umbrella header is `PigweedAVR.h`. It exposes upstream RPC and cooperative transfer headers and sets the AVR cooperative transfer configuration.
+The exported umbrella header is `PigweedAVR.h`. It exposes upstream RPC on supported Arduino targets and adds cooperative transfer headers/configuration only for ATmega2560.
 
 ## `pw_emu` + simavr
 

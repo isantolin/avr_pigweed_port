@@ -64,15 +64,14 @@ inline uint32_t Gamma1(uint32_t x) {
 }
 
 void Transform(NativeSha256Context& ctx, const uint8_t* chunk) {
-  uint32_t w[64];
+  // SHA-256 only needs the previous 16 schedule words. A 16-word ring keeps
+  // the working schedule at 64 bytes instead of 256 bytes on the AVR stack.
+  uint32_t w[16];
   for (uint8_t i = 0; i < 16; ++i) {
     w[i] = (static_cast<uint32_t>(chunk[i * 4]) << 24) |
            (static_cast<uint32_t>(chunk[i * 4 + 1]) << 16) |
            (static_cast<uint32_t>(chunk[i * 4 + 2]) << 8) |
            (static_cast<uint32_t>(chunk[i * 4 + 3]));
-  }
-  for (uint8_t i = 16; i < 64; ++i) {
-    w[i] = Gamma1(w[i - 2]) + w[i - 7] + Gamma0(w[i - 15]) + w[i - 16];
   }
 
   uint32_t a = ctx.state[0];
@@ -85,7 +84,14 @@ void Transform(NativeSha256Context& ctx, const uint8_t* chunk) {
   uint32_t h = ctx.state[7];
 
   for (uint8_t i = 0; i < 64; ++i) {
-    const uint32_t t1 = h + Sigma1(e) + Ch(e, f, g) + READ_K(i) + w[i];
+    const uint8_t slot = static_cast<uint8_t>(i & 0x0FU);
+    if (i >= 16) {
+      const uint8_t i2 = static_cast<uint8_t>((i - 2U) & 0x0FU);
+      const uint8_t i7 = static_cast<uint8_t>((i - 7U) & 0x0FU);
+      const uint8_t i15 = static_cast<uint8_t>((i - 15U) & 0x0FU);
+      w[slot] = Gamma1(w[i2]) + w[i7] + Gamma0(w[i15]) + w[slot];
+    }
+    const uint32_t t1 = h + Sigma1(e) + Ch(e, f, g) + READ_K(i) + w[slot];
     const uint32_t t2 = Sigma0(a) + Maj(a, b, c);
     h = g;
     g = f;

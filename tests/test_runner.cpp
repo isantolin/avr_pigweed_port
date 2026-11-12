@@ -29,6 +29,7 @@
 #include "pw_base64/base64.h"
 #include "pw_tokenizer/hash.h"
 #include "pw_chrono/system_clock.h"
+#include "pw_chrono_avr/system_clock_avr.h"
 #include "pw_log/log.h"
 #include "pw_log_avr/log_avr.h"
 
@@ -366,6 +367,10 @@ bool TestPwAssert() {
   PW_CHECK(2 * 2 == 4);
   PW_CHECK_OK(pw::OkStatus());
   PW_CHECK_INT_EQ(10, 10);
+  // Compile the fatal path without executing it.
+  if (false) {
+    PW_CRASH("compile-only fatal backend check");
+  }
   return true;
 }
 
@@ -390,7 +395,7 @@ bool TestCxxAbi() {
   return true;
 }
 
-// 13. Test pw_crypto (SHA-256 standard NIST test vector)
+// 13. Test pw_crypto (SHA-256 NIST vectors, including two-block finalization)
 bool TestPwCryptoSha256() {
   const char* msg = "abc";
   std::byte digest[pw::crypto::sha256::kDigestSizeBytes];
@@ -398,15 +403,28 @@ bool TestPwCryptoSha256() {
       pw::as_bytes(pw::span(msg, 3)), pw::span(digest));
   if (!status.ok()) return false;
 
-  // NIST SHA-256 vector for "abc":
-  // ba7816bf 8f01cfea 414140de 5dae2223 b00361a3 96177a9c b410ff61 f20015ad
-  const uint8_t expected[32] = {
+  const uint8_t abc_expected[32] = {
       0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea,
       0x41, 0x41, 0x40, 0xde, 0x5d, 0xae, 0x22, 0x23,
       0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c,
       0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00, 0x15, 0xad};
+  if (std::memcmp(digest, abc_expected, sizeof(abc_expected)) != 0) {
+    return false;
+  }
 
-  return std::memcmp(digest, expected, 32) == 0;
+  // 56 bytes forces SHA-256 padding into a second compression block.
+  char boundary_message[56];
+  std::memset(boundary_message, 'a', sizeof(boundary_message));
+  status = pw::crypto::sha256::Hash(
+      pw::as_bytes(pw::span(boundary_message)), pw::span(digest));
+  if (!status.ok()) return false;
+
+  const uint8_t boundary_expected[32] = {
+      0xb3, 0x54, 0x39, 0xa4, 0xac, 0x6f, 0x09, 0x48,
+      0xb6, 0xd6, 0xf9, 0xe3, 0xc6, 0xaf, 0x0f, 0x5f,
+      0x59, 0x0c, 0xe2, 0x0f, 0x1b, 0xde, 0x70, 0x90,
+      0xef, 0x79, 0x70, 0x68, 0x6e, 0xc6, 0x73, 0x8a};
+  return std::memcmp(digest, boundary_expected, sizeof(boundary_expected)) == 0;
 }
 
 // 15. Test pw_ring_buffer
@@ -521,9 +539,13 @@ bool TestPwChrono() {
   auto t1 = pw::chrono::SystemClock::now();
   auto t2 = pw::chrono::SystemClock::now();
   if (t2 < t1) return false;
-  auto diff = t2 - t1;
-  if (diff < pw::chrono::SystemClock::duration::zero()) return false;
-  return true;
+  if ((t2 - t1) < pw::chrono::SystemClock::duration::zero()) return false;
+
+  // The explicit tick hook must advance the backend clock deterministically.
+  const auto before_step = pw::chrono::SystemClock::now();
+  pw_chrono_avr_StepMillis(7);
+  const auto after_step = pw::chrono::SystemClock::now();
+  return (after_step - before_step) >= pw::chrono::SystemClock::duration(7);
 }
 
 // 21. Test pw_log (Tokenized logging to sink)

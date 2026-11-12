@@ -1,27 +1,21 @@
 #!/usr/bin/env bash
-# File: bootstrap_avr_pigweed.sh
+# Initialize the submodules declared by this repository.
 set -euo pipefail
 
-PROJECT_DIR="avr_pigweed_port"
-mkdir -p "${PROJECT_DIR}/pw_assert_avr/public/pw_assert_backend"
-mkdir -p "${PROJECT_DIR}/pw_assert_avr/public_overrides/pw_assert_backend"
-mkdir -p "${PROJECT_DIR}/src"
-cd "${PROJECT_DIR}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${REPO_ROOT}"
 
-if [ ! -d ".git" ]; then
-  git init
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Run this script from a cloned avr_pigweed_port repository." >&2
+  exit 1
 fi
 
-if [ ! -d "third_party/pigweed" ]; then
-  git submodule add --depth 1 https://pigweed.googlesource.com/pigweed/pigweed third_party/pigweed
-fi
+git submodule update --init --recursive --depth 1
 
-if [ ! -d "third_party/avr-libstdcpp" ]; then
-  git submodule add --depth 1 https://github.com/modm-io/avr-libstdcpp.git third_party/avr-libstdcpp
-fi
-
-echo "Directory structure and submodules ready in $(pwd)."
-echo "Copy CMakeLists.txt, avr-toolchain.cmake, pw_assert_avr/*, and src/* files, then run:"
-echo "  cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake -DAVR_CRC32_IMPL=PW_CHECKSUM_CRC32_4BITS"
-echo "  cmake --build build"
-echo "  cmake --build build --target run_tests"
+echo "Pigweed and AVR standard-library submodules are initialized in ${REPO_ROOT}."
+echo "Configure with:"
+echo "  cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake -DAVR_MCU=atmega2560 -DAVR_CRC32_IMPL=PW_CHECKSUM_CRC32_4BITS"
+echo "  cmake --build build --target all run_tests"
+echo "For the isolated cooperative pw_transfer bindings/probe (ATmega1284P):"
+echo "  cmake -B build-transfer -G Ninja -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake -DAVR_MCU=atmega1284p -DAVR_F_CPU=16000000UL -DAVR_CRC32_IMPL=PW_CHECKSUM_CRC32_4BITS"
+echo "  cmake --build build-transfer --target pw_transfer_upstream_probe.elf"

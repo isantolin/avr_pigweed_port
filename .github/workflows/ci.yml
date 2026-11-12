@@ -110,6 +110,64 @@ jobs:
           fi
           tail -n 20 build/build.log
 
+      - name: Report SHA-256 stack usage
+        run: |
+          # Build a diagnostic-only object from Ninja's real compiler argv.
+          # Do not depend on CMake target flags or ccache side-output behavior.
+          python3 - <<'PY'
+          import pathlib
+          import shlex
+          import subprocess
+
+          commands = subprocess.check_output(
+              ["ninja", "-C", "build", "-t", "commands"], text=True
+          ).splitlines()
+          argv = None
+          for command in commands:
+              candidate = shlex.split(command)
+              if any(arg.endswith("sha256_avr.cpp") for arg in candidate):
+                  argv = candidate
+                  break
+          if argv is None:
+              raise SystemExit("Could not find SHA-256 compile command in Ninja graph")
+
+          compiler_index = next(
+              (i for i, arg in enumerate(argv)
+               if pathlib.Path(arg).name == "avr-g++"),
+              None,
+          )
+          if compiler_index is None:
+              raise SystemExit(f"Unexpected SHA-256 compiler command: {argv[:8]}")
+          argv = argv[compiler_index:]
+
+          # Remove dependency-file arguments and redirect the object to /tmp.
+          clean = []
+          skip_next = False
+          for arg in argv:
+              if skip_next:
+                  skip_next = False
+                  continue
+              if arg in ("-MF", "-MT", "-MQ"):
+                  skip_next = True
+                  continue
+              if arg == "-o":
+                  clean.extend(["-o", "/tmp/sha256_stack_usage.o"])
+                  skip_next = True
+                  continue
+              if arg == "-flto" or arg.startswith("-flto="):
+                  continue
+              clean.append(arg)
+
+          clean.extend(["-fno-lto", "-fstack-usage"])
+          print("Running diagnostic compile:", shlex.join(clean))
+          subprocess.run(clean, check=True)
+          report = pathlib.Path("/tmp/sha256_stack_usage.su")
+          if not report.is_file() or report.stat().st_size == 0:
+              matches = list(pathlib.Path("/tmp").glob("*.su"))
+              raise SystemExit(f"Stack report missing; found: {matches}")
+          print(report.read_text())
+          PY
+
       - name: Measure application firmware and test runner on ATmega2560
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: |
