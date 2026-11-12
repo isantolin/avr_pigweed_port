@@ -30,18 +30,6 @@
 #undef round
 #endif
 
-#include <type_traits>
-
-#if !defined(__clang__) && defined(__GNUC__) && (__GNUC__ < 8)
-#ifndef _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
-#define _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
-namespace std {
-template <typename T>
-constexpr bool has_unique_object_representations_v = is_trivially_copyable<T>::value;
-} // namespace std
-#endif
-#endif
-
 // 1. Foundation and Error Handling
 #include "pw_status/status.h"
 #include "pw_status/try.h"

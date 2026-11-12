@@ -264,6 +264,10 @@ def export_library(dest_dir: Path):
             "pw_containers_var_len_entry_queue_iterator.cc",
             "pw_log_rate_limited.cc",
             "pw_transfer_atomic_file_transfer_handler.cc",
+        # The Bridge uses fixed-lifetime stream handlers, not allocator-backed
+        # file handlers; excluding this unused source avoids pulling in a
+        # platform mutex backend solely for an unused allocation API.
+        "pw_transfer_handler_allocator.cc",
         }
 
         # Copy .cc sources for compilation
@@ -338,36 +342,49 @@ def export_library(dest_dir: Path):
             "with the AVR port before exporting the Arduino library."
         )
 
-    generated_transfer_packages = {
-        "pwpb": "transfer.pwpb.h",
-        "raw_rpc": "transfer.raw_rpc.pb.h",
-    }
+    # PWPB is the transfer encoding used by this port. Pigweed's raw-RPC
+    # generator is not enabled by every build graph and is not required by the
+    # Arduino transfer client/server API; its absence must not suppress PWPB.
     generated_transfer_root = None
-    for build_root in (REPO_ROOT / "build-transfer-1284p", REPO_ROOT / "build-transfer", REPO_ROOT / "build"):
+    for build_root in (
+        REPO_ROOT / "build-transfer-1284p",
+        REPO_ROOT / "build-transfer",
+        REPO_ROOT / "build",
+    ):
         if not build_root.is_dir():
             continue
         for proto_root in build_root.rglob("pw_transfer.proto"):
-            if all(
-                (proto_root / generator / "pw_transfer" / header).is_file()
-                for generator, header in generated_transfer_packages.items()
-            ):
+            if (
+                proto_root / "pwpb" / "pw_transfer" / "transfer.pwpb.h"
+            ).is_file():
                 generated_transfer_root = proto_root
                 break
         if generated_transfer_root is not None:
             break
+
     if generated_transfer_root is None:
-        # Host-only and non-AVR builds do not need the transfer bindings. The
-        # Mega 2560 firmware compile path builds the upstream transfer probe
-        # first, which generates these headers before exporting the library.
-        print(
-            "[!] pw_transfer generated PWPB/raw RPC headers are absent; "
-            "exporting the common Pigweed RPC library without transfer bindings."
-        )
+        # Non-Mega Arduino architectures do not expose pw_transfer. Remove
+        # its copied sources as well as headers so their builds do not compile
+        # transfer translation units that require AVR-generated PWPB bindings.
+        print("[*] Omitting pw_transfer from this architecture's Arduino export.")
+        shutil.rmtree(src_dir / "pw_transfer", ignore_errors=True)
+        for source in src_dir.glob("pw_transfer_*.cc"):
+            source.unlink()
     else:
-        for generator in generated_transfer_packages:
-            generated_package = generated_transfer_root / generator / "pw_transfer"
+        # The Bridge uses the upstream stream-backed handlers and does not
+        # expose the allocator-backed file-handler API.
+        (src_dir / "pw_transfer" / "handler_allocator.h").unlink(missing_ok=True)
+
+        pwpb_package = generated_transfer_root / "pwpb" / "pw_transfer"
+        shutil.copytree(
+            pwpb_package,
+            src_dir / "pw_transfer",
+            dirs_exist_ok=True,
+        )
+        raw_rpc_package = generated_transfer_root / "raw_rpc" / "pw_transfer"
+        if raw_rpc_package.is_dir():
             shutil.copytree(
-                generated_package,
+                raw_rpc_package,
                 src_dir / "pw_transfer",
                 dirs_exist_ok=True,
             )
@@ -797,7 +814,10 @@ def export_library(dest_dir: Path):
 #define _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
 namespace std {
 template <typename T>
-constexpr bool has_unique_object_representations_v = is_trivially_copyable<T>::value;
+// GCC < 8 does not provide this C++17 trait. Report false rather than
+// approximating it with is_trivially_copyable: the two properties differ.
+// False is conservative and only disables optimizations that require the trait.
+constexpr bool has_unique_object_representations_v = false;
 } // namespace std
 #endif
 #endif
