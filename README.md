@@ -87,7 +87,7 @@ cmake -B build-transfer -G Ninja \
   -DAVR_CRC32_IMPL=PW_CHECKSUM_CRC32_4BITS
 
 cmake --build build-transfer --target pw_transfer_upstream_probe.elf
-simavr -m atmega2560 build-transfer/pw_transfer_upstream_probe.elf
+simavr -m atmega1284p build-transfer/pw_transfer_upstream_probe.elf
 ```
 
 The probe exercises read/write transfers, cancellation, recovery after a dropped response, retry exhaustion/deadline handling, and sequential client/server role reversal on the same two transfer-thread objects.
