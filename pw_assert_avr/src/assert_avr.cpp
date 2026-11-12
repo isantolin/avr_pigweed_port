@@ -108,6 +108,10 @@ void pw_assert_avr_HandleFailure(const char* file, int line, const char* express
   TxString_P(kExpressionSeparator);
   TxStringRam(expression);
   TxString_P(kMsgEnd);
+#else
+  // Diagnostics are intentionally disabled on Arduino to protect framed UART.
+  (void)file;
+  (void)expression;
 #endif
 
   while (true) {
