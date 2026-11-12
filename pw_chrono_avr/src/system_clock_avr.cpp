@@ -51,6 +51,8 @@ void pw_chrono_avr_InitTimer0(void) {
 }
 
 void pw_chrono_avr_StepMillis(uint32_t ms) {
+  // In Arduino builds this is an offset applied to millis(); in bare-metal
+  // builds it advances the software clock driven by TIMER0_COMPA_vect.
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     g_system_clock_millis += ms;
   }
@@ -60,7 +62,7 @@ uint32_t pw_chrono_avr_GetMillis(void) {
   uint32_t current_ms = 0;
 #if defined(ARDUINO)
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-    current_ms = static_cast<uint32_t>(millis());
+    current_ms = static_cast<uint32_t>(millis()) + g_system_clock_millis;
   }
 #else
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
