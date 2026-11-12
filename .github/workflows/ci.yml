@@ -131,10 +131,14 @@ jobs:
           if argv is None:
               raise SystemExit("Could not find SHA-256 compile command in Ninja graph")
 
-          if pathlib.Path(argv[0]).name == "ccache":
-              argv = argv[1:]
-          if not argv or "avr-g++" not in pathlib.Path(argv[0]).name:
-              raise SystemExit(f"Unexpected SHA-256 compiler: {argv[:1]}")
+          compiler_index = next(
+              (i for i, arg in enumerate(argv)
+               if pathlib.Path(arg).name == "avr-g++"),
+              None,
+          )
+          if compiler_index is None:
+              raise SystemExit(f"Unexpected SHA-256 compiler command: {argv[:8]}")
+          argv = argv[compiler_index:]
 
           # Remove dependency-file arguments and redirect the object to /tmp.
           clean = []
