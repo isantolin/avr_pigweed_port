@@ -338,13 +338,6 @@ def export_library(dest_dir: Path):
             "with the AVR port before exporting the Arduino library."
         )
 
-    # pw_transfer's allocator-backed handler is part of the public API.
-    # Export the allocator interfaces, but not every allocator implementation:
-    # the selected transfer handler only needs the abstract allocator contract.
-    allocator_public = PW_ROOT / "pw_allocator" / "public"
-    if allocator_public.is_dir():
-        shutil.copytree(allocator_public, src_dir, dirs_exist_ok=True)
-
     # PWPB is the transfer encoding used by this port. Pigweed's raw-RPC
     # generator is not enabled by every build graph and is not required by the
     # Arduino transfer client/server API; its absence must not suppress PWPB.
@@ -366,13 +359,23 @@ def export_library(dest_dir: Path):
             break
 
     if generated_transfer_root is None:
-        # Standalone host-only exports may be used without a configured AVR
-        # transfer build. Firmware CI builds the upstream transfer probe first.
-        print(
-            "[!] pw_transfer PWPB bindings are absent; "
-            "exporting without generated transfer protocol headers."
-        )
+        # Non-Mega Arduino architectures do not expose pw_transfer. Remove
+        # its copied sources as well as headers so their builds do not compile
+        # transfer translation units that require AVR-generated PWPB bindings.
+        print("[*] Omitting pw_transfer from this architecture's Arduino export.")
+        shutil.rmtree(src_dir / "pw_transfer", ignore_errors=True)
+        for source in src_dir.glob("pw_transfer_*.cc"):
+            source.unlink()
     else:
+        # The allocator-backed transfer handler needs the public allocator
+        # contract, not the allocator implementation catalogue.
+        allocator_public = PW_ROOT / "pw_allocator" / "public"
+        if not allocator_public.is_dir():
+            raise FileNotFoundError(
+                f"Missing Pigweed allocator public headers: {allocator_public}"
+            )
+        shutil.copytree(allocator_public, src_dir, dirs_exist_ok=True)
+
         pwpb_package = generated_transfer_root / "pwpb" / "pw_transfer"
         shutil.copytree(
             pwpb_package,
