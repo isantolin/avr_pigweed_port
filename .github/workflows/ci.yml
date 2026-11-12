@@ -112,21 +112,28 @@ jobs:
 
       - name: Report SHA-256 stack usage
         run: |
-          compile_command="$(ninja -C build -t commands | grep 'sha256_avr.cpp' | tail -n 1)"
+          # Match the compiler invocation, not the later archive/link command
+          # which also contains the source/object name.
+          compile_command="$(ninja -C build -t commands | grep -E 'avr-g\+\+.*-c .*sha256_avr\.cpp' | head -n 1)"
           echo "SHA-256 compile command: ${compile_command}"
-          if [[ "${compile_command}" != *"-fstack-usage"* ]]; then
-            echo "SHA-256 compile command is missing -fstack-usage."
+          if [[ -z "${compile_command}" || "${compile_command}" != *"-fstack-usage"* ]]; then
+            echo "SHA-256 compiler invocation is missing -fstack-usage."
             exit 1
           fi
-          mapfile -t stack_usage_files < <(find build -type f -name '*.su' -print)
-          if (( ${#stack_usage_files[@]} == 0 )); then
-            echo "No SHA-256 stack-usage report was generated."
+
+          # ccache does not reliably preserve GCC .su side-output files.
+          # Rebuild only this object with the cache disabled so the report is real.
+          object="build/CMakeFiles/pw_crypto_avr.dir/pw_crypto_avr/src/sha256_avr.cpp.obj"
+          report="build/CMakeFiles/pw_crypto_avr.dir/pw_crypto_avr/src/sha256_avr.cpp.su"
+          rm -f "${object}" "${report}"
+          CCACHE_DISABLE=1 ninja -C build CMakeFiles/pw_crypto_avr.dir/pw_crypto_avr/src/sha256_avr.cpp.obj
+          if [[ ! -s "${report}" ]]; then
+            echo "SHA-256 stack-usage report was not generated at ${report}."
+            find build -type f -name '*.su' -print
             exit 1
           fi
-          for report in "${stack_usage_files[@]}"; do
-            echo "=== ${report} ==="
-            grep -E 'Transform|Hash|Update|Final' "${report}" || cat "${report}"
-          done
+          echo "=== ${report} ==="
+          grep -E 'Transform|Hash|Update|Final' "${report}" || cat "${report}"
 
       - name: Measure application firmware and test runner on ATmega2560
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
