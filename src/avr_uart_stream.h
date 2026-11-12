@@ -29,7 +29,7 @@ class AvrUartStream final : public pw::stream::NonSeekableReaderWriter {
     const uint16_t ubrr =
         static_cast<uint16_t>((F_CPU / (16UL * baud_rate)) - 1UL);
 
-#if defined(UDR1) || defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega2560__)
+#if defined(UDR1) || defined(__AVR_ATmega2560__)
     if (port_ == UartPort::kUsart1) {
       UBRR1H = static_cast<uint8_t>(ubrr >> 8);
       UBRR1L = static_cast<uint8_t>(ubrr & 0xFF);
@@ -50,7 +50,7 @@ class AvrUartStream final : public pw::stream::NonSeekableReaderWriter {
  private:
   pw::Status DoWrite(pw::ConstByteSpan data) override {
     for (const std::byte b : data) {
-#if defined(UDR1) || defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega2560__)
+#if defined(UDR1) || defined(__AVR_ATmega2560__)
       if (port_ == UartPort::kUsart1) {
         while (!(UCSR1A & (1 << UDRE1))) {}
         UDR1 = static_cast<uint8_t>(b);
@@ -69,7 +69,7 @@ class AvrUartStream final : public pw::stream::NonSeekableReaderWriter {
     if (destination.empty()) {
       return pw::StatusWithSize(0);
     }
-#if defined(UDR1) || defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega2560__)
+#if defined(UDR1) || defined(__AVR_ATmega2560__)
     if (port_ == UartPort::kUsart1) {
       if (!(UCSR1A & (1 << RXC1))) {
         return pw::StatusWithSize::ResourceExhausted();

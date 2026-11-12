@@ -22,6 +22,7 @@ namespace {
 
 pw_assert_avr_PanicHook g_panic_hook = nullptr;
 
+#if !defined(ARDUINO) || defined(PW_ASSERT_AVR_ENABLE_UART_DIAGNOSTICS)
 void TxChar(char c) {
 #if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
 #if defined(UDR0)
@@ -77,6 +78,8 @@ const char kMsgHeader[] PROGMEM = "\r\n!!! [PW_ASSERT FAILED] ";
 const char kFileSeparator[] PROGMEM = " : ";
 const char kExpressionSeparator[] PROGMEM = " : ";
 const char kMsgEnd[] PROGMEM = " !!!\r\n";
+#endif  // raw UART diagnostics opt-in for Arduino
+
 
 }  // namespace
 
@@ -95,7 +98,9 @@ void pw_assert_avr_HandleFailure(const char* file, int line, const char* express
     g_panic_hook(line);
   }
 
-  // Emit diagnostics without allocating a temporary string buffer.
+#if !defined(ARDUINO) || defined(PW_ASSERT_AVR_ENABLE_UART_DIAGNOSTICS)
+  // Bare-metal builds may use UART0 for diagnostics. Arduino builds must opt
+  // in explicitly because the active HardwareSerial stream may carry HDLC.
   TxString_P(kMsgHeader);
   TxStringRam(file);
   TxString_P(kFileSeparator);
@@ -103,6 +108,7 @@ void pw_assert_avr_HandleFailure(const char* file, int line, const char* express
   TxString_P(kExpressionSeparator);
   TxStringRam(expression);
   TxString_P(kMsgEnd);
+#endif
 
   while (true) {
 #if defined(__GNUC__)
