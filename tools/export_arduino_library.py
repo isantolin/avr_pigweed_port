@@ -338,36 +338,51 @@ def export_library(dest_dir: Path):
             "with the AVR port before exporting the Arduino library."
         )
 
-    generated_transfer_packages = {
-        "pwpb": "transfer.pwpb.h",
-        "raw_rpc": "transfer.raw_rpc.pb.h",
-    }
+    # pw_transfer's allocator-backed handler is part of the public API.
+    # Export the allocator interfaces, but not every allocator implementation:
+    # the selected transfer handler only needs the abstract allocator contract.
+    allocator_public = PW_ROOT / "pw_allocator" / "public"
+    if allocator_public.is_dir():
+        shutil.copytree(allocator_public, src_dir, dirs_exist_ok=True)
+
+    # PWPB is the transfer encoding used by this port. Pigweed's raw-RPC
+    # generator is not enabled by every build graph and is not required by the
+    # Arduino transfer client/server API; its absence must not suppress PWPB.
     generated_transfer_root = None
-    for build_root in (REPO_ROOT / "build-transfer-1284p", REPO_ROOT / "build-transfer", REPO_ROOT / "build"):
+    for build_root in (
+        REPO_ROOT / "build-transfer-1284p",
+        REPO_ROOT / "build-transfer",
+        REPO_ROOT / "build",
+    ):
         if not build_root.is_dir():
             continue
         for proto_root in build_root.rglob("pw_transfer.proto"):
-            if all(
-                (proto_root / generator / "pw_transfer" / header).is_file()
-                for generator, header in generated_transfer_packages.items()
-            ):
+            if (
+                proto_root / "pwpb" / "pw_transfer" / "transfer.pwpb.h"
+            ).is_file():
                 generated_transfer_root = proto_root
                 break
         if generated_transfer_root is not None:
             break
+
     if generated_transfer_root is None:
-        # Host-only and non-AVR builds do not need the transfer bindings. The
-        # Mega 2560 firmware compile path builds the upstream transfer probe
-        # first, which generates these headers before exporting the library.
+        # Standalone host-only exports may be used without a configured AVR
+        # transfer build. Firmware CI builds the upstream transfer probe first.
         print(
-            "[!] pw_transfer generated PWPB/raw RPC headers are absent; "
-            "exporting the common Pigweed RPC library without transfer bindings."
+            "[!] pw_transfer PWPB bindings are absent; "
+            "exporting without generated transfer protocol headers."
         )
     else:
-        for generator in generated_transfer_packages:
-            generated_package = generated_transfer_root / generator / "pw_transfer"
+        pwpb_package = generated_transfer_root / "pwpb" / "pw_transfer"
+        shutil.copytree(
+            pwpb_package,
+            src_dir / "pw_transfer",
+            dirs_exist_ok=True,
+        )
+        raw_rpc_package = generated_transfer_root / "raw_rpc" / "pw_transfer"
+        if raw_rpc_package.is_dir():
             shutil.copytree(
-                generated_package,
+                raw_rpc_package,
                 src_dir / "pw_transfer",
                 dirs_exist_ok=True,
             )
