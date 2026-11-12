@@ -285,6 +285,7 @@ def export_library(dest_dir: Path):
             target_name = f"{mod}_{cc_file.name}"
             if (
                 not cc_file.name.endswith(("_test.cc", "_fuzzer.cc", "_perf_test.cc"))
+                and cc_file.name not in EXCLUDED_SOURCES
                 and target_name not in EXCLUDED_SOURCES
             ):
                 shutil.copy2(cc_file, src_dir / target_name)
@@ -292,6 +293,7 @@ def export_library(dest_dir: Path):
             target_name = f"{mod}_{cc_file.name}"
             if (
                 not cc_file.name.endswith(("_test.cc", "_fuzzer.cc"))
+                and cc_file.name not in EXCLUDED_SOURCES
                 and target_name not in EXCLUDED_SOURCES
             ):
                 shutil.copy2(cc_file, src_dir / target_name)
