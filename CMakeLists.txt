@@ -250,11 +250,12 @@ pw_add_library(pw_crypto_avr STATIC
     pw_stream
     pw_log
 )
-# Emit GCC stack-usage metadata so CI can verify the bounded SHA-256 frame.
-target_compile_options(pw_crypto_avr PRIVATE -fstack-usage)
-# ccache does not reliably preserve GCC auxiliary .su outputs; compile this
-# single translation unit directly so the measurement is always generated.
-set_property(TARGET pw_crypto_avr PROPERTY CXX_COMPILER_LAUNCHER "")
+# Emit GCC stack-usage metadata for the SHA-256 translation unit.
+# Source-level options are retained by pw_add_library's generated target.
+set_source_files_properties(
+  pw_crypto_avr/src/sha256_avr.cpp
+  PROPERTIES COMPILE_OPTIONS "-fstack-usage"
+)
 
 pw_add_library(pw_crypto INTERFACE
   PUBLIC_INCLUDES
