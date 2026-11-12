@@ -30,7 +30,7 @@ Configure and build:
 ```sh
 cmake -B build -G Ninja \
   -DCMAKE_TOOLCHAIN_FILE=avr-toolchain.cmake \
-  -DAVR_MCU=atmega328p \
+  -DAVR_MCU=atmega2560 \
   -DAVR_F_CPU=16000000UL \
   -DAVR_CRC32_IMPL=PW_CHECKSUM_CRC32_4BITS
 
