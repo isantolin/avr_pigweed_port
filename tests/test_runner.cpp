@@ -29,6 +29,7 @@
 #include "pw_base64/base64.h"
 #include "pw_tokenizer/hash.h"
 #include "pw_chrono/system_clock.h"
+#include "pw_chrono_avr/system_clock_avr.h"
 #include "pw_log/log.h"
 #include "pw_log_avr/log_avr.h"
 
@@ -409,7 +410,7 @@ bool TestPwCryptoSha256() {
 
   // 56 bytes forces SHA-256 padding into a second compression block.
   char boundary_message[56];
-  memset(boundary_message, 'a', sizeof(boundary_message));
+  std::memset(boundary_message, 'a', sizeof(boundary_message));
   status = pw::crypto::sha256::Hash(
       pw::as_bytes(pw::span(boundary_message)), pw::span(digest));
   if (!status.ok()) return false;
@@ -534,9 +535,13 @@ bool TestPwChrono() {
   auto t1 = pw::chrono::SystemClock::now();
   auto t2 = pw::chrono::SystemClock::now();
   if (t2 < t1) return false;
-  auto diff = t2 - t1;
-  if (diff < pw::chrono::SystemClock::duration::zero()) return false;
-  return true;
+  if ((t2 - t1) < pw::chrono::SystemClock::duration::zero()) return false;
+
+  // The explicit tick hook must advance the backend clock deterministically.
+  const auto before_step = pw::chrono::SystemClock::now();
+  pw_chrono_avr_StepMillis(7);
+  const auto after_step = pw::chrono::SystemClock::now();
+  return (after_step - before_step) >= pw::chrono::SystemClock::duration(7);
 }
 
 // 21. Test pw_log (Tokenized logging to sink)
