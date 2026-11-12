@@ -342,48 +342,51 @@ def export_library(dest_dir: Path):
         if generated_transfer_root is not None:
             break
     if generated_transfer_root is None:
-        raise FileNotFoundError(
-            "pw_transfer generated PWPB/raw RPC headers are missing. "
-            "Configure and build the pw_transfer AVR probe before exporting."
+        # Host-only and non-AVR builds do not need the transfer bindings. The
+        # Mega 2560 firmware compile path builds the upstream transfer probe
+        # first, which generates these headers before exporting the library.
+        print(
+            "[!] pw_transfer generated PWPB/raw RPC headers are absent; "
+            "exporting the common Pigweed RPC library without transfer bindings."
         )
-
-    for generator in generated_transfer_packages:
-        generated_package = generated_transfer_root / generator / "pw_transfer"
-        shutil.copytree(
-            generated_package,
-            src_dir / "pw_transfer",
-            dirs_exist_ok=True,
-        )
-
-    cooperative_transfer_defines = (
-        "#ifndef PW_TRANSFER_COOPERATIVE\n"
-        "#define PW_TRANSFER_COOPERATIVE 1\n"
-        "#endif\n"
-        "#ifndef PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY\n"
-        "#define PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY 2\n"
-        "#endif\n"
-        "#ifndef PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE\n"
-        "#define PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE 128\n"
-        "#endif\n"
-    )
-    for relative_path in (
-        "pw_transfer/transfer.h",
-        "pw_transfer/transfer_thread.h",
-    ):
-        path = src_dir / relative_path
-        content = path.read_text(encoding="utf-8")
-        if "define PW_TRANSFER_COOPERATIVE 1" not in content:
-            if "#pragma once\n" not in content:
-                raise RuntimeError(
-                    f"Cannot enable cooperative pw_transfer in {relative_path}: "
-                    "missing #pragma once"
-                )
-            content = content.replace(
-                "#pragma once\n",
-                "#pragma once\n\n" + cooperative_transfer_defines,
-                1,
+    else:
+        for generator in generated_transfer_packages:
+            generated_package = generated_transfer_root / generator / "pw_transfer"
+            shutil.copytree(
+                generated_package,
+                src_dir / "pw_transfer",
+                dirs_exist_ok=True,
             )
-            path.write_text(content, encoding="utf-8")
+
+        cooperative_transfer_defines = (
+            "#ifndef PW_TRANSFER_COOPERATIVE\n"
+            "#define PW_TRANSFER_COOPERATIVE 1\n"
+            "#endif\n"
+            "#ifndef PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY\n"
+            "#define PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY 2\n"
+            "#endif\n"
+            "#ifndef PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE\n"
+            "#define PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE 128\n"
+            "#endif\n"
+        )
+        for relative_path in (
+            "pw_transfer/transfer.h",
+            "pw_transfer/transfer_thread.h",
+        ):
+            path = src_dir / relative_path
+            content = path.read_text(encoding="utf-8")
+            if "define PW_TRANSFER_COOPERATIVE 1" not in content:
+                if "#pragma once\n" not in content:
+                    raise RuntimeError(
+                        f"Cannot enable cooperative pw_transfer in {relative_path}: "
+                        "missing #pragma once"
+                    )
+                content = content.replace(
+                    "#pragma once\n",
+                    "#pragma once\n\n" + cooperative_transfer_defines,
+                    1,
+                )
+                path.write_text(content, encoding="utf-8")
 
     rpc_config = src_dir / "pw_rpc" / "internal" / "config.h"
     if not rpc_config.is_file():
