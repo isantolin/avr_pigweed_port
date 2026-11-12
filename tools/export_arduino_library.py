@@ -797,7 +797,10 @@ def export_library(dest_dir: Path):
 #define _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
 namespace std {
 template <typename T>
-constexpr bool has_unique_object_representations_v = is_trivially_copyable<T>::value;
+// GCC < 8 does not provide this C++17 trait. Report false rather than
+// approximating it with is_trivially_copyable: the two properties differ.
+// False is conservative and only disables optimizations that require the trait.
+constexpr bool has_unique_object_representations_v = false;
 } // namespace std
 #endif
 #endif
