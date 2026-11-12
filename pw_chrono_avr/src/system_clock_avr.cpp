@@ -26,7 +26,7 @@ volatile uint32_t g_system_clock_millis = 0;
 }  // namespace
 
 #if !defined(ARDUINO)
-#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega2560__)
+#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega2560__)
 ISR(TIMER0_COMPA_vect) {
   g_system_clock_millis++;
 }
@@ -39,7 +39,7 @@ void pw_chrono_avr_InitTimer0(void) {
 #if defined(ARDUINO)
   // Arduino Core initializes Timer0 at startup for millis() and micros()
 #else
-#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega2560__)
+#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega2560__)
   // Timer0 CTC mode (WGM01 = 1), Prescaler 64 (CS01=1, CS00=1)
   // At 16 MHz: 16000000 / 64 = 250000 ticks/sec -> 250 ticks = 1 ms (OCR0A = 249)
   TCCR0A = (1 << WGM01);
