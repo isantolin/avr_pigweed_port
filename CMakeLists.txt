@@ -250,6 +250,8 @@ pw_add_library(pw_crypto_avr STATIC
     pw_stream
     pw_log
 )
+# Emit GCC stack-usage metadata so CI can verify the bounded SHA-256 frame.
+target_compile_options(pw_crypto_avr PRIVATE -fstack-usage)
 
 pw_add_library(pw_crypto INTERFACE
   PUBLIC_INCLUDES
