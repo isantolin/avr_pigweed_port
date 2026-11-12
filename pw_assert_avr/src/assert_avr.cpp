@@ -38,11 +38,18 @@ void TxChar(char c) {
 #endif
 }
 
-void TxString_P(const char* PROGMEM str) {
+void TxString_P(const char* str) {
   if (str == nullptr) return;
   char c;
   while ((c = static_cast<char>(pgm_read_byte(str++))) != '\0') {
     TxChar(c);
+  }
+}
+
+void TxStringRam(const char* str) {
+  if (str == nullptr) return;
+  while (*str != '\0') {
+    TxChar(*str++);
   }
 }
 
@@ -90,11 +97,11 @@ void pw_assert_avr_HandleFailure(const char* file, int line, const char* express
 
   // Diagnostic line report over hardware serial - 0 bytes of SRAM used
   TxString_P(kMsgHeader);
-  TxString_P(file);
+  TxStringRam(file);
   TxString_P(kFileSeparator);
   TxInt(line);
   TxString_P(kExpressionSeparator);
-  TxString_P(expression);
+  TxStringRam(expression);
   TxString_P(kMsgEnd);
 
   while (true) {
