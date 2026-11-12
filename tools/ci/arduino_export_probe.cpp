@@ -2,6 +2,7 @@
 #include <cstddef>
 
 #include "PigweedAVR.h"
+#include "pw_transfer/handler_allocator.h"
 
 namespace {
 
