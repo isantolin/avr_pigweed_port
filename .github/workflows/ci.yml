@@ -113,6 +113,7 @@ jobs:
       - name: Report SHA-256 stack usage
         run: |
           compile_command="$(ninja -C build -t commands | grep 'sha256_avr.cpp' | tail -n 1)"
+          echo "SHA-256 compile command: ${compile_command}"
           if [[ "${compile_command}" != *"-fstack-usage"* ]]; then
             echo "SHA-256 compile command is missing -fstack-usage."
             exit 1
@@ -124,7 +125,7 @@ jobs:
           fi
           for report in "${stack_usage_files[@]}"; do
             echo "=== ${report} ==="
-            cat "${report}"
+            grep -E 'Transform|Hash|Update|Final' "${report}" || cat "${report}"
           done
 
       - name: Measure application firmware and test runner on ATmega2560
