@@ -5,7 +5,7 @@
 
 #if defined(ARDUINO)
 #include <Arduino.h>
-#else
+#elif defined(__AVR__)
 #include <avr/interrupt.h>
 #include <avr/io.h>
 #endif
