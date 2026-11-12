@@ -262,7 +262,6 @@ def export_library(dest_dir: Path):
             "pw_containers_intrusive_queue.cc",
             "pw_containers_var_len_entry.cc",
             "pw_containers_var_len_entry_queue_iterator.cc",
-            "pw_log_rate_limited.cc",
             "pw_transfer_atomic_file_transfer_handler.cc",
         # The Bridge uses fixed-lifetime stream handlers, not allocator-backed
         # file handlers; excluding this unused source avoids pulling in a
