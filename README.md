@@ -77,7 +77,7 @@ Detailed design, constraints, and validation status: [Cooperative upstream pw_tr
 
 ### End-to-end transfer probe
 
-The full read/write transfer probe is built separately for ATmega2560:
+The full read/write transfer probe is an isolated ATmega1284P component test (not an application target):
 
 ```sh
 cmake -B build-transfer -G Ninja \
@@ -94,15 +94,15 @@ The probe exercises read/write transfers, cancellation, recovery after a dropped
 
 ## Arduino library export
 
-The exporter packages upstream RPC client/server sources and cooperative transfer sources and generated protocol headers:
+The exporter packages upstream RPC client/server sources and, when generated bindings are available, cooperative transfer sources and generated protocol headers:
 
 ```sh
 python3 tools/export_arduino_library.py
 ```
 
-Run the CMake configure/build steps above first, including the ATmega2560 transfer probe, so the generated `pw_transfer` PWPB and raw-RPC headers exist. The exporter fails if the cooperative source patch or generated headers are missing.
+Run the CMake configure/build steps above first, including the ATmega1284P transfer probe, so the generated `pw_transfer` PWPB and raw-RPC headers exist. Host-only and non-Mega exports may omit those generated bindings; the exporter warns when they are absent. `PigweedAVR.h` exposes the transfer API only when compiling for ATmega2560.
 
-The exported umbrella header is `PigweedAVR.h`. It exposes upstream RPC and cooperative transfer headers and sets the AVR cooperative transfer configuration.
+The exported umbrella header is `PigweedAVR.h`. It exposes upstream RPC on supported Arduino targets and adds cooperative transfer headers/configuration only for ATmega2560.
 
 ## `pw_emu` + simavr
 
