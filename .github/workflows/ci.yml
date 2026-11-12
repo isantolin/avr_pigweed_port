@@ -112,24 +112,28 @@ jobs:
 
       - name: Report SHA-256 stack usage
         run: |
-          # Match the compiler invocation, not the later archive/link command
-          # which also contains the source/object name.
-          compile_command="$(ninja -C build -t commands | grep -E 'avr-g\+\+.*-c .*sha256_avr\.cpp' | head -n 1)"
-          echo "SHA-256 compile command: ${compile_command}"
+          # Re-run the exact compiler command as a standalone diagnostic object.
+          # GCC does not reliably emit .su side files for LTO objects; keep the
+          # production object untouched and disable LTO only for this report.
+          compile_command="$(ninja -C build -t commands | grep -E 'avr-g\\+\\+.*-c .*sha256_avr\\.cpp' | head -n 1)"
           if [[ -z "${compile_command}" || "${compile_command}" != *"-fstack-usage"* ]]; then
             echo "SHA-256 compiler invocation is missing -fstack-usage."
             exit 1
           fi
 
-          # ccache does not reliably preserve GCC .su side-output files.
-          # Rebuild only this object with the cache disabled so the report is real.
-          object="build/CMakeFiles/pw_crypto_avr.dir/pw_crypto_avr/src/sha256_avr.cpp.obj"
-          report="build/CMakeFiles/pw_crypto_avr.dir/pw_crypto_avr/src/sha256_avr.cpp.su"
-          rm -f "${object}" "${report}"
-          CCACHE_DISABLE=1 ninja -C build CMakeFiles/pw_crypto_avr.dir/pw_crypto_avr/src/sha256_avr.cpp.obj
+          diagnostic_command="${compile_command#ccache }"
+          diagnostic_command="${diagnostic_command// -flto / -fno-lto }"
+          diagnostic_command="${diagnostic_command/ -o CMakeFiles\\/pw_crypto_avr.dir\\/pw_crypto_avr\\/src\\/sha256_avr.cpp.obj / -o \/tmp\/sha256_stack_usage.o }"
+          diagnostic_command="${diagnostic_command/ -MF CMakeFiles\\/pw_crypto_avr.dir\\/pw_crypto_avr\\/src\\/sha256_avr.cpp.obj.d / }"
+          diagnostic_command="${diagnostic_command/ -MT CMakeFiles\\/pw_crypto_avr.dir\\/pw_crypto_avr\\/src\\/sha256_avr.cpp.obj / }"
+          diagnostic_command="${diagnostic_command} -fno-lto"
+          echo "Generating standalone SHA-256 stack report; production object is unchanged."
+          eval "${diagnostic_command}"
+
+          report="/tmp/sha256_stack_usage.su"
           if [[ ! -s "${report}" ]]; then
-            echo "SHA-256 stack-usage report was not generated at ${report}."
-            find build -type f -name '*.su' -print
+            echo "Compiler did not emit the expected stack-usage report."
+            find /tmp build -type f -name '*.su' -print
             exit 1
           fi
           echo "=== ${report} ==="
