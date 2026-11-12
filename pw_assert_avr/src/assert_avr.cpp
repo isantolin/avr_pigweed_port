@@ -95,7 +95,7 @@ void pw_assert_avr_HandleFailure(const char* file, int line, const char* express
     g_panic_hook(line);
   }
 
-  // Diagnostic line report over hardware serial - 0 bytes of SRAM used
+  // Emit diagnostics without allocating a temporary string buffer.
   TxString_P(kMsgHeader);
   TxStringRam(file);
   TxString_P(kFileSeparator);
