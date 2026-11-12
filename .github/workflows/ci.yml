@@ -110,6 +110,18 @@ jobs:
           fi
           tail -n 20 build/build.log
 
+      - name: Report SHA-256 stack usage
+        run: |
+          mapfile -t stack_usage_files < <(find build -type f -name '*.su' -path '*pw_crypto_avr*' -print)
+          if (( ${#stack_usage_files[@]} == 0 )); then
+            echo "No SHA-256 stack-usage report was generated."
+            exit 1
+          fi
+          for report in "${stack_usage_files[@]}"; do
+            echo "=== ${report} ==="
+            cat "${report}"
+          done
+
       - name: Measure application firmware and test runner on ATmega2560
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: |
