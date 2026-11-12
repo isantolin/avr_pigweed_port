@@ -16,13 +16,13 @@ namespace avr_port {
 
 enum class UartPort : uint8_t {
   kUsart0 = 0,
-#if defined(UDR1) || defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega2560__)
+#if defined(UDR1) || defined(__AVR_ATmega2560__)
   kUsart1 = 1,
 #endif
 };
 
 /// Hardware UART stream for bare-metal AVR and simavr simulation.
-/// Supports both USART0 (standard) and USART1 (ATmega32u4/Mega2560 communicating with OpenWrt).
+/// Supports both USART0 (standard) and USART1 (Mega2560 communicating with OpenWrt).
 class AvrUartStream final : public pw::stream::NonSeekableReaderWriter {
  public:
   explicit AvrUartStream(uint32_t baud_rate, UartPort port = UartPort::kUsart0)
