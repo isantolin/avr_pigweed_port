@@ -9,9 +9,9 @@ The port uses upstream **`pw_rpc`** and **`pw_transfer`**. The former custom `pw
 - **Transport:** upstream `pw_hdlc` over a bounded UART `pw::stream` adapter.
 - **RPC:** upstream `pw::rpc::Server`, `pw::rpc::Client`, and raw streaming APIs.
 - **Transfer:** upstream `pw_transfer::TransferService` and `pw_transfer::Client`, adapted for cooperative bare-metal execution.
-- **AVR backends:** local implementations only where hardware-specific behavior is required, including clock, logging, assertions, crypto, and UART.
+- **AVR backends:** local implementations only where hardware-specific behavior is required, including clock, logging, assertions, and UART. The standalone SHA-256 backend uses a 16-word rolling schedule to limit compression stack use.
 - **Simulation:** a `pw_emu` launcher/connector backed by `simavr` and a PTY UART.
-- **Build:** CMake + `avr-gcc`; Pigweed and the AVR C++ standard-library support are pinned submodules.
+- **Build:** CMake + `avr-gcc`; Pigweed and the AVR C++ standard-library support are pinned submodules. ATmega2560 is the minimum supported application target; smaller AVRs are used only for isolated component probes.
 
 The Pigweed revision used by the current RPC/transfer work is:
 
@@ -47,7 +47,7 @@ To use the smaller CRC implementation, configure with `-DAVR_CRC32_IMPL=PW_CHECK
 Run it with:
 
 ```sh
-simavr -m atmega328p build/pw_rpc_upstream_probe.elf
+simavr -m atmega1284p build-transfer/pw_rpc_upstream_probe.elf
 ```
 
 The firmware emits `PW_RPC_PROBE_PASS` only after the runtime assertions succeed.
