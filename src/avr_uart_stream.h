@@ -6,7 +6,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "arduino_stream.h"
 #include "pw_bytes/span.h"
 #include "pw_status/status.h"
 #include "pw_status/status_with_size.h"
