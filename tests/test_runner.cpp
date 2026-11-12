@@ -367,6 +367,10 @@ bool TestPwAssert() {
   PW_CHECK(2 * 2 == 4);
   PW_CHECK_OK(pw::OkStatus());
   PW_CHECK_INT_EQ(10, 10);
+  // Compile the fatal path without executing it.
+  if (false) {
+    PW_CRASH("compile-only fatal backend check");
+  }
   return true;
 }
 

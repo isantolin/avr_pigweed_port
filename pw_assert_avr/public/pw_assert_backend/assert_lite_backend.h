@@ -3,4 +3,6 @@
 
 #include "pw_assert_avr/assert_avr.h"
 
-#define PW_ASSERT_HANDLE_FAILURE() pw_assert_avr_HandleFailure(__FILE__, __LINE__, 0)
+// Legacy PW_ASSERT_LITE backend entry point.
+#define PW_ASSERT_LITE_HANDLE_FAILURE(expression) \
+  pw_assert_avr_HandleFailure(__FILE__, __LINE__, #expression)

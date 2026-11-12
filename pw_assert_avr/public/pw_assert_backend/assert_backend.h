@@ -3,5 +3,6 @@
 
 #include "pw_assert_avr/assert_avr.h"
 
-#define PW_ASSERT_HANDLE_FAILURE(condition_string) \
-  pw_assert_avr_HandleFailure(__FILE__, __LINE__, condition_string)
+// The PW_ASSERT facade supplies an expression, not its evaluated value.
+#define PW_ASSERT_HANDLE_FAILURE(expression) \
+  pw_assert_avr_HandleFailure(__FILE__, __LINE__, #expression)
