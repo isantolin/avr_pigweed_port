@@ -19,7 +19,7 @@ namespace avr_port {
 /// into Pigweed's pw::stream::NonSeekableReaderWriter interface.
 ///
 /// Benefits in Arduino Yún Bridge 2:
-/// - Supports Serial1 (USART1 connecting ATmega32u4 to Atheros AR9331 / OpenWrt).
+/// - Adapts the selected Arduino Stream, including Mega 2560 hardware UARTs used for the MPU link.
 /// - Non-blocking I/O leveraging Arduino Core's interrupt-driven circular RX/TX ring buffers.
 /// - Immune to single-byte hardware FIFO overrun.
 class ArduinoStream final : public pw::stream::NonSeekableReaderWriter {
