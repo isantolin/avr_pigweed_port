@@ -107,7 +107,6 @@ pw_add_library(pw_assert_avr STATIC
     pw_assert_avr/src/assert_avr.cpp
   PUBLIC_INCLUDES
     pw_assert_avr/public
-    pw_assert_avr/public_overrides
   PUBLIC_DEPS
     pw_preprocessor
 )
