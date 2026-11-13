@@ -723,7 +723,7 @@ index 550ac84e2..4b586d6d0 100644
    Event next_event_;
    Function<void(Status)> staged_on_completion_;
 diff --git a/pw_transfer/transfer_thread.cc b/pw_transfer/transfer_thread.cc
-index 76f774197..1dad74309 100644
+index 76f774197..bda6fa117 100644
 --- a/pw_transfer/transfer_thread.cc
 +++ b/pw_transfer/transfer_thread.cc
 @@ -31,23 +31,24 @@ PW_MODIFY_DIAGNOSTIC(ignored, "-Wmissing-field-initializers");
@@ -965,25 +965,19 @@ index 76f774197..1dad74309 100644
  }
  
  void TransferThread::SetClientReadStream(
-@@ -285,9 +446,17 @@ void TransferThread::SetClientReadStream(
+@@ -285,9 +446,11 @@ void TransferThread::SetClientReadStream(
      Function<void(ConstByteSpan)>&& on_next,
      internal::SetStreamBehavior behavior) {
    client_read_stream_.stream.set_on_next(nullptr);
-+#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
 +#if !defined(PW_TRANSFER_COOPERATIVE)
    if (!TryWaitForEventToProcess()) {
      return;
    }
 +#endif
-+#endif
-+#endif
-+#endif
    staged_client_stream_.stream = std::move(read_stream);
    staged_client_stream_.client = client;
    staged_client_on_next_ = std::move(on_next);
-@@ -298,14 +467,54 @@ void TransferThread::SetClientReadStream(
+@@ -298,14 +461,24 @@ void TransferThread::SetClientReadStream(
        .behavior = behavior,
    };
  
@@ -995,51 +989,21 @@ index 76f774197..1dad74309 100644
 +  HandleSetStreamEvent(next_event_.set_stream.stream,
 +                       next_event_.set_stream.behavior);
 +#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
 +  NotifyEvent();
    WaitUntilEventIsProcessed();
-+#endif
-+#endif
-+#endif
 +#endif
  }
  
  void TransferThread::CloseClientReadStream(Client* client) {
 +#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
    if (!TryWaitForEventToProcess()) {
      return;
    }
 +#endif
-+#endif
-+#endif
-+#endif
    staged_client_stream_.client = client;
  
    next_event_.type = EventType::kSetStream;
-@@ -314,8 +523,40 @@ void TransferThread::CloseClientReadStream(Client* client) {
+@@ -314,8 +487,16 @@ void TransferThread::CloseClientReadStream(Client* client) {
        .behavior = internal::SetStreamBehavior::kCloseStream,
    };
  
@@ -1051,55 +1015,25 @@ index 76f774197..1dad74309 100644
 +  HandleSetStreamEvent(next_event_.set_stream.stream,
 +                       next_event_.set_stream.behavior);
 +#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
 +  NotifyEvent();
    WaitUntilEventIsProcessed();
-+#endif
-+#endif
-+#endif
 +#endif
  }
  
  void TransferThread::SetClientWriteStream(
-@@ -324,9 +565,17 @@ void TransferThread::SetClientWriteStream(
+@@ -324,9 +505,11 @@ void TransferThread::SetClientWriteStream(
      Function<void(ConstByteSpan)>&& on_next,
      internal::SetStreamBehavior behavior) {
    client_write_stream_.stream.set_on_next(nullptr);
-+#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
 +#if !defined(PW_TRANSFER_COOPERATIVE)
    if (!TryWaitForEventToProcess()) {
      return;
    }
 +#endif
-+#endif
-+#endif
-+#endif
    staged_client_stream_.stream = std::move(write_stream);
    staged_client_stream_.client = client;
    staged_client_on_next_ = std::move(on_next);
-@@ -337,14 +586,54 @@ void TransferThread::SetClientWriteStream(
+@@ -337,14 +520,24 @@ void TransferThread::SetClientWriteStream(
        .behavior = behavior,
    };
  
@@ -1111,51 +1045,21 @@ index 76f774197..1dad74309 100644
 +  HandleSetStreamEvent(next_event_.set_stream.stream,
 +                       next_event_.set_stream.behavior);
 +#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
 +  NotifyEvent();
    WaitUntilEventIsProcessed();
-+#endif
-+#endif
-+#endif
 +#endif
  }
  
  void TransferThread::CloseClientWriteStream(Client* client) {
 +#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
    if (!TryWaitForEventToProcess()) {
      return;
    }
 +#endif
-+#endif
-+#endif
-+#endif
    staged_client_stream_.client = client;
  
    next_event_.type = EventType::kSetStream;
-@@ -353,17 +642,57 @@ void TransferThread::CloseClientWriteStream(Client* client) {
+@@ -353,17 +546,27 @@ void TransferThread::CloseClientWriteStream(Client* client) {
        .behavior = internal::SetStreamBehavior::kCloseStream,
    };
  
@@ -1167,32 +1071,8 @@ index 76f774197..1dad74309 100644
 +  HandleSetStreamEvent(next_event_.set_stream.stream,
 +                       next_event_.set_stream.behavior);
 +#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
 +  NotifyEvent();
    WaitUntilEventIsProcessed();
-+#endif
-+#endif
-+#endif
 +#endif
  }
  
@@ -1201,20 +1081,14 @@ index 76f774197..1dad74309 100644
      Function<void(ConstByteSpan)>&& on_next) {
    server_read_stream_.set_on_next(nullptr);
 +#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
    if (!TryWaitForEventToProcess()) {
      return;
    }
 +#endif
-+#endif
-+#endif
-+#endif
    staged_server_stream_ = std::move(read_stream);
    staged_server_on_next_ = std::move(on_next);
  
-@@ -373,17 +702,57 @@ void TransferThread::SetServerReadStream(
+@@ -373,17 +576,27 @@ void TransferThread::SetServerReadStream(
        .behavior = internal::SetStreamBehavior::kNewClient,
    };
  
@@ -1226,32 +1100,8 @@ index 76f774197..1dad74309 100644
 +  HandleSetStreamEvent(next_event_.set_stream.stream,
 +                       next_event_.set_stream.behavior);
 +#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
 +  NotifyEvent();
    WaitUntilEventIsProcessed();
-+#endif
-+#endif
-+#endif
 +#endif
  }
  
@@ -1260,20 +1110,14 @@ index 76f774197..1dad74309 100644
      Function<void(ConstByteSpan)>&& on_next) {
    server_write_stream_.set_on_next(nullptr);
 +#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
-+#if !defined(PW_TRANSFER_COOPERATIVE)
    if (!TryWaitForEventToProcess()) {
      return;
    }
 +#endif
-+#endif
-+#endif
-+#endif
    staged_server_stream_ = std::move(write_stream);
    staged_server_on_next_ = std::move(on_next);
  
-@@ -393,8 +762,40 @@ void TransferThread::SetServerWriteStream(
+@@ -393,8 +606,16 @@ void TransferThread::SetServerWriteStream(
        .behavior = internal::SetStreamBehavior::kNewClient,
    };
  
@@ -1285,37 +1129,13 @@ index 76f774197..1dad74309 100644
 +  HandleSetStreamEvent(next_event_.set_stream.stream,
 +                       next_event_.set_stream.behavior);
 +#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
-+#if defined(PW_TRANSFER_COOPERATIVE)
-+  // In the cooperative build this callback runs on the same owner loop as
-+  // Poll(). Install the RPC stream synchronously so the first incoming
-+  // transfer chunk cannot arrive before its on_next callback is attached.
-+  HandleSetStreamEvent(next_event_.set_stream.stream,
-+                       next_event_.set_stream.behavior);
-+#else
 +  NotifyEvent();
    WaitUntilEventIsProcessed();
-+#endif
-+#endif
-+#endif
 +#endif
  }
  
  void TransferThread::UpdateClientTransfer(uint32_t handle_id,
-@@ -407,7 +808,7 @@ void TransferThread::UpdateClientTransfer(uint32_t handle_id,
+@@ -407,7 +628,7 @@ void TransferThread::UpdateClientTransfer(uint32_t handle_id,
    next_event_.update_transfer.handle_id = handle_id;
    next_event_.update_transfer.transfer_size_bytes = transfer_size_bytes;
  
@@ -1324,7 +1144,7 @@ index 76f774197..1dad74309 100644
  }
  
  bool TransferThread::TransferHandlerEvent(EventType type, Handler& handler) {
-@@ -422,7 +823,7 @@ bool TransferThread::TransferHandlerEvent(EventType type, Handler& handler) {
+@@ -422,7 +643,7 @@ bool TransferThread::TransferHandlerEvent(EventType type, Handler& handler) {
      next_event_.remove_transfer_handler = &handler;
    }
  
@@ -1333,7 +1153,7 @@ index 76f774197..1dad74309 100644
    return true;
  }
  
-@@ -514,6 +915,13 @@ void TransferThread::HandleEvent(const internal::Event& event) {
+@@ -514,6 +735,13 @@ void TransferThread::HandleEvent(const internal::Event& event) {
  
    Context* ctx = FindContextForEvent(event);
    if (ctx == nullptr) {
@@ -1347,7 +1167,7 @@ index 76f774197..1dad74309 100644
      // No context was found. For new transfer events, report a
      // RESOURCE_EXHAUSTED error with starting the transfer.
      if (event.type == EventType::kNewClientTransfer) {
-@@ -532,6 +940,13 @@ void TransferThread::HandleEvent(const internal::Event& event) {
+@@ -532,6 +760,13 @@ void TransferThread::HandleEvent(const internal::Event& event) {
      return;
    }
  
@@ -1361,7 +1181,7 @@ index 76f774197..1dad74309 100644
    if (event.type == EventType::kNewClientTransfer) {
      // TODO(frolv): This is terrible.
      ClientContext* cctx = static_cast<ClientContext*>(ctx);
-@@ -546,6 +961,9 @@ void TransferThread::HandleEvent(const internal::Event& event) {
+@@ -546,6 +781,9 @@ void TransferThread::HandleEvent(const internal::Event& event) {
    }
  
    ctx->HandleEvent(event);
@@ -1371,7 +1191,7 @@ index 76f774197..1dad74309 100644
  }
  
  Context* TransferThread::FindContextForEvent(
-@@ -785,30 +1203,35 @@ void TransferThread::HandleSetStreamEvent(
+@@ -785,30 +1023,35 @@ void TransferThread::HandleSetStreamEvent(
  // GetResourceStatusEvent in process.
  void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
                                            ResourceStatusCallback&& callback) {
@@ -1416,7 +1236,7 @@ index 76f774197..1dad74309 100644
    stats.resource_id = resource_id;
  
    if (handler != handlers_.end()) {
-@@ -823,6 +1246,9 @@ void TransferThread::GetResourceState(uint32_t resource_id) {
+@@ -823,6 +1066,9 @@ void TransferThread::GetResourceState(uint32_t resource_id) {
    }
  
    resource_status_callback_ = nullptr;

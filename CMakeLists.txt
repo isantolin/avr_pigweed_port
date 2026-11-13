@@ -35,8 +35,8 @@ if(NOT _pw_patch_result EQUAL 0)
 endif()
 
 # Pigweed's PWPB plugin imports Python protos generated into the build tree.
-# apply_pigweed_patches.py mirrors these roots into the plugin's sys.path.
-# Pass those package roots to generate_protos.py through its PYTHONPATH hook.
+# Pass those package roots to generate_protos.py through its PYTHONPATH hook;
+# apply_pigweed_patches.py extends pw_rpc's package path so they resolve.
 # pw_protobuf's binary directory is build/pw_protobuf, not build/.
 set(_pw_generated_python_paths
   "${CMAKE_BINARY_DIR}/pw_protobuf/pw_protobuf.codegen_protos/python"
@@ -57,18 +57,6 @@ endif()
 set(ENV{PYTHONPATH} "${_pw_generated_pythonpath}")
 
 
-# Architectural patch for 16-bit integer architectures (AVR: sizeof(int) == 2, sizeof(long) == 4)
-set(_ARG_TYPES_FILE "${PW_ROOT}/pw_tokenizer/public/pw_tokenizer/internal/argument_types.h")
-if(EXISTS "${_ARG_TYPES_FILE}")
-  file(READ "${_ARG_TYPES_FILE}" _ARG_TYPES_CONTENT)
-  if(_ARG_TYPES_CONTENT MATCHES "sizeof\\(ArgType\\) == sizeof\\(int64_t\\)")
-    string(REPLACE
-      "} else if constexpr (sizeof(ArgType) == sizeof(int64_t)) {"
-      "} else if constexpr (sizeof(ArgType) > sizeof(int)) {\n    static_assert(sizeof(ArgType) <= sizeof(int64_t));"
-      _ARG_TYPES_CONTENT "${_ARG_TYPES_CONTENT}")
-    file(WRITE "${_ARG_TYPES_FILE}" "${_ARG_TYPES_CONTENT}")
-  endif()
-endif()
 set(pw_unit_test_ENABLE_PW_ADD_TEST OFF CACHE BOOL "" FORCE)
 include("${PW_ROOT}/pw_build/pigweed.cmake")
 include("${PW_ROOT}/pw_assert/backend.cmake")

@@ -724,16 +724,9 @@ def export_library(dest_dir: Path):
         if fuchsia_include.exists():
             shutil.copytree(fuchsia_include, src_dir, dirs_exist_ok=True)
 
-    # 4.1 Patch pw_tokenizer for 16-bit integer architectures (AVR: sizeof(int) == 2, sizeof(long) == 4)
-    arg_types_file = src_dir / "pw_tokenizer" / "internal" / "argument_types.h"
-    if arg_types_file.exists():
-        content = arg_types_file.read_text()
-        if "sizeof(ArgType) == sizeof(int64_t)" in content:
-            content = content.replace(
-                "} else if constexpr (sizeof(ArgType) == sizeof(int64_t)) {",
-                "} else if constexpr (sizeof(ArgType) > sizeof(int)) {\n    static_assert(sizeof(ArgType) <= sizeof(int64_t));",
-            )
-            arg_types_file.write_text(content)
+    # 4.1 The 16-bit pw_tokenizer argument-type fix is applied to the pinned
+    # source tree by tools/ci/apply_pigweed_patches.py (run above) and is
+    # inherited by the copied headers.
 
     # 4.2 Patch pw_containers/vector.h for GCC 7 compatibility (defaulted constructor noexcept mismatch)
     vec_file = src_dir / "pw_containers" / "vector.h"
