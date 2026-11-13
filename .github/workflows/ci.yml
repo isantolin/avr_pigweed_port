@@ -35,6 +35,10 @@ jobs:
         run: |
           bash tools/ci/audit_pigweed_rpc.sh
 
+      - name: Verify Pigweed AVR patch idempotence and reviewed patch file
+        run: |
+          bash tools/ci/check_pigweed_patches.sh
+
       - name: Upload pinned Pigweed source audit
         if: always() && matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         uses: actions/upload-artifact@v4

@@ -71,6 +71,17 @@ from pw_rpc.client import Client""",
   }""",
     )
 
+    # AVR has 16-bit int and 32-bit long. Upstream only classifies arguments
+    # wider than int when they are exactly int64_t-sized, so a 32-bit long
+    # would fall through to the int static_assert. Encode every argument wider
+    # than int as INT64 (the tokenizer's varint encoding is width-agnostic).
+    replace_once(
+        "pw_tokenizer/public/pw_tokenizer/internal/argument_types.h",
+        "  } else if constexpr (sizeof(ArgType) == sizeof(int64_t)) {",
+        "  } else if constexpr (sizeof(ArgType) > sizeof(int)) {\n"
+        "    static_assert(sizeof(ArgType) <= sizeof(int64_t));",
+    )
+
     # AVR's unsigned is 16-bit while transfer session IDs are 32-bit. Keep the
     # full value and use the matching %lu format in every log call.
     context_cc = PW_ROOT / "pw_transfer" / "context.cc"
@@ -700,9 +711,13 @@ from pw_rpc.client import Client""",
         )
         method_end = len(transfer_content) if next_method < 0 else next_method
         method_block = transfer_content[method_start:method_end]
-        if old_reserve in method_block:
+        # new_reserve embeds old_reserve, so test the patched form first to
+        # keep the transformation idempotent.
+        if new_reserve in method_block:
+            pass
+        elif old_reserve in method_block:
             method_block = method_block.replace(old_reserve, new_reserve, 1)
-        elif new_reserve not in method_block:
+        else:
             raise RuntimeError(f"could not find stream reservation in {signature}")
         transfer_content = (
             transfer_content[:method_start] + method_block + transfer_content[method_end:]
@@ -721,12 +736,18 @@ from pw_rpc.client import Client""",
   NotifyEvent();
   WaitUntilEventIsProcessed();
 #endif"""
+    # new_wait embeds old_wait in its #else branch, so test the patched form
+    # first to keep the transformation idempotent.
+    patched_wait_count = stream_tail.count(new_wait)
     wait_count = stream_tail.count(old_wait)
-    if wait_count == 6:
+    if patched_wait_count == 6:
+        pass
+    elif patched_wait_count == 0 and wait_count == 6:
         stream_tail = stream_tail.replace(old_wait, new_wait)
-    elif stream_tail.count(new_wait) != 6:
+    else:
         raise RuntimeError(
-            f"expected six stream callback waits or six already-patched waits; found {wait_count}"
+            "expected six stream callback waits or six already-patched waits; "
+            f"found {wait_count} unpatched and {patched_wait_count} patched"
         )
     transfer_content = transfer_content[:stream_start] + stream_tail
 

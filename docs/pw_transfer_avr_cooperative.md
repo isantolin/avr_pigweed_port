@@ -25,7 +25,7 @@ The implementation must remain suitable for bare-metal AVR:
 
 ## Cooperative event processing
 
-The AVR patch is applied to the exact pinned Pigweed source by `tools/ci/apply_pigweed_patches.py`. The patch is idempotent and is guarded by the upstream source signatures.
+The AVR patch is applied to the exact pinned Pigweed source by `tools/ci/apply_pigweed_patches.py`, the single source of truth for every Pigweed source modification (including the 16-bit `pw_tokenizer` argument-type fix). The patch is idempotent and is guarded by the upstream source signatures. `patches/0001-avr-pw-transfer-and-protobuf.patch` is the reviewable rendering of that scripted delta; `tools/ci/check_pigweed_patches.sh` (run in CI) fails if a second script run changes the tree or if the `.patch` file is stale. Regenerate it with `tools/ci/check_pigweed_patches.sh --update`.
 
 The cooperative implementation provides:
 
