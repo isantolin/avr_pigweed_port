@@ -1,5 +1,5 @@
 diff --git a/pw_protobuf/public/pw_protobuf/buffer_encoder.h b/pw_protobuf/public/pw_protobuf/buffer_encoder.h
-index 9a9a0c721..b16b17a60 100644
+index 9a9a0c7212c5d4889260f51276da27551860d926..b16b17a602e068cc2403f6cbed61d90ef6ad48fc 100644
 --- a/pw_protobuf/public/pw_protobuf/buffer_encoder.h
 +++ b/pw_protobuf/public/pw_protobuf/buffer_encoder.h
 @@ -18,6 +18,7 @@
@@ -69,7 +69,7 @@ index 9a9a0c721..b16b17a60 100644
  
    // Vector/Repeated support helpers (templated to avoid header dependencies)
 diff --git a/pw_protobuf/public/pw_protobuf/decoder.h b/pw_protobuf/public/pw_protobuf/decoder.h
-index 9282b6380..928bb483e 100644
+index 9282b638042629f7d6ff3eb9ea00eb8f64acbd86..928bb483e55ce9b80cf56a88488a05fb1cd0ab79 100644
 --- a/pw_protobuf/public/pw_protobuf/decoder.h
 +++ b/pw_protobuf/public/pw_protobuf/decoder.h
 @@ -175,9 +175,12 @@ class Decoder {
@@ -89,7 +89,7 @@ index 9282b6380..928bb483e 100644
  
    /// Reads a proto `string` value from the current cursor position as a view.
 diff --git a/pw_protobuf/public/pw_protobuf/encoder.h b/pw_protobuf/public/pw_protobuf/encoder.h
-index 232e94caf..63c15f12c 100644
+index 232e94cafc45399dbfb67a2fc194db120367bab7..63c15f12c14aa4c98c401fe34c3d204b07fe6221 100644
 --- a/pw_protobuf/public/pw_protobuf/encoder.h
 +++ b/pw_protobuf/public/pw_protobuf/encoder.h
 @@ -638,20 +638,30 @@ class StreamEncoder {
@@ -146,7 +146,7 @@ index 232e94caf..63c15f12c 100644
  
    /// Writes a proto `bytes` field as a key-value pair. This can also be used to
 diff --git a/pw_protobuf/public/pw_protobuf/internal/codegen.h b/pw_protobuf/public/pw_protobuf/internal/codegen.h
-index 7c8017669..e244c3bc3 100644
+index 7c801766916446c330e4bafd2395d37d2f06eeda..e244c3bc391888687146dae3d5bc3a5b2668b685 100644
 --- a/pw_protobuf/public/pw_protobuf/internal/codegen.h
 +++ b/pw_protobuf/public/pw_protobuf/internal/codegen.h
 @@ -64,7 +64,7 @@ enum class CallbackType {
@@ -173,7 +173,7 @@ index 7c8017669..e244c3bc3 100644
  // Traits for a generated PWPB Message struct, specialized by codegen.
  template <typename T>
 diff --git a/pw_protobuf/public/pw_protobuf/serialized_size.h b/pw_protobuf/public/pw_protobuf/serialized_size.h
-index 4d7365d5d..4d0de964f 100644
+index 4d7365d5ded1d56616fa6d2564f50f1b4d4408a6..4d0de964fc48f3e0623bfd89e6b8340e8a34c080 100644
 --- a/pw_protobuf/public/pw_protobuf/serialized_size.h
 +++ b/pw_protobuf/public/pw_protobuf/serialized_size.h
 @@ -132,7 +132,7 @@ constexpr size_t SizeOfFieldFloat(T field_number) {
@@ -186,7 +186,7 @@ index 4d7365d5d..4d0de964f 100644
  template <typename T>
  constexpr size_t SizeOfFieldInt32(T field_number, int32_t value = -1) {
 diff --git a/pw_protobuf/public/pw_protobuf/stream_decoder.h b/pw_protobuf/public/pw_protobuf/stream_decoder.h
-index c7a8667e0..48452fdfe 100644
+index c7a8667e0d802e1607f6a228a81a5981a365db50..48452fdfe65212f9be1483bef7b14b85c9ea91d3 100644
 --- a/pw_protobuf/public/pw_protobuf/stream_decoder.h
 +++ b/pw_protobuf/public/pw_protobuf/stream_decoder.h
 @@ -499,9 +499,11 @@ class StreamDecoder {
@@ -235,7 +235,7 @@ index c7a8667e0..48452fdfe 100644
  
    /// Reads a proto `string` value from the current position into the provided
 diff --git a/pw_protobuf/public/pw_protobuf/wire_format.h b/pw_protobuf/public/pw_protobuf/wire_format.h
-index 71acd3725..8bb7ab7fb 100644
+index 71acd3725dd785007a5cb0dc851140d6b9b89492..8bb7ab7fb222aecd3814bfdf52821fbdb94b44c7 100644
 --- a/pw_protobuf/public/pw_protobuf/wire_format.h
 +++ b/pw_protobuf/public/pw_protobuf/wire_format.h
 @@ -25,7 +25,7 @@ namespace pw::protobuf {
@@ -248,7 +248,7 @@ index 71acd3725..8bb7ab7fb 100644
  inline constexpr static uint32_t kLastReservedNumber = 19999;
  
 diff --git a/pw_rpc/py/pw_rpc/__init__.py b/pw_rpc/py/pw_rpc/__init__.py
-index 45948b19b..d168f2041 100644
+index 45948b19b214ab30cb1b1fbbf7f90445aa81fc7b..d168f20414838fc6ad689336c37d0df6b39c2860 100644
 --- a/pw_rpc/py/pw_rpc/__init__.py
 +++ b/pw_rpc/py/pw_rpc/__init__.py
 @@ -17,5 +17,11 @@ from pkgutil import extend_path  # type: ignore
@@ -264,7 +264,7 @@ index 45948b19b..d168f2041 100644
  from pw_rpc.client import Client
  from pw_rpc.descriptors import Channel, ChannelManipulator
 diff --git a/pw_tokenizer/public/pw_tokenizer/internal/argument_types.h b/pw_tokenizer/public/pw_tokenizer/internal/argument_types.h
-index b1c77db07..461d43144 100644
+index b1c77db0792120cece6f95df8f44cbd0562cf2be..461d43144c136ccc6edb68699c000d9237814b78 100644
 --- a/pw_tokenizer/public/pw_tokenizer/internal/argument_types.h
 +++ b/pw_tokenizer/public/pw_tokenizer/internal/argument_types.h
 @@ -96,7 +96,8 @@ constexpr pw_tokenizer_ArgTypes VarargsType() {
@@ -278,7 +278,7 @@ index b1c77db07..461d43144 100644
    } else {
      static_assert(sizeof(ArgType) <= sizeof(int));
 diff --git a/pw_transfer/context.cc b/pw_transfer/context.cc
-index db7642e0e..865d1c4f8 100644
+index db7642e0e0d162801c301e46033e7513863b87c5..865d1c4f8fe2f7ccaaa5f7358ce93f6488699162 100644
 --- a/pw_transfer/context.cc
 +++ b/pw_transfer/context.cc
 @@ -478,6 +478,9 @@ void Context::PerformInitialHandshake(const Chunk& chunk) {
@@ -437,7 +437,7 @@ index db7642e0e..865d1c4f8 100644
  
  uint32_t Context::MaxWriteChunkSize(uint32_t max_chunk_size_bytes,
 diff --git a/pw_transfer/public/pw_transfer/internal/context.h b/pw_transfer/public/pw_transfer/internal/context.h
-index c06b40252..db445d7ba 100644
+index c06b402529ea58dc7e01c9c0342ec00e499946de..db445d7bae9a14e422c795ceca7c70c894e3778d 100644
 --- a/pw_transfer/public/pw_transfer/internal/context.h
 +++ b/pw_transfer/public/pw_transfer/internal/context.h
 @@ -227,10 +227,10 @@ class Context {
@@ -456,7 +456,7 @@ index c06b40252..db445d7ba 100644
  
    stream::Writer& writer() {
 diff --git a/pw_transfer/public/pw_transfer/transfer.h b/pw_transfer/public/pw_transfer/transfer.h
-index 85af43605..cfd828d87 100644
+index 85af436055b423d2fdacbc359c36d37a2a9af96f..cfd828d8736b6bdeef25ac46c2b0b678f087d6d8 100644
 --- a/pw_transfer/public/pw_transfer/transfer.h
 +++ b/pw_transfer/public/pw_transfer/transfer.h
 @@ -18,7 +18,11 @@
@@ -484,7 +484,7 @@ index 85af43605..cfd828d87 100644
        PW_GUARDED_BY(resource_responder_mutex_);
  
 diff --git a/pw_transfer/public/pw_transfer/transfer_thread.h b/pw_transfer/public/pw_transfer/transfer_thread.h
-index 550ac84e2..4b586d6d0 100644
+index 550ac84e290f19ede4ad18a6ab42e7a636d8163c..4b586d6d06884d8e8294dda2f10b5e187a5ae888 100644
 --- a/pw_transfer/public/pw_transfer/transfer_thread.h
 +++ b/pw_transfer/public/pw_transfer/transfer_thread.h
 @@ -21,10 +21,24 @@
@@ -723,7 +723,7 @@ index 550ac84e2..4b586d6d0 100644
    Event next_event_;
    Function<void(Status)> staged_on_completion_;
 diff --git a/pw_transfer/transfer_thread.cc b/pw_transfer/transfer_thread.cc
-index 76f774197..bda6fa117 100644
+index 76f7741977ae653c5c3b30e0e2becac43211b25d..bda6fa1172c944d541d6ae05c531ace6753c9ef7 100644
 --- a/pw_transfer/transfer_thread.cc
 +++ b/pw_transfer/transfer_thread.cc
 @@ -31,23 +31,24 @@ PW_MODIFY_DIAGNOSTIC(ignored, "-Wmissing-field-initializers");
@@ -1247,7 +1247,7 @@ index 76f774197..bda6fa117 100644
  
  rpc::Writer& TransferThread::stream_for(TransferStream stream) {
 diff --git a/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/bit.h b/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/bit.h
-index 37f0de1cc..42324eec0 100644
+index 37f0de1cc47de16249aed698fa01e3ea736732dd..42324eec0b7e80e080401e4109779c3964f53111 100644
 --- a/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/bit.h
 +++ b/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/bit.h
 @@ -173,7 +173,7 @@ using std::endian;
@@ -1260,7 +1260,7 @@ index 37f0de1cc..42324eec0 100644
    big = 0xB16,
    native = internal::native_endianess<little, big>(),
 diff --git a/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/internal/bit.h b/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/internal/bit.h
-index 62f046a74..079d488ec 100644
+index 62f046a747c3473844752a67d0f15f53d4220bf2..079d488eca689b51057f593f889e05d11061f5f4 100644
 --- a/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/internal/bit.h
 +++ b/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/internal/bit.h
 @@ -5,6 +5,7 @@
