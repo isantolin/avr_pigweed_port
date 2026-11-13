@@ -1,0 +1,1464 @@
+diff --git a/pw_protobuf/public/pw_protobuf/buffer_encoder.h b/pw_protobuf/public/pw_protobuf/buffer_encoder.h
+index 9a9a0c721..b16b17a60 100644
+--- a/pw_protobuf/public/pw_protobuf/buffer_encoder.h
++++ b/pw_protobuf/public/pw_protobuf/buffer_encoder.h
+@@ -18,6 +18,7 @@
+ #include <string_view>
+ #include <type_traits>
+ 
++#include "pw_assert/check.h"
+ #include "pw_bytes/span.h"
+ #include "pw_protobuf/serialized_size.h"
+ #include "pw_protobuf/wire_format.h"
+@@ -296,14 +297,26 @@ class BufferEncoderView {
+   }
+ 
+   void UncheckedWriteDouble(uint32_t field_number, double value) {
+-    UncheckedWriteTag(field_number, WireType::kFixed64);
+-    UncheckedWriteBytes(&value, sizeof(value));
++    if constexpr (sizeof(double) != sizeof(uint64_t)) {
++      (void)field_number;
++      (void)value;
++      PW_CRASH("Protobuf double requires a 64-bit native double");
++    } else {
++      UncheckedWriteTag(field_number, WireType::kFixed64);
++      UncheckedWriteBytes(&value, sizeof(value));
++    }
+   }
+   pw::Status WriteDouble(uint32_t field_number, double value) {
+-    if (EnsureSpace(TagSizeBytes(field_number) + kMaxSizeBytesDouble)) {
+-      UncheckedWriteDouble(field_number, value);
++    if constexpr (sizeof(double) != sizeof(uint64_t)) {
++      (void)field_number;
++      (void)value;
++      return Status::Unimplemented();
++    } else {
++      if (EnsureSpace(TagSizeBytes(field_number) + kMaxSizeBytesDouble)) {
++        UncheckedWriteDouble(field_number, value);
++      }
++      return status();
+     }
+-    return status();
+   }
+ 
+   // Delimited types
+@@ -543,11 +556,23 @@ class BufferEncoderView {
+ 
+   void UncheckedWritePackedDouble(uint32_t field_number,
+                                   span<const double> values) {
+-    UncheckedWritePackedFixed(field_number, as_bytes(values), sizeof(double));
++    if constexpr (sizeof(double) != sizeof(uint64_t)) {
++      (void)field_number;
++      (void)values;
++      PW_CRASH("Protobuf double requires a 64-bit native double");
++    } else {
++      UncheckedWritePackedFixed(field_number, as_bytes(values), sizeof(double));
++    }
+   }
+   pw::Status WritePackedDouble(uint32_t field_number,
+                                span<const double> values) {
+-    return WritePackedFixed(field_number, as_bytes(values), sizeof(double));
++    if constexpr (sizeof(double) != sizeof(uint64_t)) {
++      (void)field_number;
++      (void)values;
++      return Status::Unimplemented();
++    } else {
++      return WritePackedFixed(field_number, as_bytes(values), sizeof(double));
++    }
+   }
+ 
+   // Vector/Repeated support helpers (templated to avoid header dependencies)
+diff --git a/pw_protobuf/public/pw_protobuf/decoder.h b/pw_protobuf/public/pw_protobuf/decoder.h
+index 9282b6380..928bb483e 100644
+--- a/pw_protobuf/public/pw_protobuf/decoder.h
++++ b/pw_protobuf/public/pw_protobuf/decoder.h
+@@ -175,9 +175,12 @@ class Decoder {
+   ///
+   /// @param[out] out Pointer to store the read `double` value.
+   Status ReadDouble(double* out) {
+-    static_assert(sizeof(double) == sizeof(uint64_t),
+-                  "Double and uint64_t must be the same size for protobufs");
+-    return ReadFixed(out);
++    if constexpr (sizeof(double) != sizeof(uint64_t)) {
++      (void)out;
++      return Status::Unimplemented();
++    } else {
++      return ReadFixed(out);
++    }
+   }
+ 
+   /// Reads a proto `string` value from the current cursor position as a view.
+diff --git a/pw_protobuf/public/pw_protobuf/encoder.h b/pw_protobuf/public/pw_protobuf/encoder.h
+index 232e94caf..63c15f12c 100644
+--- a/pw_protobuf/public/pw_protobuf/encoder.h
++++ b/pw_protobuf/public/pw_protobuf/encoder.h
+@@ -638,20 +638,30 @@ class StreamEncoder {
+   ///
+   /// @pre Encoder has no active child encoder.
+   Status WriteDouble(uint32_t field_number, double value) {
+-    static_assert(sizeof(double) == sizeof(uint64_t),
+-                  "Double and uint64_t are not the same size");
++#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8
+     uint64_t integral_value;
+     std::memcpy(&integral_value, &value, sizeof(value));
+     std::array<std::byte, sizeof(value)> data =
+         bytes::CopyInOrder(endian::little, integral_value);
+     return WriteFixed(field_number, data);
++#else
++    (void)field_number;
++    (void)value;
++    return Status::Unimplemented();
++#endif
+   }
+ 
+   /// Writes a repeated `double` field using packed encoding.
+   ///
+   /// @pre Encoder has no active child encoder.
+   Status WritePackedDouble(uint32_t field_number, span<const double> values) {
+-    return WritePackedFixed(field_number, as_bytes(values), sizeof(double));
++    if constexpr (sizeof(double) != sizeof(uint64_t)) {
++      (void)field_number;
++      (void)values;
++      return Status::Unimplemented();
++    } else {
++      return WritePackedFixed(field_number, as_bytes(values), sizeof(double));
++    }
+   }
+ 
+   /// Writes a repeated `double` field using packed encoding.
+@@ -659,9 +669,15 @@ class StreamEncoder {
+   /// @pre Encoder has no active child encoder.
+   Status WriteRepeatedDouble(uint32_t field_number,
+                              const pw::Vector<double>& values) {
+-    return WritePackedFixed(field_number,
+-                            as_bytes(span(values.data(), values.size())),
+-                            sizeof(double));
++    if constexpr (sizeof(double) != sizeof(uint64_t)) {
++      (void)field_number;
++      (void)values;
++      return Status::Unimplemented();
++    } else {
++      return WritePackedFixed(field_number,
++                              as_bytes(span(values.data(), values.size())),
++                              sizeof(double));
++    }
+   }
+ 
+   /// Writes a proto `bytes` field as a key-value pair. This can also be used to
+diff --git a/pw_protobuf/public/pw_protobuf/internal/codegen.h b/pw_protobuf/public/pw_protobuf/internal/codegen.h
+index 7c8017669..e244c3bc3 100644
+--- a/pw_protobuf/public/pw_protobuf/internal/codegen.h
++++ b/pw_protobuf/public/pw_protobuf/internal/codegen.h
+@@ -64,7 +64,7 @@ enum class CallbackType {
+ // is only the size of a pointer to that span.
+ class MessageField {
+  public:
+-  static constexpr unsigned int kMaxFieldSize = (1u << 16) - 1;
++  static constexpr uint32_t kMaxFieldSize = (uint32_t{1} << 16) - 1;
+ 
+   constexpr MessageField(uint32_t field_number,
+                          WireType wire_type,
+@@ -174,8 +174,11 @@ class MessageField {
+   // TODO: b/234875722 - Could be replaced by a class MessageDescriptor*
+   const span<const MessageField>* nested_message_fields_;
+ };
+-static_assert(sizeof(MessageField) <= sizeof(size_t) * 4,
+-              "MessageField should be four words or less");
++static_assert(
++    sizeof(MessageField) <=
++        (sizeof(size_t) < sizeof(uint32_t) ? sizeof(uint32_t) * 4
++                                           : sizeof(size_t) * 4),
++    "MessageField should be four 32-bit words or less on 16-bit targets");
+ 
+ // Traits for a generated PWPB Message struct, specialized by codegen.
+ template <typename T>
+diff --git a/pw_protobuf/public/pw_protobuf/serialized_size.h b/pw_protobuf/public/pw_protobuf/serialized_size.h
+index 4d7365d5d..4d0de964f 100644
+--- a/pw_protobuf/public/pw_protobuf/serialized_size.h
++++ b/pw_protobuf/public/pw_protobuf/serialized_size.h
+@@ -132,7 +132,7 @@ constexpr size_t SizeOfFieldFloat(T field_number) {
+ }
+ template <typename T>
+ constexpr size_t SizeOfFieldDouble(T field_number) {
+-  return TagSizeBytes(field_number) + sizeof(double);
++  return TagSizeBytes(field_number) + kMaxSizeBytesDouble;
+ }
+ template <typename T>
+ constexpr size_t SizeOfFieldInt32(T field_number, int32_t value = -1) {
+diff --git a/pw_protobuf/public/pw_protobuf/stream_decoder.h b/pw_protobuf/public/pw_protobuf/stream_decoder.h
+index c7a8667e0..48452fdfe 100644
+--- a/pw_protobuf/public/pw_protobuf/stream_decoder.h
++++ b/pw_protobuf/public/pw_protobuf/stream_decoder.h
+@@ -499,9 +499,11 @@ class StreamDecoder {
+ 
+   /// Reads a proto `double` value from the current position.
+   Result<double> ReadDouble() {
+-    static_assert(sizeof(double) == sizeof(uint64_t),
+-                  "Double and uint64_t must be the same size for protobufs");
+-    return ReadFixedField<double>();
++    if constexpr (sizeof(double) != sizeof(uint64_t)) {
++      return Status::Unimplemented();
++    } else {
++      return ReadFixedField<double>();
++    }
+   }
+ 
+   /// Reads repeated `double` values from the current position using packed
+@@ -510,9 +512,12 @@ class StreamDecoder {
+   /// @param[out] out Destination span for read values.
+   /// @returns Status with the number of values successfully read.
+   StatusWithSize ReadPackedDouble(span<double> out) {
+-    static_assert(sizeof(double) == sizeof(uint64_t),
+-                  "Double and uint64_t must be the same size for protobufs");
+-    return ReadPackedFixedField(as_writable_bytes(out), sizeof(double));
++    if constexpr (sizeof(double) != sizeof(uint64_t)) {
++      (void)out;
++      return StatusWithSize::Unimplemented();
++    } else {
++      return ReadPackedFixedField(as_writable_bytes(out), sizeof(double));
++    }
+   }
+ 
+   /// Reads repeated `double` values from the current position into the vector,
+@@ -520,7 +525,12 @@ class StreamDecoder {
+   ///
+   /// @param[out] out Vector where values will be appended.
+   Status ReadRepeatedDouble(pw::Vector<double>& out) {
+-    return ReadRepeatedFixedField<double>(out);
++    if constexpr (sizeof(double) != sizeof(uint64_t)) {
++      (void)out;
++      return Status::Unimplemented();
++    } else {
++      return ReadRepeatedFixedField<double>(out);
++    }
+   }
+ 
+   /// Reads a proto `string` value from the current position into the provided
+diff --git a/pw_protobuf/public/pw_protobuf/wire_format.h b/pw_protobuf/public/pw_protobuf/wire_format.h
+index 71acd3725..8bb7ab7fb 100644
+--- a/pw_protobuf/public/pw_protobuf/wire_format.h
++++ b/pw_protobuf/public/pw_protobuf/wire_format.h
+@@ -25,7 +25,7 @@ namespace pw::protobuf {
+ /// Per the protobuf specification, valid field numbers range between `1` and
+ /// `2^29 - 1`, inclusive. The numbers `19000` to `19999` are reserved for
+ /// internal use by protobuf implementations.
+-inline constexpr static uint32_t kMaxFieldNumber = (1u << 29) - 1;
++inline constexpr static uint32_t kMaxFieldNumber = (uint32_t{1} << 29) - 1;
+ inline constexpr static uint32_t kFirstReservedNumber = 19000;
+ inline constexpr static uint32_t kLastReservedNumber = 19999;
+ 
+diff --git a/pw_rpc/py/pw_rpc/__init__.py b/pw_rpc/py/pw_rpc/__init__.py
+index 45948b19b..d168f2041 100644
+--- a/pw_rpc/py/pw_rpc/__init__.py
++++ b/pw_rpc/py/pw_rpc/__init__.py
+@@ -17,5 +17,11 @@ from pkgutil import extend_path  # type: ignore
+ 
+ __path__ = extend_path(__path__, __name__)  # type: ignore
+ 
++from pkgutil import extend_path
++
++# Generated pw_rpc.protos Python modules live in a sibling build directory.
++# Extend this package so pw_rpc.internal.packet_pb2 is importable by protoc.
++__path__ = extend_path(__path__, __name__)
++
+ from pw_rpc.client import Client
+ from pw_rpc.descriptors import Channel, ChannelManipulator
+diff --git a/pw_tokenizer/public/pw_tokenizer/internal/argument_types.h b/pw_tokenizer/public/pw_tokenizer/internal/argument_types.h
+index b1c77db07..461d43144 100644
+--- a/pw_tokenizer/public/pw_tokenizer/internal/argument_types.h
++++ b/pw_tokenizer/public/pw_tokenizer/internal/argument_types.h
+@@ -96,7 +96,8 @@ constexpr pw_tokenizer_ArgTypes VarargsType() {
+   } else if constexpr (!std::is_null_pointer<ArgType>() &&
+                        std::is_convertible<ArgType, const char*>()) {
+     return PW_TOKENIZER_ARG_TYPE_STRING;
+-  } else if constexpr (sizeof(ArgType) == sizeof(int64_t)) {
++  } else if constexpr (sizeof(ArgType) > sizeof(int)) {
++    static_assert(sizeof(ArgType) <= sizeof(int64_t));
+     return PW_TOKENIZER_ARG_TYPE_INT64;
+   } else {
+     static_assert(sizeof(ArgType) <= sizeof(int));
+diff --git a/pw_transfer/context.cc b/pw_transfer/context.cc
+index db7642e0e..865d1c4f8 100644
+--- a/pw_transfer/context.cc
++++ b/pw_transfer/context.cc
+@@ -478,6 +478,9 @@ void Context::PerformInitialHandshake(const Chunk& chunk) {
+       start_ack.set_initial_offset(offset_);
+ 
+       EncodeAndSendChunk(start_ack);
++#if defined(PW_TRANSFER_COOPERATIVE)
++      SetTimeout(chunk_timeout_);
++#endif
+       break;
+     }
+ 
+@@ -550,7 +553,7 @@ void Context::PerformInitialHandshake(const Chunk& chunk) {
+       set_transfer_state(TransferState::kWaiting);
+ 
+       PW_LOG_DEBUG(
+-          "Transfer %u tried to start on protocol version %d, but peer only "
++          "Transfer %lu tried to start on protocol version %d, but peer only "
+           "supports legacy",
+           id_for_log(),
+           static_cast<int>(desired_protocol_version_));
+@@ -579,7 +582,7 @@ void Context::UpdateLocalProtocolConfigurationFromPeer(const Chunk& chunk) {
+   configured_protocol_version_ =
+       std::min(desired_protocol_version_, chunk.protocol_version());
+ 
+-  PW_LOG_INFO("Transfer %u: using protocol version %d",
++  PW_LOG_INFO("Transfer %lu: using protocol version %d",
+               id_for_log(),
+               static_cast<int>(configured_protocol_version_));
+ }
+@@ -610,7 +613,7 @@ void Context::HandleTransmitChunk(const Chunk& chunk) {
+         HandleTransferParametersUpdate(chunk);
+       } else {
+         PW_LOG_ERROR(
+-            "Transmit transfer %u was configured to use protocol version %d "
++            "Transmit transfer %lu was configured to use protocol version %d "
+             "but received a chunk with version %d",
+             id_for_log(),
+             static_cast<int>(configured_protocol_version_),
+@@ -658,7 +661,7 @@ void Context::HandleTransferParametersUpdate(const Chunk& chunk) {
+ 
+     offset_ = chunk.offset();
+   } else if (chunk.window_end_offset() <= offset_) {
+-    PW_LOG_DEBUG("Transfer %u ignoring old rolling window chunk", id_for_log());
++    PW_LOG_DEBUG("Transfer %lu ignoring old rolling window chunk", id_for_log());
+     SetTimeout(chunk_timeout_);
+     return;
+   }
+@@ -745,13 +748,13 @@ void Context::TransmitNextChunk(bool retransmit_requested) {
+     if (offset_ == window_end_offset_) {
+       if (retransmit_requested) {
+         PW_LOG_ERROR(
+-            "Transfer %u: received an empty retransmit request, but there is "
++            "Transfer %lu: received an empty retransmit request, but there is "
+             "still data to send; aborting with RESOURCE_EXHAUSTED",
+             id_for_log());
+         TerminateTransfer(Status::ResourceExhausted());
+       } else {
+         PW_LOG_DEBUG(
+-            "Transfer %u: ignoring continuation packet for transfer window "
++            "Transfer %lu: ignoring continuation packet for transfer window "
+             "that has already been sent",
+             id_for_log());
+         SetTimeout(chunk_timeout_);
+@@ -827,7 +830,7 @@ void Context::HandleReceiveChunk(const Chunk& chunk) {
+ 
+   if (chunk.protocol_version() != configured_protocol_version_) {
+     PW_LOG_ERROR(
+-        "Receive transfer %u was configured to use protocol version %d "
++        "Receive transfer %lu was configured to use protocol version %d "
+         "but received a chunk with version %d",
+         id_for_log(),
+         static_cast<int>(configured_protocol_version_),
+@@ -905,7 +908,7 @@ void Context::HandleReceivedData(const Chunk& chunk) {
+       //
+       // Start ack confs do not come with an offset set, so it can get stuck
+       // here if we are doing an offset transfer.
+-      PW_LOG_DEBUG("Transfer %u received duplicate chunk with offset %u",
++      PW_LOG_DEBUG("Transfer %lu received duplicate chunk with offset %u",
+                    id_for_log(),
+                    static_cast<unsigned>(chunk.offset()));
+       UpdateTransferParameters(TransmitAction::kRetransmit);
+@@ -929,7 +932,7 @@ void Context::HandleReceivedData(const Chunk& chunk) {
+ 
+   if (chunk.offset() + chunk.payload().size() > window_end_offset_) {
+     PW_LOG_WARN(
+-        "Transfer %u received more data than what was requested (%u received "
++        "Transfer %lu received more data than what was requested (%u received "
+         "for %u pending); attempting to recover.",
+         id_for_log(),
+         static_cast<unsigned>(chunk.payload().size()),
+@@ -982,7 +985,7 @@ void Context::HandleReceivedData(const Chunk& chunk) {
+   if (chunk.window_end_offset() != 0) {
+     if (chunk.window_end_offset() < offset_) {
+       PW_LOG_ERROR(
+-          "Transfer %u got invalid end offset of %u (current offset %u)",
++          "Transfer %lu got invalid end offset of %u (current offset %u)",
+           id_for_log(),
+           static_cast<unsigned>(chunk.window_end_offset()),
+           static_cast<unsigned>(offset_));
+@@ -995,7 +998,7 @@ void Context::HandleReceivedData(const Chunk& chunk) {
+       // receiver has advertised. If this occurs, there is a bug in the
+       // transmitter implementation. Terminate the transfer.
+       PW_LOG_ERROR(
+-          "Transfer %u transmitter sent invalid end offset of %u, "
++          "Transfer %lu transmitter sent invalid end offset of %u, "
+           "greater than receiver offset %u",
+           id_for_log(),
+           static_cast<unsigned>(chunk.window_end_offset()),
+@@ -1039,7 +1042,7 @@ void Context::HandleTerminatingChunk(const Chunk& chunk) {
+ 
+     case Chunk::Type::kCompletionAck:
+       PW_LOG_INFO(
+-          "Transfer %u completed with status %u", id_for_log(), status_.code());
++          "Transfer %lu completed with status %u", id_for_log(), status_.code());
+       SetInactive();
+       break;
+ 
+@@ -1113,7 +1116,7 @@ void Context::SendFinalStatusChunk(bool with_resource_id) {
+     // version for the status chunk.
+     configured_protocol_version_ = desired_protocol_version_;
+     PW_LOG_WARN(
+-        "Transfer %u ending before protocol version was confirmed; using "
++        "Transfer %lu ending before protocol version was confirmed; using "
+         "version %u",
+         id_for_log(),
+         static_cast<unsigned>(desired_protocol_version_));
+@@ -1188,7 +1191,7 @@ void Context::HandleTimeout() {
+ void Context::Retry() {
+   if (retries_ == max_retries_ || lifetime_retries_ == max_lifetime_retries_) {
+     PW_LOG_ERROR(
+-        "Transfer %u failed to receive a chunk after %u retries (lifetime %u).",
++        "Transfer %lu failed to receive a chunk after %u retries (lifetime %u).",
+         id_for_log(),
+         static_cast<unsigned>(retries_),
+         static_cast<unsigned>(lifetime_retries_));
+@@ -1242,7 +1245,7 @@ void Context::Retry() {
+   // Otherwise, resend the most recent chunk. If the reader doesn't support
+   // seeking, this isn't possible, so just terminate the transfer immediately.
+   if (!SeekReader(last_chunk_offset_).ok()) {
+-    PW_LOG_ERROR("Transmit transfer %u timed out waiting for new parameters.",
++    PW_LOG_ERROR("Transmit transfer %lu timed out waiting for new parameters.",
+                  id_for_log());
+     PW_LOG_ERROR("Retrying requires a seekable reader. Alas, ours is not.");
+     TerminateTransfer(Status::DeadlineExceeded());
+@@ -1292,6 +1295,11 @@ void Context::RetryHandshake() {
+   }
+ 
+   EncodeAndSendChunk(retry_chunk);
++#if defined(PW_TRANSFER_COOPERATIVE)
++  if (last_chunk_sent_ == Chunk::Type::kStartAck) {
++    SetTimeout(chunk_timeout_);
++  }
++#endif
+ }
+ 
+ uint32_t Context::MaxWriteChunkSize(uint32_t max_chunk_size_bytes,
+diff --git a/pw_transfer/public/pw_transfer/internal/context.h b/pw_transfer/public/pw_transfer/internal/context.h
+index c06b40252..db445d7ba 100644
+--- a/pw_transfer/public/pw_transfer/internal/context.h
++++ b/pw_transfer/public/pw_transfer/internal/context.h
+@@ -227,10 +227,10 @@ class Context {
+ 
+   void set_transfer_state(TransferState state) { transfer_state_ = state; }
+ 
+-  // The session ID as unsigned instead of uint32_t so it can be used with %u.
+-  unsigned id_for_log() const {
+-    static_assert(sizeof(unsigned) >= sizeof(session_id_));
+-    return static_cast<unsigned>(session_id_);
++  // Preserve the full session ID on targets with 16-bit unsigned.
++  unsigned long id_for_log() const {
++    static_assert(sizeof(unsigned long) >= sizeof(session_id_));
++    return static_cast<unsigned long>(session_id_);
+   }
+ 
+   stream::Writer& writer() {
+diff --git a/pw_transfer/public/pw_transfer/transfer.h b/pw_transfer/public/pw_transfer/transfer.h
+index 85af43605..cfd828d87 100644
+--- a/pw_transfer/public/pw_transfer/transfer.h
++++ b/pw_transfer/public/pw_transfer/transfer.h
+@@ -18,7 +18,11 @@
+ #include <limits>
+ 
+ #include "pw_bytes/span.h"
++#if defined(PW_TRANSFER_COOPERATIVE)
++#include "pw_sync/no_lock.h"
++#else
+ #include "pw_sync/mutex.h"
++#endif
+ #include "pw_transfer/handler.h"
+ #include "pw_transfer/internal/config.h"
+ #include "pw_transfer/internal/server_context.h"
+@@ -186,7 +190,11 @@ class TransferService : public pw_rpc::raw::Transfer::Service<TransferService> {
+   uint8_t max_retries_;
+   uint32_t max_lifetime_retries_;
+ 
++#if defined(PW_TRANSFER_COOPERATIVE)
++  sync::NoLock resource_responder_mutex_;
++#else
+   sync::Mutex resource_responder_mutex_;
++#endif
+   rpc::RawUnaryResponder resource_responder_
+       PW_GUARDED_BY(resource_responder_mutex_);
+ 
+diff --git a/pw_transfer/public/pw_transfer/transfer_thread.h b/pw_transfer/public/pw_transfer/transfer_thread.h
+index 550ac84e2..4b586d6d0 100644
+--- a/pw_transfer/public/pw_transfer/transfer_thread.h
++++ b/pw_transfer/public/pw_transfer/transfer_thread.h
+@@ -21,10 +21,24 @@
+ #include "pw_function/function.h"
+ #include "pw_rpc/raw/client_reader_writer.h"
+ #include "pw_rpc/raw/server_reader_writer.h"
++#include <array>
++#include <cstddef>
++#include <cstring>
++
++#ifndef PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY
++#define PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY 2
++#endif
++#ifndef PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE
++#define PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE 128
++#endif
++
+ #include "pw_span/span.h"
++#include "pw_assert/check.h"
++#if !defined(PW_TRANSFER_COOPERATIVE)
+ #include "pw_sync/binary_semaphore.h"
+ #include "pw_sync/timed_thread_notification.h"
+ #include "pw_thread/thread_core.h"
++#endif
+ #include "pw_transfer/handler.h"
+ #include "pw_transfer/internal/client_context.h"
+ #include "pw_transfer/internal/config.h"
+@@ -38,7 +52,11 @@ class Client;
+ 
+ namespace internal {
+ 
+-class TransferThread : public thread::ThreadCore {
++class TransferThread
++#if !defined(PW_TRANSFER_COOPERATIVE)
++    : public thread::ThreadCore
++#endif
++{
+  public:
+   TransferThread(span<ClientContext> client_transfers,
+                  span<ServerContext> server_transfers,
+@@ -243,14 +261,79 @@ class TransferThread : public thread::ThreadCore {
+ 
+   size_t max_chunk_size() const { return chunk_buffer_.size(); }
+ 
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // Process at most budget queued events and check transfer deadlines.
++  // Unavailable means more events remain; ResourceExhausted means the bounded
++  // queue overflowed and active transfers were aborted rather than corrupted.
++  Status Poll(size_t budget = 1);
++#if defined(PW_TRANSFER_COOPERATIVE_TEST)
++  // Test-only event injector for deterministic bounded-queue overflow tests.
++  void EnqueueTestEvent() {
++    if (!TryWaitForEventToProcess()) {
++      event_overflowed_ = true;
++      return;
++    }
++    next_event_ = {};
++    next_event_.type = EventType::kClientEndTransfer;
++    next_event_.end_transfer.id_type = IdentifierType::Session;
++    next_event_.end_transfer.id = 0;
++    next_event_.end_transfer.status = Status::Cancelled().code();
++    next_event_.end_transfer.send_status_chunk = false;
++    NotifyEvent();
++  }
++
++  size_t PendingEventsForTest() const { return event_queue_size_; }
++  uint8_t PendingEventTypeForTest(size_t offset = 0) const {
++    if (offset >= event_queue_size_) return 0xff;
++    const size_t index =
++        (event_queue_head_ + offset) % PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY;
++    return static_cast<uint8_t>(event_queue_[index].event.type);
++  }
++
++  size_t ActiveClientTransfersForTest() const {
++    size_t count = 0;
++    for (const ClientContext& context : client_transfers_) {
++      if (context.active()) ++count;
++    }
++    return count;
++  }
++
++  size_t ActiveServerTransfersForTest() const {
++    size_t count = 0;
++    for (const ServerContext& context : server_transfers_) {
++      if (context.active()) ++count;
++    }
++    return count;
++  }
++  size_t TimedOutServerTransfersForTest() const {
++    size_t count = 0;
++    for (const ServerContext& context : server_transfers_) {
++      if (context.active() && context.timed_out()) ++count;
++    }
++    return count;
++  }
++  size_t ServerTransfersWithTimeoutForTest() const {
++    size_t count = 0;
++    for (const ServerContext& context : server_transfers_) {
++      if (context.active() && context.timeout().has_value()) ++count;
++    }
++    return count;
++  }
++#endif
++#endif
++
+   // For testing only: terminates the transfer thread with a kTerminate event.
+   void Terminate();
+ 
+   // For testing only: blocks until the next event can be acquired, which means
+   // a previously enqueued event has been processed.
+   void WaitUntilEventIsProcessed() {
++#if defined(PW_TRANSFER_COOPERATIVE)
++    (void)Poll(PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY);
++#else
+     next_event_ownership_.acquire();
+     next_event_ownership_.release();
++#endif
+   }
+ 
+   // For testing only: simulates a timeout event for a client transfer.
+@@ -332,18 +415,83 @@ class TransferThread : public thread::ThreadCore {
+ 
+   const ByteSpan& encode_buffer() const { return encode_buffer_; }
+ 
++#if !defined(PW_TRANSFER_COOPERATIVE)
+   void Run() final;
++#endif
+ 
+-  void HandleTimeouts();
++  bool HandleTimeouts();
+ 
+   rpc::Writer& stream_for(TransferStream stream);
+ 
++  void NotifyEvent() {
++#if defined(PW_TRANSFER_COOPERATIVE)
++    if (event_queue_size_ >= PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY) {
++      event_overflowed_ = true;
++      event_slot_available_ = true;
++      return;
++    }
++    CooperativeEventSlot& slot = event_queue_[event_queue_tail_];
++    slot.event = next_event_;
++    const std::byte* chunk_data = nullptr;
++    size_t chunk_size = 0;
++    if (slot.event.type == EventType::kClientChunk ||
++        slot.event.type == EventType::kServerChunk) {
++      chunk_data = slot.event.chunk.data;
++      chunk_size = slot.event.chunk.size;
++    } else if (slot.event.type == EventType::kNewClientTransfer ||
++               slot.event.type == EventType::kNewServerTransfer) {
++      chunk_data = slot.event.new_transfer.raw_chunk_data;
++      chunk_size = slot.event.new_transfer.raw_chunk_size;
++    }
++    if (chunk_size > slot.chunk_storage.size()) {
++      if (slot.event.type == EventType::kNewServerTransfer) {
++        SendStatusChunk({
++            .session_id = slot.event.new_transfer.session_id,
++            .protocol_version = slot.event.new_transfer.protocol_version,
++            .status = Status::ResourceExhausted().code(),
++            .stream = slot.event.new_transfer.type == TransferType::kTransmit
++                          ? TransferStream::kServerRead
++                          : TransferStream::kServerWrite,
++        });
++      }
++      event_overflowed_ = true;
++      event_slot_available_ = true;
++      return;
++    }
++    if (chunk_size != 0) {
++      std::memcpy(slot.chunk_storage.data(), chunk_data, chunk_size);
++      if (slot.event.type == EventType::kClientChunk ||
++          slot.event.type == EventType::kServerChunk) {
++        slot.event.chunk.data = slot.chunk_storage.data();
++      } else {
++        slot.event.new_transfer.raw_chunk_data = slot.chunk_storage.data();
++      }
++    }
++    event_queue_tail_ =
++        (event_queue_tail_ + 1) % PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY;
++    ++event_queue_size_;
++    event_slot_available_ = true;
++#else
++    event_notification_.release();
++#endif
++  }
++
+   bool TryWaitForEventToProcess() {
++#if defined(PW_TRANSFER_COOPERATIVE)
++    if (!event_slot_available_ ||
++        event_queue_size_ >= PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY) {
++      event_overflowed_ = true;
++      return false;
++    }
++    event_slot_available_ = false;
++    return true;
++#else
+     if constexpr (cfg::kWaitForEventProcessingIndefinitely) {
+       next_event_ownership_.acquire();
+       return true;
+     }
+     return next_event_ownership_.try_acquire_for(cfg::kEventProcessingTimeout);
++#endif
+   }
+ 
+   // Returns the earliest timeout among all active transfers, if any.
+@@ -391,8 +539,31 @@ class TransferThread : public thread::ThreadCore {
+ 
+   void GetResourceState(uint32_t resource_id);
+ 
++#if defined(PW_TRANSFER_COOPERATIVE)
++  struct CooperativeEventSlot {
++    Event event{};
++    std::array<std::byte, PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE>
++        chunk_storage{};
++  };
++  static_assert(PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY >= 2,
++                "The cooperative event queue must have at least two slots");
++  std::array<CooperativeEventSlot, PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY>
++      event_queue_{};
++  size_t event_queue_head_ = 0;
++  size_t event_queue_tail_ = 0;
++  size_t event_queue_size_ = 0;
++  bool event_slot_available_ = true;
++  bool event_overflowed_ = false;
++  bool resource_status_pending_ = false;
++  enum class CooperativeRole : uint8_t { kIdle, kClient, kServer };
++  CooperativeRole cooperative_role_ = CooperativeRole::kIdle;
++  uint32_t cooperative_session_id_ = 0;
++  bool cooperative_start_pending_ = false;
++  void UpdateCooperativeRole();
++#else
+   sync::TimedThreadNotification event_notification_;
+   sync::BinarySemaphore next_event_ownership_;
++#endif
+ 
+   Event next_event_;
+   Function<void(Status)> staged_on_completion_;
+diff --git a/pw_transfer/transfer_thread.cc b/pw_transfer/transfer_thread.cc
+index 76f774197..1dad74309 100644
+--- a/pw_transfer/transfer_thread.cc
++++ b/pw_transfer/transfer_thread.cc
+@@ -31,23 +31,24 @@ PW_MODIFY_DIAGNOSTIC(ignored, "-Wmissing-field-initializers");
+ namespace pw::transfer::internal {
+ 
+ void TransferThread::Terminate() {
+-  next_event_ownership_.acquire();
++  if (!TryWaitForEventToProcess()) { return; }
+   next_event_.type = EventType::kTerminate;
+-  event_notification_.release();
++  NotifyEvent();
+ }
+ 
+ void TransferThread::SimulateTimeout(EventType type, uint32_t session_id) {
+-  next_event_ownership_.acquire();
++  if (!TryWaitForEventToProcess()) { return; }
+ 
+   next_event_.type = type;
+   next_event_.chunk = {};
+   next_event_.chunk.context_identifier = session_id;
+ 
+-  event_notification_.release();
++  NotifyEvent();
+ 
+   WaitUntilEventIsProcessed();
+ }
+ 
++#if !defined(PW_TRANSFER_COOPERATIVE)
+ void TransferThread::Run() {
+   // Next event starts freed.
+   next_event_ownership_.release();
+@@ -93,6 +94,119 @@ void TransferThread::Run() {
+     }
+   }
+ }
++#endif  // !PW_TRANSFER_COOPERATIVE
++
++#if defined(PW_TRANSFER_COOPERATIVE)
++Status TransferThread::Poll(size_t budget) {
++  if (event_overflowed_) {
++    // Preserve accepted event ordering and consume staged objects before
++    // aborting sessions after a dropped event. The initial count bounds work.
++    const size_t accepted_before_overflow = event_queue_size_;
++    for (size_t i = 0; i < accepted_before_overflow; ++i) {
++      if (event_queue_size_ == 0) break;
++      event_queue_head_ =
++          (event_queue_head_ + 1) % PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY;
++      --event_queue_size_;
++    }
++    event_queue_head_ = event_queue_tail_;
++    if (resource_status_pending_ && resource_status_callback_) {
++      internal::ResourceStatus stats{};
++      resource_status_callback_(Status::ResourceExhausted(), stats);
++      resource_status_callback_ = nullptr;
++    }
++    Event abort_event{};
++    abort_event.type = EventType::kClientEndTransfer;
++    abort_event.end_transfer = {
++        .id_type = IdentifierType::Session,
++        .id = 0,
++        .status = Status::ResourceExhausted().code(),
++        .send_status_chunk = true,
++    };
++    for (ClientContext& context : client_transfers_) {
++      if (context.active()) {
++        abort_event.end_transfer.id = context.session_id();
++        context.HandleEvent(abort_event);
++      }
++    }
++    abort_event.type = EventType::kServerEndTransfer;
++    for (ServerContext& context : server_transfers_) {
++      if (context.active()) {
++        abort_event.end_transfer.id = context.session_id();
++        context.HandleEvent(abort_event);
++      }
++    }
++    event_queue_head_ = event_queue_tail_;
++    event_queue_size_ = 0;
++    resource_status_pending_ = false;
++    event_overflowed_ = false;
++    if (cooperative_start_pending_ && staged_on_completion_) {
++      staged_on_completion_(Status::ResourceExhausted());
++      staged_on_completion_ = nullptr;
++    }
++    cooperative_start_pending_ = false;
++    UpdateCooperativeRole();
++    return Status::ResourceExhausted();
++  }
++
++  size_t processed = 0;
++  while (event_queue_size_ != 0 && processed < budget) {
++    // Detach the head slot before dispatch. HandleEvent may synchronously
++    // enqueue another event (for example while a transfer context installs
++    // its stream). Dispatching from the live ring slot would either report a
++    // false queue overflow or let the producer overwrite the event in flight.
++    CooperativeEventSlot current = event_queue_[event_queue_head_];
++    event_queue_head_ =
++        (event_queue_head_ + 1) % PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY;
++    --event_queue_size_;
++
++    // The copied Event initially points into the ring slot. Rebind payload
++    // pointers to the detached local slot before the ring slot is reused.
++    if (current.event.type == EventType::kClientChunk ||
++        current.event.type == EventType::kServerChunk) {
++      current.event.chunk.data = current.chunk_storage.data();
++    } else if (current.event.type == EventType::kNewClientTransfer ||
++               current.event.type == EventType::kNewServerTransfer) {
++      current.event.new_transfer.raw_chunk_data = current.chunk_storage.data();
++    }
++    HandleEvent(current.event);
++    ++processed;
++  }
++  (void)HandleTimeouts();
++  UpdateCooperativeRole();
++  return event_queue_size_ != 0 ? Status::Unavailable() : OkStatus();
++}
++
++void TransferThread::UpdateCooperativeRole() {
++  if (cooperative_start_pending_) {
++    return;
++  }
++  for (const Context& context : client_transfers_) {
++    if (context.active()) return;
++  }
++  for (const Context& context : server_transfers_) {
++    if (context.active()) return;
++  }
++  cooperative_role_ = CooperativeRole::kIdle;
++  cooperative_session_id_ = 0;
++}
++#endif  // PW_TRANSFER_COOPERATIVE
++
++bool TransferThread::HandleTimeouts() {
++  bool did_work = false;
++  for (Context& context : client_transfers_) {
++    if (context.timed_out()) {
++      context.HandleEvent({.type = EventType::kClientTimeout});
++      did_work = true;
++    }
++  }
++  for (Context& context : server_transfers_) {
++    if (context.timed_out()) {
++      context.HandleEvent({.type = EventType::kServerTimeout});
++      did_work = true;
++    }
++  }
++  return did_work;
++}
+ 
+ std::optional<chrono::SystemClock::time_point>
+ TransferThread::GetNextTransferTimeout() const {
+@@ -132,6 +246,20 @@ void TransferThread::StartTransfer(
+     uint32_t max_lifetime_retries,
+     uint32_t initial_offset) {
+   if (!TryWaitForEventToProcess()) {
++#if defined(PW_TRANSFER_COOPERATIVE)
++    if (stream != nullptr) {
++      if (on_completion) on_completion(Status::ResourceExhausted());
++    } else {
++      SendStatusChunk({
++          .session_id = session_id,
++          .protocol_version = version,
++          .status = Status::ResourceExhausted().code(),
++          .stream = type == TransferType::kTransmit
++                        ? TransferStream::kServerRead
++                        : TransferStream::kServerWrite,
++      });
++    }
++#endif
+     return;
+   }
+ 
+@@ -207,7 +335,40 @@ void TransferThread::StartTransfer(
+     }
+   }
+ 
+-  event_notification_.release();
++#if defined(PW_TRANSFER_COOPERATIVE)
++  if (next_event_.type == EventType::kNewClientTransfer ||
++      next_event_.type == EventType::kNewServerTransfer) {
++    const CooperativeRole requested_role =
++        is_client_transfer ? CooperativeRole::kClient
++                           : CooperativeRole::kServer;
++    if (cooperative_role_ != CooperativeRole::kIdle &&
++        (cooperative_role_ != requested_role ||
++         cooperative_session_id_ != session_id ||
++         cooperative_start_pending_)) {
++      if (is_client_transfer) {
++        if (staged_on_completion_) {
++          staged_on_completion_(Status::Unavailable());
++          staged_on_completion_ = nullptr;
++        }
++      } else {
++        SendStatusChunk({
++            .session_id = session_id,
++            .protocol_version = version,
++            .status = Status::Unavailable().code(),
++            .stream = type == TransferType::kTransmit
++                          ? TransferStream::kServerRead
++                          : TransferStream::kServerWrite,
++        });
++      }
++      event_slot_available_ = true;
++      return;
++    }
++    cooperative_role_ = requested_role;
++    cooperative_session_id_ = session_id;
++    cooperative_start_pending_ = true;
++  }
++#endif
++  NotifyEvent();
+ }
+ 
+ void TransferThread::ProcessChunk(EventType type, ConstByteSpan chunk) {
+@@ -237,7 +398,7 @@ void TransferThread::ProcessChunk(EventType type, ConstByteSpan chunk) {
+       .size = chunk.size(),
+   };
+ 
+-  event_notification_.release();
++  NotifyEvent();
+ }
+ 
+ void TransferThread::SendStatus(TransferStream stream,
+@@ -256,7 +417,7 @@ void TransferThread::SendStatus(TransferStream stream,
+       .stream = stream,
+   };
+ 
+-  event_notification_.release();
++  NotifyEvent();
+ }
+ 
+ void TransferThread::EndTransfer(EventType type,
+@@ -276,7 +437,7 @@ void TransferThread::EndTransfer(EventType type,
+       .send_status_chunk = send_status_chunk,
+   };
+ 
+-  event_notification_.release();
++  NotifyEvent();
+ }
+ 
+ void TransferThread::SetClientReadStream(
+@@ -285,9 +446,17 @@ void TransferThread::SetClientReadStream(
+     Function<void(ConstByteSpan)>&& on_next,
+     internal::SetStreamBehavior behavior) {
+   client_read_stream_.stream.set_on_next(nullptr);
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
+   if (!TryWaitForEventToProcess()) {
+     return;
+   }
++#endif
++#endif
++#endif
++#endif
+   staged_client_stream_.stream = std::move(read_stream);
+   staged_client_stream_.client = client;
+   staged_client_on_next_ = std::move(on_next);
+@@ -298,14 +467,54 @@ void TransferThread::SetClientReadStream(
+       .behavior = behavior,
+   };
+ 
+-  event_notification_.release();
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++  NotifyEvent();
+   WaitUntilEventIsProcessed();
++#endif
++#endif
++#endif
++#endif
+ }
+ 
+ void TransferThread::CloseClientReadStream(Client* client) {
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
+   if (!TryWaitForEventToProcess()) {
+     return;
+   }
++#endif
++#endif
++#endif
++#endif
+   staged_client_stream_.client = client;
+ 
+   next_event_.type = EventType::kSetStream;
+@@ -314,8 +523,40 @@ void TransferThread::CloseClientReadStream(Client* client) {
+       .behavior = internal::SetStreamBehavior::kCloseStream,
+   };
+ 
+-  event_notification_.release();
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++  NotifyEvent();
+   WaitUntilEventIsProcessed();
++#endif
++#endif
++#endif
++#endif
+ }
+ 
+ void TransferThread::SetClientWriteStream(
+@@ -324,9 +565,17 @@ void TransferThread::SetClientWriteStream(
+     Function<void(ConstByteSpan)>&& on_next,
+     internal::SetStreamBehavior behavior) {
+   client_write_stream_.stream.set_on_next(nullptr);
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
+   if (!TryWaitForEventToProcess()) {
+     return;
+   }
++#endif
++#endif
++#endif
++#endif
+   staged_client_stream_.stream = std::move(write_stream);
+   staged_client_stream_.client = client;
+   staged_client_on_next_ = std::move(on_next);
+@@ -337,14 +586,54 @@ void TransferThread::SetClientWriteStream(
+       .behavior = behavior,
+   };
+ 
+-  event_notification_.release();
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++  NotifyEvent();
+   WaitUntilEventIsProcessed();
++#endif
++#endif
++#endif
++#endif
+ }
+ 
+ void TransferThread::CloseClientWriteStream(Client* client) {
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
+   if (!TryWaitForEventToProcess()) {
+     return;
+   }
++#endif
++#endif
++#endif
++#endif
+   staged_client_stream_.client = client;
+ 
+   next_event_.type = EventType::kSetStream;
+@@ -353,17 +642,57 @@ void TransferThread::CloseClientWriteStream(Client* client) {
+       .behavior = internal::SetStreamBehavior::kCloseStream,
+   };
+ 
+-  event_notification_.release();
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++  NotifyEvent();
+   WaitUntilEventIsProcessed();
++#endif
++#endif
++#endif
++#endif
+ }
+ 
+ void TransferThread::SetServerReadStream(
+     rpc::RawServerReaderWriter& read_stream,
+     Function<void(ConstByteSpan)>&& on_next) {
+   server_read_stream_.set_on_next(nullptr);
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
+   if (!TryWaitForEventToProcess()) {
+     return;
+   }
++#endif
++#endif
++#endif
++#endif
+   staged_server_stream_ = std::move(read_stream);
+   staged_server_on_next_ = std::move(on_next);
+ 
+@@ -373,17 +702,57 @@ void TransferThread::SetServerReadStream(
+       .behavior = internal::SetStreamBehavior::kNewClient,
+   };
+ 
+-  event_notification_.release();
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++  NotifyEvent();
+   WaitUntilEventIsProcessed();
++#endif
++#endif
++#endif
++#endif
+ }
+ 
+ void TransferThread::SetServerWriteStream(
+     rpc::RawServerReaderWriter& write_stream,
+     Function<void(ConstByteSpan)>&& on_next) {
+   server_write_stream_.set_on_next(nullptr);
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
++#if !defined(PW_TRANSFER_COOPERATIVE)
+   if (!TryWaitForEventToProcess()) {
+     return;
+   }
++#endif
++#endif
++#endif
++#endif
+   staged_server_stream_ = std::move(write_stream);
+   staged_server_on_next_ = std::move(on_next);
+ 
+@@ -393,8 +762,40 @@ void TransferThread::SetServerWriteStream(
+       .behavior = internal::SetStreamBehavior::kNewClient,
+   };
+ 
+-  event_notification_.release();
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++#if defined(PW_TRANSFER_COOPERATIVE)
++  // In the cooperative build this callback runs on the same owner loop as
++  // Poll(). Install the RPC stream synchronously so the first incoming
++  // transfer chunk cannot arrive before its on_next callback is attached.
++  HandleSetStreamEvent(next_event_.set_stream.stream,
++                       next_event_.set_stream.behavior);
++#else
++  NotifyEvent();
+   WaitUntilEventIsProcessed();
++#endif
++#endif
++#endif
++#endif
+ }
+ 
+ void TransferThread::UpdateClientTransfer(uint32_t handle_id,
+@@ -407,7 +808,7 @@ void TransferThread::UpdateClientTransfer(uint32_t handle_id,
+   next_event_.update_transfer.handle_id = handle_id;
+   next_event_.update_transfer.transfer_size_bytes = transfer_size_bytes;
+ 
+-  event_notification_.release();
++  NotifyEvent();
+ }
+ 
+ bool TransferThread::TransferHandlerEvent(EventType type, Handler& handler) {
+@@ -422,7 +823,7 @@ bool TransferThread::TransferHandlerEvent(EventType type, Handler& handler) {
+     next_event_.remove_transfer_handler = &handler;
+   }
+ 
+-  event_notification_.release();
++  NotifyEvent();
+   return true;
+ }
+ 
+@@ -514,6 +915,13 @@ void TransferThread::HandleEvent(const internal::Event& event) {
+ 
+   Context* ctx = FindContextForEvent(event);
+   if (ctx == nullptr) {
++#if defined(PW_TRANSFER_COOPERATIVE)
++    if (event.type == EventType::kNewClientTransfer ||
++        event.type == EventType::kNewServerTransfer) {
++      cooperative_start_pending_ = false;
++      UpdateCooperativeRole();
++    }
++#endif
+     // No context was found. For new transfer events, report a
+     // RESOURCE_EXHAUSTED error with starting the transfer.
+     if (event.type == EventType::kNewClientTransfer) {
+@@ -532,6 +940,13 @@ void TransferThread::HandleEvent(const internal::Event& event) {
+     return;
+   }
+ 
++  if (event.type == EventType::kNewClientTransfer ||
++      event.type == EventType::kNewServerTransfer) {
++#if defined(PW_TRANSFER_COOPERATIVE)
++    cooperative_start_pending_ = false;
++#endif
++  }
++
+   if (event.type == EventType::kNewClientTransfer) {
+     // TODO(frolv): This is terrible.
+     ClientContext* cctx = static_cast<ClientContext*>(ctx);
+@@ -546,6 +961,9 @@ void TransferThread::HandleEvent(const internal::Event& event) {
+   }
+ 
+   ctx->HandleEvent(event);
++#if defined(PW_TRANSFER_COOPERATIVE)
++  UpdateCooperativeRole();
++#endif
+ }
+ 
+ Context* TransferThread::FindContextForEvent(
+@@ -785,30 +1203,35 @@ void TransferThread::HandleSetStreamEvent(
+ // GetResourceStatusEvent in process.
+ void TransferThread::EnqueueResourceEvent(uint32_t resource_id,
+                                           ResourceStatusCallback&& callback) {
++#if defined(PW_TRANSFER_COOPERATIVE)
++  if (resource_status_pending_) {
++    internal::ResourceStatus stats{};
++    callback(Status::Unavailable(), stats);
++    return;
++  }
++  resource_status_callback_ = std::move(callback);
++  resource_status_pending_ = true;
++  GetResourceState(resource_id);
++#else
+   if (!TryWaitForEventToProcess()) {
+-    internal::ResourceStatus stats;
++    internal::ResourceStatus stats{};
+     callback(Status::Unavailable(), stats);
+     return;
+   }
+ 
+   next_event_.type = EventType::kGetResourceStatus;
+-
+   resource_status_callback_ = std::move(callback);
+-
+   next_event_.resource_status.resource_id = resource_id;
+-
+-  event_notification_.release();
++  NotifyEvent();
++#endif
+ }
+-
+-// Should only be called when we got a valid callback and RPC responder from
+-// GetResourceStatus transfer RPC.
+ void TransferThread::GetResourceState(uint32_t resource_id) {
+   PW_ASSERT(resource_status_callback_ != nullptr);
+ 
+   auto handler = std::find_if(handlers_.begin(), handlers_.end(), [&](auto& h) {
+     return h.id() == resource_id;
+   });
+-  internal::ResourceStatus stats;
++  internal::ResourceStatus stats{};
+   stats.resource_id = resource_id;
+ 
+   if (handler != handlers_.end()) {
+@@ -823,6 +1246,9 @@ void TransferThread::GetResourceState(uint32_t resource_id) {
+   }
+ 
+   resource_status_callback_ = nullptr;
++#if defined(PW_TRANSFER_COOPERATIVE)
++  resource_status_pending_ = false;
++#endif
+ }
+ 
+ rpc::Writer& TransferThread::stream_for(TransferStream stream) {
+diff --git a/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/bit.h b/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/bit.h
+index 37f0de1cc..42324eec0 100644
+--- a/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/bit.h
++++ b/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/bit.h
+@@ -173,7 +173,7 @@ using std::endian;
+ 
+ #else  // Provide polyfill for endian enum.
+ 
+-enum class endian {
++enum class endian : std::uint32_t {
+   little = 0x11771E,
+   big = 0xB16,
+   native = internal::native_endianess<little, big>(),
+diff --git a/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/internal/bit.h b/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/internal/bit.h
+index 62f046a74..079d488ec 100644
+--- a/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/internal/bit.h
++++ b/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/internal/bit.h
+@@ -5,6 +5,7 @@
+ #ifndef LIB_STDCOMPAT_INTERNAL_BIT_H_
+ #define LIB_STDCOMPAT_INTERNAL_BIT_H_
+ 
++#include <cstdint>
+ #include <limits>
+ #include <type_traits>
+ 
+@@ -212,8 +213,8 @@ constexpr std::enable_if_t<is_bit_type<T>::value, T> bit_floor(T value) {
+   return value == 0 ? 0 : static_cast<T>(T(1) << (static_cast<T>(bit_width(value)) - T(1)));
+ }
+ 
+-template <unsigned little, unsigned big>
+-constexpr unsigned native_endianess() {
++template <std::uint32_t little, std::uint32_t big>
++constexpr std::uint32_t native_endianess() {
+   auto curr = __BYTE_ORDER__;
+   if (curr == __ORDER_LITTLE_ENDIAN__) {
+     return little;
