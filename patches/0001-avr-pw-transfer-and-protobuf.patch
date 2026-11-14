@@ -473,22 +473,19 @@ index 83ae23de452b392d49b97ed38339619278cabc1e..df10593972fc5f65eaef5f4b4f202870
          if (active_locked() && id() == original_id && !callback_replaced) {
            restore_on_next(std::move(proto_on_next_local));
 diff --git a/pw_rpc/public/pw_rpc/internal/config.h b/pw_rpc/public/pw_rpc/internal/config.h
-index 74f4ed0f86cfff85d5661f216319edf4d484ada1..55a6f8f974548088554a8d525fa133de08c04b48 100644
+index 74f4ed0f86cfff85d5661f216319edf4d484ada1..ce44d2c9a7a737d16529976e5c2b24531548ee9e 100644
 --- a/pw_rpc/public/pw_rpc/internal/config.h
 +++ b/pw_rpc/public/pw_rpc/internal/config.h
-@@ -88,7 +88,11 @@
+@@ -88,7 +88,7 @@
  ///   - `@pigweed//pw_rpc:use_global_mutex_true` (the default)
  ///   - `@pigweed//pw_rpc:use_global_mutex_false`
  #ifndef PW_RPC_USE_GLOBAL_MUTEX
-+#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
+-#define PW_RPC_USE_GLOBAL_MUTEX 1
 +#define PW_RPC_USE_GLOBAL_MUTEX 0
-+#else
- #define PW_RPC_USE_GLOBAL_MUTEX 1
-+#endif
  #endif  // PW_RPC_USE_GLOBAL_MUTEX
  
  /// pw_rpc must yield the current thread when waiting for a callback to complete
-@@ -280,7 +284,11 @@ static_assert(
+@@ -280,7 +280,11 @@ static_assert(
  /// packet size and for `pw::rpc::MaxSafePayloadSize()`. It is also used by test
  /// helpers that allocate RPC encoding buffers.
  #ifndef PW_RPC_ENCODING_BUFFER_SIZE_BYTES

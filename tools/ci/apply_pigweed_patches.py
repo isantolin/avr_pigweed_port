@@ -666,11 +666,7 @@ from pw_rpc.client import Client""",
         "pw_rpc/public/pw_rpc/internal/config.h",
         "#ifndef PW_RPC_USE_GLOBAL_MUTEX\n#define PW_RPC_USE_GLOBAL_MUTEX 1\n#endif  // PW_RPC_USE_GLOBAL_MUTEX",
         """#ifndef PW_RPC_USE_GLOBAL_MUTEX
-#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
 #define PW_RPC_USE_GLOBAL_MUTEX 0
-#else
-#define PW_RPC_USE_GLOBAL_MUTEX 1
-#endif
 #endif  // PW_RPC_USE_GLOBAL_MUTEX""",
     )
     replace_once(
