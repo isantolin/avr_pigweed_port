@@ -1,3 +1,79 @@
+diff --git a/pw_bytes/public/pw_bytes/span.h b/pw_bytes/public/pw_bytes/span.h
+index 506849f9e4f13ebd04c875cd953fdd3f39d9fa2d..2a2d6c935ce7445bb03e512c4c4552916645ad91 100644
+--- a/pw_bytes/public/pw_bytes/span.h
++++ b/pw_bytes/public/pw_bytes/span.h
+@@ -16,6 +16,19 @@
+ #include <cstddef>
+ #include <memory>
+ #include <type_traits>
++#if !defined(__clang__) && defined(__GNUC__) && (__GNUC__ < 8)
++#ifndef _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
++#define _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
++namespace std {
++template <typename T>
++// GCC < 8 does not provide this C++17 trait. Report false rather than
++// approximating it with is_trivially_copyable: the two properties differ.
++// False is conservative and only disables optimizations that require the trait.
++constexpr bool has_unique_object_representations_v = false;
++} // namespace std
++#endif
++#endif
++
+ 
+ #include "pw_span/span.h"
+ 
+diff --git a/pw_checksum/public/pw_checksum/internal/config.h b/pw_checksum/public/pw_checksum/internal/config.h
+index f35d28a4323477705a98036fd0a01c77644060fa..7a8e27bb89df82b3724404f190ea63d10ef70992 100644
+--- a/pw_checksum/public/pw_checksum/internal/config.h
++++ b/pw_checksum/public/pw_checksum/internal/config.h
+@@ -19,7 +19,11 @@
+ #define PW_CHECKSUM_CRC32_1BITS 1
+ 
+ #ifndef PW_CHECKSUM_CRC32_DEFAULT_IMPL
++#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
++#define PW_CHECKSUM_CRC32_DEFAULT_IMPL PW_CHECKSUM_CRC32_4BITS
++#else
+ #define PW_CHECKSUM_CRC32_DEFAULT_IMPL PW_CHECKSUM_CRC32_8BITS
++#endif
+ #endif  // PW_CHECKSUM_CRC32_DEFAULT_IMPL
+ 
+ #ifdef __cplusplus
+diff --git a/pw_containers/public/pw_containers/internal/intrusive_list_item.h b/pw_containers/public/pw_containers/internal/intrusive_list_item.h
+index c0087d4e64fe70dfe63011ce98c588108aeb1e60..e9b979a1a1626ec35cd02b45a12f8847b35e9c25 100644
+--- a/pw_containers/public/pw_containers/internal/intrusive_list_item.h
++++ b/pw_containers/public/pw_containers/internal/intrusive_list_item.h
+@@ -23,6 +23,9 @@ namespace pw::containers::internal {
+ template <typename>
+ class GenericIntrusiveList;
+ 
++template <typename, typename>
++class Incrementable;
++
+ class GenericIntrusiveQueue;
+ 
+ /// Base class for items that can be included in intrusive lists.
+diff --git a/pw_containers/public/pw_containers/vector.h b/pw_containers/public/pw_containers/vector.h
+index 2656395d8a5d72302452c7215ddaa95167b08159..3f2e831e537698500df8dd149cab5b5aa954d38c 100644
+--- a/pw_containers/public/pw_containers/vector.h
++++ b/pw_containers/public/pw_containers/vector.h
+@@ -171,7 +171,7 @@ struct VectorStorage<T, kMaxSize, true>
+   using Base = Vector<T, vector_impl::kGeneric>;
+ 
+  protected:
+-  VectorStorage() : Base(kMaxSize) {}
++  VectorStorage() noexcept : Base(kMaxSize) {}
+ 
+   constexpr VectorStorage(ConstexprTag /*constexpr_tag*/)
+       : Base(kMaxSize), array_{} {}
+@@ -223,7 +223,7 @@ struct VectorStorage<T, kMaxSize, false>
+   }
+ 
+  protected:
+-  VectorStorage() : Base(kMaxSize) {}
++  VectorStorage() noexcept : Base(kMaxSize) {}
+ 
+   constexpr VectorStorage(ConstexprTag /*constexpr_tag*/)
+       : Base(kMaxSize), array_{} {}
 diff --git a/pw_protobuf/public/pw_protobuf/buffer_encoder.h b/pw_protobuf/public/pw_protobuf/buffer_encoder.h
 index 9a9a0c7212c5d4889260f51276da27551860d926..b16b17a602e068cc2403f6cbed61d90ef6ad48fc 100644
 --- a/pw_protobuf/public/pw_protobuf/buffer_encoder.h
@@ -89,10 +165,28 @@ index 9282b638042629f7d6ff3eb9ea00eb8f64acbd86..928bb483e55ce9b80cf56a88488a05fb
  
    /// Reads a proto `string` value from the current cursor position as a view.
 diff --git a/pw_protobuf/public/pw_protobuf/encoder.h b/pw_protobuf/public/pw_protobuf/encoder.h
-index 232e94cafc45399dbfb67a2fc194db120367bab7..63c15f12c14aa4c98c401fe34c3d204b07fe6221 100644
+index 232e94cafc45399dbfb67a2fc194db120367bab7..ebc56710b11d20dfdb1374431a7bed46ad609185 100644
 --- a/pw_protobuf/public/pw_protobuf/encoder.h
 +++ b/pw_protobuf/public/pw_protobuf/encoder.h
-@@ -638,20 +638,30 @@ class StreamEncoder {
+@@ -27,6 +27,7 @@
+ #include "pw_containers/vector.h"
+ #include "pw_function/function_ref.h"
+ #include "pw_memory/internal/sibling_cast.h"
++#include "pw_polyfill/language_feature_macros.h"
+ #include "pw_protobuf/config.h"
+ #include "pw_protobuf/internal/codegen.h"
+ #include "pw_protobuf/wire_format.h"
+@@ -169,7 +170,8 @@ class StreamEncoder {
+   /// @param[in] writer The destination stream writer for serialized data.
+   /// @param[in] scratch_buffer Buffer for staging nested submessages before
+   /// their final sizes are known.
+-  constexpr StreamEncoder(stream::Writer& writer, ByteSpan scratch_buffer)
++  PW_CONSTEXPR_CPP20 StreamEncoder(stream::Writer& writer,
++                                   ByteSpan scratch_buffer)
+       : status_(OkStatus()),
+         write_when_empty_(true),
+         parent_(nullptr),
+@@ -638,20 +640,30 @@ class StreamEncoder {
    ///
    /// @pre Encoder has no active child encoder.
    Status WriteDouble(uint32_t field_number, double value) {
@@ -126,7 +220,7 @@ index 232e94cafc45399dbfb67a2fc194db120367bab7..63c15f12c14aa4c98c401fe34c3d204b
    }
  
    /// Writes a repeated `double` field using packed encoding.
-@@ -659,9 +669,15 @@ class StreamEncoder {
+@@ -659,9 +671,15 @@ class StreamEncoder {
    /// @pre Encoder has no active child encoder.
    Status WriteRepeatedDouble(uint32_t field_number,
                               const pw::Vector<double>& values) {
@@ -145,6 +239,37 @@ index 232e94cafc45399dbfb67a2fc194db120367bab7..63c15f12c14aa4c98c401fe34c3d204b
    }
  
    /// Writes a proto `bytes` field as a key-value pair. This can also be used to
+@@ -787,7 +805,7 @@ class StreamEncoder {
+   struct NestedCountingEncoderTag {};
+ 
+   // Constructor for MemoryEncoder.
+-  constexpr explicit StreamEncoder(ByteSpan dest)
++  PW_CONSTEXPR_CPP20 explicit StreamEncoder(ByteSpan dest)
+       : status_(OkStatus()),
+         write_when_empty_(true),
+         parent_(nullptr),
+@@ -798,9 +816,9 @@ class StreamEncoder {
+ 
+   // If this encoder was spawned from a failed encoder, it also starts in a
+   // failed state.
+-  constexpr StreamEncoder(StreamEncoder& parent,
+-                          ByteSpan scratch_buffer,
+-                          bool write_when_empty = true)
++  PW_CONSTEXPR_CPP20 StreamEncoder(StreamEncoder& parent,
++                                   ByteSpan scratch_buffer,
++                                   bool write_when_empty = true)
+       : status_(parent.status_),
+         write_when_empty_(write_when_empty),
+         parent_(&parent),
+@@ -1055,7 +1073,7 @@ class MemoryEncoder : public StreamEncoder {
+   /// Constructs a `MemoryEncoder` targeting the `dest` buffer.
+   ///
+   /// @param[in] dest The destination buffer for serialized protobuf data.
+-  constexpr MemoryEncoder(ByteSpan dest) : StreamEncoder(dest) {}
++  PW_CONSTEXPR_CPP20 MemoryEncoder(ByteSpan dest) : StreamEncoder(dest) {}
+ 
+   /// @pre Encoder has no active child encoder.
+   /// @post If this encoder is a nested one, the parent encoder is unlocked and
 diff --git a/pw_protobuf/public/pw_protobuf/internal/codegen.h b/pw_protobuf/public/pw_protobuf/internal/codegen.h
 index 7c801766916446c330e4bafd2395d37d2f06eeda..e244c3bc391888687146dae3d5bc3a5b2668b685 100644
 --- a/pw_protobuf/public/pw_protobuf/internal/codegen.h
@@ -247,6 +372,134 @@ index 71acd3725dd785007a5cb0dc851140d6b9b89492..8bb7ab7fb222aecd3814bfdf52821fbd
  inline constexpr static uint32_t kFirstReservedNumber = 19000;
  inline constexpr static uint32_t kLastReservedNumber = 19999;
  
+diff --git a/pw_rpc/packet.cc b/pw_rpc/packet.cc
+index 36ba6d5b7d17d89ad388b51c3e7d1f51355ddf92..6ba9a38172480e2e75dd71b398420103d57b675d 100644
+--- a/pw_rpc/packet.cc
++++ b/pw_rpc/packet.cc
+@@ -21,7 +21,7 @@ namespace pw::rpc::internal {
+ 
+ using pwpb::PacketType;
+ 
+-namespace RpcPacket = pwpb::RpcPacket;
++namespace RpcPacketProto = ::pw::rpc::internal::pwpb::RpcPacket;
+ 
+ Result<Packet> Packet::FromBuffer(ConstByteSpan data) {
+   Packet packet;
+@@ -29,11 +29,11 @@ Result<Packet> Packet::FromBuffer(ConstByteSpan data) {
+   protobuf::Decoder decoder(data);
+ 
+   while ((status = decoder.Next()).ok()) {
+-    RpcPacket::Fields field =
+-        static_cast<RpcPacket::Fields>(decoder.FieldNumber());
++    RpcPacketProto::Fields field =
++        static_cast<RpcPacketProto::Fields>(decoder.FieldNumber());
+ 
+     switch (field) {
+-      case RpcPacket::Fields::kType: {
++      case RpcPacketProto::Fields::kType: {
+         uint32_t value;
+         // A decode error will propagate from Next() and terminate the loop.
+         decoder.ReadUint32(&value).IgnoreError();
+@@ -41,27 +41,27 @@ Result<Packet> Packet::FromBuffer(ConstByteSpan data) {
+         break;
+       }
+ 
+-      case RpcPacket::Fields::kChannelId:
++      case RpcPacketProto::Fields::kChannelId:
+         // A decode error will propagate from Next() and terminate the loop.
+         decoder.ReadUint32(&packet.channel_id_).IgnoreError();
+         break;
+ 
+-      case RpcPacket::Fields::kServiceId:
++      case RpcPacketProto::Fields::kServiceId:
+         // A decode error will propagate from Next() and terminate the loop.
+         decoder.ReadFixed32(&packet.service_id_).IgnoreError();
+         break;
+ 
+-      case RpcPacket::Fields::kMethodId:
++      case RpcPacketProto::Fields::kMethodId:
+         // A decode error will propagate from Next() and terminate the loop.
+         decoder.ReadFixed32(&packet.method_id_).IgnoreError();
+         break;
+ 
+-      case RpcPacket::Fields::kPayload:
++      case RpcPacketProto::Fields::kPayload:
+         // A decode error will propagate from Next() and terminate the loop.
+         decoder.ReadBytes(&packet.payload_).IgnoreError();
+         break;
+ 
+-      case RpcPacket::Fields::kStatus: {
++      case RpcPacketProto::Fields::kStatus: {
+         uint32_t value;
+         // A decode error will propagate from Next() and terminate the loop.
+         decoder.ReadUint32(&value).IgnoreError();
+@@ -69,7 +69,7 @@ Result<Packet> Packet::FromBuffer(ConstByteSpan data) {
+         break;
+       }
+ 
+-      case RpcPacket::Fields::kCallId:
++      case RpcPacketProto::Fields::kCallId:
+         // A decode error will propagate from Next() and terminate the loop.
+         decoder.ReadUint32(&packet.call_id_).IgnoreError();
+         break;
+@@ -84,7 +84,7 @@ Result<Packet> Packet::FromBuffer(ConstByteSpan data) {
+ }
+ 
+ Result<ConstByteSpan> Packet::Encode(ByteSpan buffer) const {
+-  RpcPacket::MemoryEncoder rpc_packet(buffer);
++  RpcPacketProto::MemoryEncoder rpc_packet(buffer);
+ 
+   // The payload is encoded first, as it may share the encode buffer.
+   if (!payload_.empty()) {
+diff --git a/pw_rpc/public/pw_rpc/internal/call.h b/pw_rpc/public/pw_rpc/internal/call.h
+index 83ae23de452b392d49b97ed38339619278cabc1e..df10593972fc5f65eaef5f4b4f2028704c2accf8 100644
+--- a/pw_rpc/public/pw_rpc/internal/call.h
++++ b/pw_rpc/public/pw_rpc/internal/call.h
+@@ -522,7 +522,7 @@ class Call : public IntrusiveForwardList<Call>::Item, private rpc::Writer {
+ 
+       if (decoder.Decode(payload, proto_struct).ok()) {
+         const uint32_t original_id = id();
+-        proto_on_next_local = std::move(proto_on_next);
++        proto_on_next_local = std::exchange(proto_on_next, nullptr);
+ 
+         rpc_lock().unlock();
+         proto_on_next_local(proto_struct);
+@@ -530,7 +530,6 @@ class Call : public IntrusiveForwardList<Call>::Item, private rpc::Writer {
+ 
+         // Restore the original callback if the original call is still active
+         // and the callback has not been replaced.
+-        // NOLINTNEXTLINE(bugprone-use-after-move)
+         const bool callback_replaced = proto_on_next != nullptr;
+         if (active_locked() && id() == original_id && !callback_replaced) {
+           restore_on_next(std::move(proto_on_next_local));
+diff --git a/pw_rpc/public/pw_rpc/internal/config.h b/pw_rpc/public/pw_rpc/internal/config.h
+index 74f4ed0f86cfff85d5661f216319edf4d484ada1..55a6f8f974548088554a8d525fa133de08c04b48 100644
+--- a/pw_rpc/public/pw_rpc/internal/config.h
++++ b/pw_rpc/public/pw_rpc/internal/config.h
+@@ -88,7 +88,11 @@
+ ///   - `@pigweed//pw_rpc:use_global_mutex_true` (the default)
+ ///   - `@pigweed//pw_rpc:use_global_mutex_false`
+ #ifndef PW_RPC_USE_GLOBAL_MUTEX
++#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
++#define PW_RPC_USE_GLOBAL_MUTEX 0
++#else
+ #define PW_RPC_USE_GLOBAL_MUTEX 1
++#endif
+ #endif  // PW_RPC_USE_GLOBAL_MUTEX
+ 
+ /// pw_rpc must yield the current thread when waiting for a callback to complete
+@@ -280,7 +284,11 @@ static_assert(
+ /// packet size and for `pw::rpc::MaxSafePayloadSize()`. It is also used by test
+ /// helpers that allocate RPC encoding buffers.
+ #ifndef PW_RPC_ENCODING_BUFFER_SIZE_BYTES
++#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
++#define PW_RPC_ENCODING_BUFFER_SIZE_BYTES 256
++#else
+ #define PW_RPC_ENCODING_BUFFER_SIZE_BYTES 512
++#endif
+ #endif  // PW_RPC_ENCODING_BUFFER_SIZE_BYTES
+ 
+ /// The log level to use for this module. Logs below this level are omitted.
 diff --git a/pw_rpc/py/pw_rpc/__init__.py b/pw_rpc/py/pw_rpc/__init__.py
 index 45948b19b214ab30cb1b1fbbf7f90445aa81fc7b..d168f20414838fc6ad689336c37d0df6b39c2860 100644
 --- a/pw_rpc/py/pw_rpc/__init__.py
@@ -263,6 +516,50 @@ index 45948b19b214ab30cb1b1fbbf7f90445aa81fc7b..d168f20414838fc6ad689336c37d0df6
 +
  from pw_rpc.client import Client
  from pw_rpc.descriptors import Channel, ChannelManipulator
+diff --git a/pw_stream/memory_stream.cc b/pw_stream/memory_stream.cc
+index 1a0de5181d21ba49108c09c56f1da96841bf7f45..73cb870fb989ec4c9b090f31bf8ba4eae28b7b86 100644
+--- a/pw_stream/memory_stream.cc
++++ b/pw_stream/memory_stream.cc
+@@ -13,6 +13,9 @@
+ // the License.
+ 
+ #include "pw_stream/memory_stream.h"
++#ifdef min
++#undef min
++#endif
+ 
+ #include <cstddef>
+ #include <cstring>
+diff --git a/pw_stream/public/pw_stream/null_stream.h b/pw_stream/public/pw_stream/null_stream.h
+index 40cdf4dc1ed1e279eeaf4f21d81a145392c2425f..a39f1f01bfc799ae50bbaba8e4ff59651209f372 100644
+--- a/pw_stream/public/pw_stream/null_stream.h
++++ b/pw_stream/public/pw_stream/null_stream.h
+@@ -33,7 +33,12 @@ class NullStream final : public SeekableReaderWriter {
+   // Gives access to a global NullStream instance. It is not necessary to have
+   // multiple NullStream instances since they have no state and do nothing.
+   static NullStream& Instance() {
++#if (defined(__cpp_constinit) && __cpp_constinit >= 201907L) || \
++    defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 10)
+     PW_CONSTINIT static NullStream stream;
++#else
++    static NullStream stream;
++#endif
+     return stream;
+   }
+ 
+diff --git a/pw_tokenizer/public/pw_tokenizer/encode_args.h b/pw_tokenizer/public/pw_tokenizer/encode_args.h
+index a6dfddd4a72a3bb514a8a7b730b4bc1863b1c7f2..1ddf420c9132382dbe237eb599fafc868e2f3780 100644
+--- a/pw_tokenizer/public/pw_tokenizer/encode_args.h
++++ b/pw_tokenizer/public/pw_tokenizer/encode_args.h
+@@ -113,7 +113,7 @@ class EncodedMessage {
+                  pw_tokenizer_ArgTypes types,
+                  va_list args) {
+     auto token_bytes = TokenBytes(token);
+-    static_assert(token_bytes.size() == sizeof(pw_tokenizer_Token));
++    static_assert(sizeof(token_bytes) == sizeof(pw_tokenizer_Token));
+     std::memcpy(data_, token_bytes.data(), token_bytes.size());
+     size_ =
+         sizeof(token) +
 diff --git a/pw_tokenizer/public/pw_tokenizer/internal/argument_types.h b/pw_tokenizer/public/pw_tokenizer/internal/argument_types.h
 index b1c77db0792120cece6f95df8f44cbd0562cf2be..461d43144c136ccc6edb68699c000d9237814b78 100644
 --- a/pw_tokenizer/public/pw_tokenizer/internal/argument_types.h
@@ -456,13 +753,18 @@ index c06b402529ea58dc7e01c9c0342ec00e499946de..db445d7bae9a14e422c795ceca7c70c8
  
    stream::Writer& writer() {
 diff --git a/pw_transfer/public/pw_transfer/transfer.h b/pw_transfer/public/pw_transfer/transfer.h
-index 85af436055b423d2fdacbc359c36d37a2a9af96f..cfd828d8736b6bdeef25ac46c2b0b678f087d6d8 100644
+index 85af436055b423d2fdacbc359c36d37a2a9af96f..af673e8c2098cdaf7af3fcc800ab79febb563c4f 100644
 --- a/pw_transfer/public/pw_transfer/transfer.h
 +++ b/pw_transfer/public/pw_transfer/transfer.h
-@@ -18,7 +18,11 @@
+@@ -18,7 +18,16 @@
  #include <limits>
  
  #include "pw_bytes/span.h"
++#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
++#ifndef PW_TRANSFER_COOPERATIVE
++#define PW_TRANSFER_COOPERATIVE 1
++#endif
++#endif
 +#if defined(PW_TRANSFER_COOPERATIVE)
 +#include "pw_sync/no_lock.h"
 +#else
@@ -471,7 +773,7 @@ index 85af436055b423d2fdacbc359c36d37a2a9af96f..cfd828d8736b6bdeef25ac46c2b0b678
  #include "pw_transfer/handler.h"
  #include "pw_transfer/internal/config.h"
  #include "pw_transfer/internal/server_context.h"
-@@ -186,7 +190,11 @@ class TransferService : public pw_rpc::raw::Transfer::Service<TransferService> {
+@@ -186,7 +195,11 @@ class TransferService : public pw_rpc::raw::Transfer::Service<TransferService> {
    uint8_t max_retries_;
    uint32_t max_lifetime_retries_;
  
@@ -484,10 +786,10 @@ index 85af436055b423d2fdacbc359c36d37a2a9af96f..cfd828d8736b6bdeef25ac46c2b0b678
        PW_GUARDED_BY(resource_responder_mutex_);
  
 diff --git a/pw_transfer/public/pw_transfer/transfer_thread.h b/pw_transfer/public/pw_transfer/transfer_thread.h
-index 550ac84e290f19ede4ad18a6ab42e7a636d8163c..4b586d6d06884d8e8294dda2f10b5e187a5ae888 100644
+index 550ac84e290f19ede4ad18a6ab42e7a636d8163c..584f873380f5130c8a6df0c2d45936d96a1437ec 100644
 --- a/pw_transfer/public/pw_transfer/transfer_thread.h
 +++ b/pw_transfer/public/pw_transfer/transfer_thread.h
-@@ -21,10 +21,24 @@
+@@ -21,10 +21,29 @@
  #include "pw_function/function.h"
  #include "pw_rpc/raw/client_reader_writer.h"
  #include "pw_rpc/raw/server_reader_writer.h"
@@ -495,6 +797,11 @@ index 550ac84e290f19ede4ad18a6ab42e7a636d8163c..4b586d6d06884d8e8294dda2f10b5e18
 +#include <cstddef>
 +#include <cstring>
 +
++#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
++#ifndef PW_TRANSFER_COOPERATIVE
++#define PW_TRANSFER_COOPERATIVE 1
++#endif
++#endif
 +#ifndef PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY
 +#define PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY 2
 +#endif
@@ -512,7 +819,7 @@ index 550ac84e290f19ede4ad18a6ab42e7a636d8163c..4b586d6d06884d8e8294dda2f10b5e18
  #include "pw_transfer/handler.h"
  #include "pw_transfer/internal/client_context.h"
  #include "pw_transfer/internal/config.h"
-@@ -38,7 +52,11 @@ class Client;
+@@ -38,7 +57,11 @@ class Client;
  
  namespace internal {
  
@@ -525,7 +832,7 @@ index 550ac84e290f19ede4ad18a6ab42e7a636d8163c..4b586d6d06884d8e8294dda2f10b5e18
   public:
    TransferThread(span<ClientContext> client_transfers,
                   span<ServerContext> server_transfers,
-@@ -243,14 +261,79 @@ class TransferThread : public thread::ThreadCore {
+@@ -243,14 +266,79 @@ class TransferThread : public thread::ThreadCore {
  
    size_t max_chunk_size() const { return chunk_buffer_.size(); }
  
@@ -605,7 +912,7 @@ index 550ac84e290f19ede4ad18a6ab42e7a636d8163c..4b586d6d06884d8e8294dda2f10b5e18
    }
  
    // For testing only: simulates a timeout event for a client transfer.
-@@ -332,18 +415,83 @@ class TransferThread : public thread::ThreadCore {
+@@ -332,18 +420,83 @@ class TransferThread : public thread::ThreadCore {
  
    const ByteSpan& encode_buffer() const { return encode_buffer_; }
  
@@ -690,7 +997,7 @@ index 550ac84e290f19ede4ad18a6ab42e7a636d8163c..4b586d6d06884d8e8294dda2f10b5e18
    }
  
    // Returns the earliest timeout among all active transfers, if any.
-@@ -391,8 +539,31 @@ class TransferThread : public thread::ThreadCore {
+@@ -391,8 +544,31 @@ class TransferThread : public thread::ThreadCore {
  
    void GetResourceState(uint32_t resource_id);
  
@@ -1247,10 +1554,30 @@ index 76f7741977ae653c5c3b30e0e2becac43211b25d..bda6fa1172c944d541d6ae05c531ace6
  
  rpc::Writer& TransferThread::stream_for(TransferStream stream) {
 diff --git a/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/bit.h b/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/bit.h
-index 37f0de1cc47de16249aed698fa01e3ea736732dd..42324eec0b7e80e080401e4109779c3964f53111 100644
+index 37f0de1cc47de16249aed698fa01e3ea736732dd..900b2a3e3393c550965735ccdc4bc24ad922f56d 100644
 --- a/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/bit.h
 +++ b/third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/bit.h
-@@ -173,7 +173,7 @@ using std::endian;
+@@ -10,6 +10,19 @@
+ #include <cstring>
+ #include <limits>
+ #include <type_traits>
++#if !defined(__clang__) && defined(__GNUC__) && (__GNUC__ < 8)
++#ifndef _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
++#define _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
++namespace std {
++template <typename T>
++// GCC < 8 does not provide this C++17 trait. Report false rather than
++// approximating it with is_trivially_copyable: the two properties differ.
++// False is conservative and only disables optimizations that require the trait.
++constexpr bool has_unique_object_representations_v = false;
++} // namespace std
++#endif
++#endif
++
+ 
+ #include "internal/bit.h"
+ #include "memory.h"
+@@ -173,7 +186,7 @@ using std::endian;
  
  #else  // Provide polyfill for endian enum.
  

@@ -11,17 +11,7 @@ void pw_log_avr_SetLogSink(pw_log_avr_LogSink sink) {
   g_log_sink = sink;
 }
 
-void pw_log_SetLogSink(pw_log_Sink sink) {
-  g_log_sink = sink;
-}
-
 void pw_log_avr_HandleLog(uint8_t level, const uint8_t* log_data, size_t size) {
-  if (g_log_sink != nullptr) {
-    g_log_sink(level, log_data, size);
-  }
-}
-
-void pw_log_HandleLog(uint8_t level, const uint8_t* log_data, size_t size) {
   if (g_log_sink != nullptr) {
     g_log_sink(level, log_data, size);
   }

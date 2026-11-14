@@ -50,14 +50,25 @@ def generate_pw_rpc_packet_header(output_dir: Path) -> Path:
         generated_python_root = Path(tmp) / "py"
         protobuf_python_dir = generated_python_root / "pw_protobuf_protos"
         codegen_python_dir = generated_python_root / "pw_protobuf_codegen_protos"
+        rpc_internal_python_dir = generated_python_root / "pw_rpc" / "internal"
         protobuf_python_dir.mkdir(parents=True)
         codegen_python_dir.mkdir(parents=True)
+        rpc_internal_python_dir.mkdir(parents=True)
 
-        for package_dir in (protobuf_python_dir, codegen_python_dir):
+        for package_dir in (
+            protobuf_python_dir,
+            codegen_python_dir,
+            rpc_internal_python_dir,
+        ):
             (package_dir / "__init__.py").write_text("", encoding="utf-8")
+        (generated_python_root / "pw_rpc" / "__init__.py").write_text(
+            "from pkgutil import extend_path\n__path__ = extend_path(__path__, __name__)\n",
+            encoding="utf-8",
+        )
 
         generation_commands = (
             (
+                protobuf_proto_dir,
                 f"-I{protobuf_proto_dir}",
                 f"--python_out={protobuf_python_dir}",
                 "common.proto",
@@ -65,19 +76,26 @@ def generate_pw_rpc_packet_header(output_dir: Path) -> Path:
                 "status.proto",
             ),
             (
+                codegen_proto_dir,
                 f"-I{codegen_proto_dir}",
                 f"--python_out={codegen_python_dir}",
                 "codegen_options.proto",
             ),
+            (
+                PW_ROOT,
+                f"-I{PW_ROOT}",
+                f"--python_out={generated_python_root}",
+                "pw_rpc/internal/packet.proto",
+            ),
         )
-        for arguments in generation_commands:
+        for work_dir, *arguments in generation_commands:
             try:
                 subprocess.run(
                     [protoc, "--experimental_allow_proto3_optional", *arguments],
                     check=True,
                     capture_output=True,
                     text=True,
-                    cwd=protobuf_proto_dir if "common.proto" in arguments else codegen_proto_dir,
+                    cwd=work_dir,
                 )
             except subprocess.CalledProcessError as exc:
                 raise RuntimeError(
@@ -103,6 +121,7 @@ def generate_pw_rpc_packet_header(output_dir: Path) -> Path:
 
         command = [
             protoc,
+            "--experimental_allow_proto3_optional",
             f"-I{PW_ROOT}",
             f"--plugin=protoc-gen-pwpb={plugin_path}",
             f"--pwpb_out={output_dir}",
@@ -123,10 +142,45 @@ def generate_pw_rpc_packet_header(output_dir: Path) -> Path:
                 f"{exc.stderr or exc.stdout}"
             ) from exc
 
+        raw_rpc_plugin_path = PW_ROOT / "pw_rpc" / "py" / "pw_rpc" / "plugin_raw.py"
+        transfer_proto_dir = PW_ROOT / "pw_transfer"
+        transfer_out_dir = output_dir / "pw_transfer"
+        transfer_out_dir.mkdir(parents=True, exist_ok=True)
+        transfer_command = [
+            protoc,
+            "--experimental_allow_proto3_optional",
+            f"-I{transfer_proto_dir}",
+            f"--plugin=protoc-gen-pwpb={plugin_path}",
+            f"--pwpb_opt=-I{transfer_proto_dir}",
+            f"--pwpb_out={transfer_out_dir}",
+            f"--plugin=protoc-gen-raw_rpc={raw_rpc_plugin_path}",
+            f"--raw_rpc_out={transfer_out_dir}",
+            "transfer.proto",
+        ]
+        try:
+            subprocess.run(
+                transfer_command,
+                check=True,
+                capture_output=True,
+                text=True,
+                cwd=transfer_proto_dir,
+                env=env,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(
+                "Pigweed pw_transfer code generation failed:\n"
+                f"{exc.stderr or exc.stdout}"
+            ) from exc
+
     packet_header = output_dir / "pw_rpc" / "internal" / "packet.pwpb.h"
     if not packet_header.is_file():
         raise FileNotFoundError(
             f"PWPB generator did not create the expected header: {packet_header}"
+        )
+    transfer_header = output_dir / "pw_transfer" / "transfer.pwpb.h"
+    if not transfer_header.is_file():
+        raise FileNotFoundError(
+            f"PWPB generator did not create the expected header: {transfer_header}"
         )
     return packet_header
 
@@ -341,373 +395,9 @@ def export_library(dest_dir: Path):
             "with the AVR port before exporting the Arduino library."
         )
 
-    # PWPB is the transfer encoding used by this port. Pigweed's raw-RPC
-    # generator is not enabled by every build graph and is not required by the
-    # Arduino transfer client/server API; its absence must not suppress PWPB.
-    generated_transfer_root = None
-    for build_root in (
-        REPO_ROOT / "build-transfer-1284p",
-        REPO_ROOT / "build-transfer",
-        REPO_ROOT / "build",
-    ):
-        if not build_root.is_dir():
-            continue
-        for proto_root in build_root.rglob("pw_transfer.proto"):
-            if (
-                proto_root / "pwpb" / "pw_transfer" / "transfer.pwpb.h"
-            ).is_file():
-                generated_transfer_root = proto_root
-                break
-        if generated_transfer_root is not None:
-            break
-
-    if generated_transfer_root is None:
-        # Non-Mega Arduino architectures do not expose pw_transfer. Remove
-        # its copied sources as well as headers so their builds do not compile
-        # transfer translation units that require AVR-generated PWPB bindings.
-        print("[*] Omitting pw_transfer from this architecture's Arduino export.")
-        shutil.rmtree(src_dir / "pw_transfer", ignore_errors=True)
-        for source in src_dir.glob("pw_transfer_*.cc"):
-            source.unlink()
-    else:
-        # The Bridge uses the upstream stream-backed handlers and does not
-        # expose the allocator-backed file-handler API.
-        (src_dir / "pw_transfer" / "handler_allocator.h").unlink(missing_ok=True)
-
-        pwpb_package = generated_transfer_root / "pwpb" / "pw_transfer"
-        shutil.copytree(
-            pwpb_package,
-            src_dir / "pw_transfer",
-            dirs_exist_ok=True,
-        )
-        raw_rpc_package = generated_transfer_root / "raw_rpc" / "pw_transfer"
-        if raw_rpc_package.is_dir():
-            shutil.copytree(
-                raw_rpc_package,
-                src_dir / "pw_transfer",
-                dirs_exist_ok=True,
-            )
-
-        cooperative_transfer_defines = (
-            "#ifndef PW_TRANSFER_COOPERATIVE\n"
-            "#define PW_TRANSFER_COOPERATIVE 1\n"
-            "#endif\n"
-            "#ifndef PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY\n"
-            "#define PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY 2\n"
-            "#endif\n"
-            "#ifndef PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE\n"
-            "#define PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE 128\n"
-            "#endif\n"
-        )
-        for relative_path in (
-            "pw_transfer/transfer.h",
-            "pw_transfer/transfer_thread.h",
-        ):
-            path = src_dir / relative_path
-            content = path.read_text(encoding="utf-8")
-            if "define PW_TRANSFER_COOPERATIVE 1" not in content:
-                if "#pragma once\n" not in content:
-                    raise RuntimeError(
-                        f"Cannot enable cooperative pw_transfer in {relative_path}: "
-                        "missing #pragma once"
-                    )
-                content = content.replace(
-                    "#pragma once\n",
-                    "#pragma once\n\n" + cooperative_transfer_defines,
-                    1,
-                )
-                path.write_text(content, encoding="utf-8")
-
-    rpc_config = src_dir / "pw_rpc" / "internal" / "config.h"
-    if not rpc_config.is_file():
-        raise FileNotFoundError(f"Missing upstream pw_rpc configuration: {rpc_config}")
-
-    content = rpc_config.read_text(encoding="utf-8")
-    for original, replacement in (
-        (
-            "#define PW_RPC_USE_GLOBAL_MUTEX 1",
-            "#define PW_RPC_USE_GLOBAL_MUTEX 0",
-        ),
-        (
-            "#define PW_RPC_ENCODING_BUFFER_SIZE_BYTES 512",
-            "#define PW_RPC_ENCODING_BUFFER_SIZE_BYTES 256",
-        ),
-    ):
-        if original not in content:
-            raise RuntimeError(
-                f"Upstream pw_rpc configuration no longer matches the AVR patch: {original}"
-            )
-        content = content.replace(original, replacement, 1)
-    rpc_config.write_text(content, encoding="utf-8")
-
-    def replace_in_export(relative_path: str, old: str, new: str) -> None:
-        path = src_dir / relative_path
-        content = path.read_text(encoding="utf-8")
-        if new in content:
-            return
-        if old not in content:
-            # The source-tree AVR patch already provides these double guards.
-            # The Arduino export must not try to apply a second, older variant.
-            if (
-                relative_path.startswith("pw_protobuf/")
-                and "Double" in old
-                and "if constexpr (sizeof(double) != sizeof(uint64_t))" in content
-            ):
-                return
-            raise RuntimeError(
-                f"Pigweed compatibility patch did not match {relative_path}"
-            )
-        path.write_text(content.replace(old, new, 1), encoding="utf-8")
-
-    replace_in_export(
-        "pw_checksum/internal/config.h",
-        "#ifndef PW_CHECKSUM_CRC32_DEFAULT_IMPL\n"
-        "#define PW_CHECKSUM_CRC32_DEFAULT_IMPL PW_CHECKSUM_CRC32_8BITS\n"
-        "#endif  // PW_CHECKSUM_CRC32_DEFAULT_IMPL",
-        "#ifndef PW_CHECKSUM_CRC32_DEFAULT_IMPL\n"
-        "#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)\n"
-        "#define PW_CHECKSUM_CRC32_DEFAULT_IMPL PW_CHECKSUM_CRC32_4BITS\n"
-        "#else\n"
-        "#define PW_CHECKSUM_CRC32_DEFAULT_IMPL PW_CHECKSUM_CRC32_8BITS\n"
-        "#endif\n"
-        "#endif  // PW_CHECKSUM_CRC32_DEFAULT_IMPL",
-    )
-
-    replace_in_export(
-        "pw_protobuf/wire_format.h",
-        "kMaxFieldNumber = (1u << 29) - 1;",
-        "kMaxFieldNumber = (uint32_t{1} << 29) - 1;",
-    )
-    replace_in_export(
-        "pw_protobuf/internal/codegen.h",
-        "static constexpr unsigned int kMaxFieldSize = (1u << 16) - 1;",
-        "static constexpr uint32_t kMaxFieldSize = (uint32_t{1} << 16) - 1;",
-    )
-    codegen_header = src_dir / "pw_protobuf/internal/codegen.h"
-    if "MessageField should be four 32-bit words or less on 16-bit targets" not in codegen_header.read_text(encoding="utf-8"):
-        replace_in_export(
-            "pw_protobuf/internal/codegen.h",
-            "static_assert(sizeof(MessageField) <= sizeof(size_t) * 4,\n"
-            '              "MessageField should be four words or less");',
-            "static_assert(sizeof(MessageField) <=\n"
-            "                  (sizeof(size_t) == 2 ? 12 : sizeof(size_t) * 4),\n"
-            '              "MessageField exceeds the target-specific size budget");',
-        )
-
-    encoder_path = "pw_protobuf/encoder.h"
-    replace_in_export(
-        encoder_path,
-        '#include "pw_memory/internal/sibling_cast.h"',
-        '#include "pw_memory/internal/sibling_cast.h"\n'
-        '#include "pw_polyfill/language_feature_macros.h"',
-    )
-    replace_in_export(
-        encoder_path,
-        "constexpr StreamEncoder(stream::Writer& writer, ByteSpan scratch_buffer)",
-        "PW_CONSTEXPR_CPP20 StreamEncoder(stream::Writer& writer,\n"
-        "                                   ByteSpan scratch_buffer)",
-    )
-    replace_in_export(
-        encoder_path,
-        "constexpr explicit StreamEncoder(ByteSpan dest)",
-        "PW_CONSTEXPR_CPP20 explicit StreamEncoder(ByteSpan dest)",
-    )
-    replace_in_export(
-        encoder_path,
-        "constexpr StreamEncoder(StreamEncoder& parent,\n"
-        "                          ByteSpan scratch_buffer,\n"
-        "                          bool write_when_empty = true)",
-        "PW_CONSTEXPR_CPP20 StreamEncoder(StreamEncoder& parent,\n"
-        "                                   ByteSpan scratch_buffer,\n"
-        "                                   bool write_when_empty = true)",
-    )
-    replace_in_export(
-        encoder_path,
-        "constexpr MemoryEncoder(ByteSpan dest) : StreamEncoder(dest) {}",
-        "PW_CONSTEXPR_CPP20 MemoryEncoder(ByteSpan dest) : StreamEncoder(dest) {}",
-    )
-    replace_in_export(
-        encoder_path,
-        "  Status WriteDouble(uint32_t field_number, double value) {\n"
-        "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
-        '                  "Double and uint64_t are not the same size");\n'
-        "    uint64_t integral_value;\n"
-        "    std::memcpy(&integral_value, &value, sizeof(value));\n"
-        "    std::array<std::byte, sizeof(value)> data =\n"
-        "        bytes::CopyInOrder(endian::little, integral_value);\n"
-        "    return WriteFixed(field_number, data);\n"
-        "  }",
-        "  Status WriteDouble(uint32_t field_number, double value) {\n"
-        "#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8\n"
-        "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
-        '                  "Double and uint64_t are not the same size");\n'
-        "    uint64_t integral_value;\n"
-        "    std::memcpy(&integral_value, &value, sizeof(value));\n"
-        "    std::array<std::byte, sizeof(value)> data =\n"
-        "        bytes::CopyInOrder(endian::little, integral_value);\n"
-        "    return WriteFixed(field_number, data);\n"
-        "#else\n"
-        "    (void)field_number;\n"
-        "    (void)value;\n"
-        "    return Status::Unimplemented();\n"
-        "#endif\n"
-        "  }",
-    )
-    replace_in_export(
-        encoder_path,
-        "  Status WritePackedDouble(uint32_t field_number, span<const double> values) {\n"
-        "    return WritePackedFixed(field_number, as_bytes(values), sizeof(double));\n"
-        "  }",
-        "  Status WritePackedDouble(uint32_t field_number, span<const double> values) {\n"
-        "#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8\n"
-        "    return WritePackedFixed(field_number, as_bytes(values), sizeof(double));\n"
-        "#else\n"
-        "    (void)field_number;\n"
-        "    (void)values;\n"
-        "    return Status::Unimplemented();\n"
-        "#endif\n"
-        "  }",
-    )
-    replace_in_export(
-        encoder_path,
-        "  Status WriteRepeatedDouble(uint32_t field_number,\n"
-        "                             const pw::Vector<double>& values) {\n"
-        "    return WritePackedFixed(field_number,\n"
-        "                            as_bytes(span(values.data(), values.size())),\n"
-        "                            sizeof(double));\n"
-        "  }",
-        "  Status WriteRepeatedDouble(uint32_t field_number,\n"
-        "                             const pw::Vector<double>& values) {\n"
-        "#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8\n"
-        "    return WritePackedFixed(field_number,\n"
-        "                            as_bytes(span(values.data(), values.size())),\n"
-        "                            sizeof(double));\n"
-        "#else\n"
-        "    (void)field_number;\n"
-        "    (void)values;\n"
-        "    return Status::Unimplemented();\n"
-        "#endif\n"
-        "  }",
-    )
-
-    for decoder_path, old, new in [
-        (
-            "pw_protobuf/decoder.h",
-            "  Status ReadDouble(double* out) {\n"
-            "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
-            '                  "Double and uint64_t must be the same size for protobufs");\n'
-            "    return ReadFixed(out);\n"
-            "  }",
-            "  Status ReadDouble(double* out) {\n"
-            "#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8\n"
-            "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
-            '                  "Double and uint64_t must be the same size for protobufs");\n'
-            "    return ReadFixed(out);\n"
-            "#else\n"
-            "    (void)out;\n"
-            "    return Status::Unimplemented();\n"
-            "#endif\n"
-            "  }",
-        ),
-        (
-            "pw_protobuf/stream_decoder.h",
-            "  Result<double> ReadDouble() {\n"
-            "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
-            '                  "Double and uint64_t must be the same size for protobufs");\n'
-            "    return ReadFixedField<double>();\n"
-            "  }",
-            "  Result<double> ReadDouble() {\n"
-            "#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8\n"
-            "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
-            '                  "Double and uint64_t must be the same size for protobufs");\n'
-            "    return ReadFixedField<double>();\n"
-            "#else\n"
-            "    return Status::Unimplemented();\n"
-            "#endif\n"
-            "  }",
-        ),
-        (
-            "pw_protobuf/stream_decoder.h",
-            "  StatusWithSize ReadPackedDouble(span<double> out) {\n"
-            "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
-            '                  "Double and uint64_t must be the same size for protobufs");\n'
-            "    return ReadPackedFixedField(as_writable_bytes(out), sizeof(double));\n"
-            "  }",
-            "  StatusWithSize ReadPackedDouble(span<double> out) {\n"
-            "#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8\n"
-            "    static_assert(sizeof(double) == sizeof(uint64_t),\n"
-            '                  "Double and uint64_t must be the same size for protobufs");\n'
-            "    return ReadPackedFixedField(as_writable_bytes(out), sizeof(double));\n"
-            "#else\n"
-            "    (void)out;\n"
-            "    return StatusWithSize::Unimplemented();\n"
-            "#endif\n"
-            "  }",
-        ),
-        (
-            "pw_protobuf/stream_decoder.h",
-            "  Status ReadRepeatedDouble(pw::Vector<double>& out) {\n"
-            "    return ReadRepeatedFixedField<double>(out);\n"
-            "  }",
-            "  Status ReadRepeatedDouble(pw::Vector<double>& out) {\n"
-            "#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8\n"
-            "    return ReadRepeatedFixedField<double>(out);\n"
-            "#else\n"
-            "    (void)out;\n"
-            "    return Status::Unimplemented();\n"
-            "#endif\n"
-            "  }",
-        ),
-    ]:
-        replace_in_export(decoder_path, old, new)
-
-    replace_in_export(
-        "pw_stream/null_stream.h",
-        "    PW_CONSTINIT static NullStream stream;",
-        "#if (defined(__cpp_constinit) && __cpp_constinit >= 201907L) || \\\n"
-        "    defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 10)\n"
-        "    PW_CONSTINIT static NullStream stream;\n"
-        "#else\n"
-        "    static NullStream stream;\n"
-        "#endif",
-    )
-    replace_in_export(
-        "pw_containers/internal/intrusive_list_item.h",
-        "template <typename>\n" "class GenericIntrusiveList;\n",
-        "template <typename>\n"
-        "class GenericIntrusiveList;\n\n"
-        "template <typename, typename>\n"
-        "class Incrementable;\n",
-    )
-    replace_in_export(
-        "pw_rpc/internal/call.h",
-        "        proto_on_next_local = std::move(proto_on_next);\n\n"
-        "        rpc_lock().unlock();\n"
-        "        proto_on_next_local(proto_struct);\n"
-        "        rpc_lock().lock();\n\n"
-        "        // Restore the original callback if the original call is still active\n"
-        "        // and the callback has not been replaced.\n"
-        "        // NOLINTNEXTLINE(bugprone-use-after-move)\n"
-        "        const bool callback_replaced = proto_on_next != nullptr;",
-        "        proto_on_next_local = std::exchange(proto_on_next, nullptr);\n\n"
-        "        rpc_lock().unlock();\n"
-        "        proto_on_next_local(proto_struct);\n"
-        "        rpc_lock().lock();\n\n"
-        "        // Restore the original callback if the original call is still active\n"
-        "        // and the callback has not been replaced.\n"
-        "        const bool callback_replaced = proto_on_next != nullptr;",
-    )
-    replace_in_export(
-        "pw_rpc_packet.cc",
-        "namespace RpcPacket = pwpb::RpcPacket;",
-        "namespace RpcPacketProto = ::pw::rpc::internal::pwpb::RpcPacket;",
-    )
-    packet_source = src_dir / "pw_rpc_packet.cc"
-    packet_content = packet_source.read_text(encoding="utf-8")
-    packet_source.write_text(
-        packet_content.replace("RpcPacket::", "RpcPacketProto::"),
-        encoding="utf-8",
-    )
+    # The Bridge uses the upstream stream-backed handlers and does not
+    # expose the allocator-backed file-handler API.
+    (src_dir / "pw_transfer" / "handler_allocator.h").unlink(missing_ok=True)
 
     # Fuchsia stdcompat and fit dependencies (required by pw_function)
     for fuchsia_lib in ["stdcompat", "fit"]:
@@ -724,110 +414,15 @@ def export_library(dest_dir: Path):
         if fuchsia_include.exists():
             shutil.copytree(fuchsia_include, src_dir, dirs_exist_ok=True)
 
-    # 4.1 The 16-bit pw_tokenizer argument-type fix is applied to the pinned
-    # source tree by tools/ci/apply_pigweed_patches.py (run above) and is
-    # inherited by the copied headers.
-
-    # 4.2 Patch pw_containers/vector.h for GCC 7 compatibility (defaulted constructor noexcept mismatch)
-    vec_file = src_dir / "pw_containers" / "vector.h"
-    if vec_file.exists():
-        c = vec_file.read_text(encoding="utf-8")
-        c = c.replace("Vector() noexcept = default;", "Vector() = default;")
-        c = c.replace(
-            "VectorStorage() : Base(kMaxSize) {}",
-            "VectorStorage() noexcept : Base(kMaxSize) {}",
-        )
-        vec_file.write_text(c, encoding="utf-8")
-
-    # 4.3 Patch pw_tokenizer/encode_args.h for GCC 7 (non-constant static_assert condition)
-    enc_args = src_dir / "pw_tokenizer" / "encode_args.h"
-    if enc_args.exists():
-        c = enc_args.read_text(encoding="utf-8")
-        c = c.replace(
-            "static_assert(token_bytes.size() == sizeof(pw_tokenizer_Token));",
-            "static_assert(sizeof(token_bytes) == sizeof(pw_tokenizer_Token));",
-        )
-        enc_args.write_text(c, encoding="utf-8")
-
-    # 4.4 Patch pw_stream_memory_stream.cc for Arduino min macro collision
-    mem_stream = src_dir / "pw_stream_memory_stream.cc"
-    if mem_stream.exists():
-        c = mem_stream.read_text(encoding="utf-8")
-        if "#include <algorithm>" not in c:
-            c = "#include <algorithm>\n#ifdef min\n#undef min\n#endif\n" + c
-            mem_stream.write_text(c, encoding="utf-8")
-
     # Copy avr-libstdcpp versioned trees
     for gcc_ver in ["gcc10", "gcc12", "gcc13", "gcc15", "gcc16"]:
         gcc_path = REPO_ROOT / "third_party" / "avr-libstdcpp" / gcc_ver
         if gcc_path.exists():
             shutil.copytree(gcc_path, dest_dir / gcc_ver, dirs_exist_ok=True)
 
-    # Copy avr-libstdcpp headers with architecture guards for host / non-AVR compatibility
+    # Copy avr-libstdcpp headers directly for AVR targets
     if STDCPP_ROOT.exists():
-        for root, dirs, files in os.walk(STDCPP_ROOT):
-            rel_dir = Path(root).relative_to(STDCPP_ROOT)
-            target_dir = src_dir / rel_dir
-            target_dir.mkdir(parents=True, exist_ok=True)
-            for f in files:
-                src_file = Path(root) / f
-                dst_file = target_dir / f
-                content = src_file.read_text(encoding="utf-8", errors="replace")
-                if content.startswith("#pragma GCC system_header // avr-libstdcpp"):
-                    rel_header = (rel_dir / f).as_posix() if str(rel_dir) != "." else f
-                    wrapped_content = (
-                        f"#pragma GCC system_header // avr-libstdcpp\n"
-                        f"#if !defined(__AVR__) && !defined(ARDUINO_ARCH_AVR)\n"
-                        f"#if __has_include_next(<{rel_header}>)\n"
-                        f"#include_next <{rel_header}>\n"
-                        f"#endif\n"
-                        f"#else\n"
-                        f"{content}\n"
-                        f"#endif\n"
-                    )
-                    dst_file.write_text(wrapped_content, encoding="utf-8")
-                else:
-                    shutil.copy2(src_file, dst_file)
-
-    # 4.2 Patch cstdio to provide std::snprintf and std::vsnprintf on AVR
-    for cstdio_path in dest_dir.glob("**/cstdio"):
-        content = cstdio_path.read_text(encoding="utf-8", errors="replace")
-        if "using ::vsprintf;\n}" in content and "using ::vsnprintf;\n}" not in content:
-            content = content.replace(
-                "  using ::vsprintf;\n}",
-                "  using ::vsprintf;\n  using ::snprintf;\n  using ::vsnprintf;\n}",
-            )
-            cstdio_path.write_text(content, encoding="utf-8")
-
-    # 4.3 Patch std::has_unique_object_representations_v for GCC < 8 compatibility
-    poly = """
-#if !defined(__clang__) && defined(__GNUC__) && (__GNUC__ < 8)
-#ifndef _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
-#define _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
-namespace std {
-template <typename T>
-// GCC < 8 does not provide this C++17 trait. Report false rather than
-// approximating it with is_trivially_copyable: the two properties differ.
-// False is conservative and only disables optimizations that require the trait.
-constexpr bool has_unique_object_representations_v = false;
-} // namespace std
-#endif
-#endif
-"""
-    for hdr in [
-        src_dir / "pw_bytes" / "span.h",
-        src_dir / "lib" / "stdcompat" / "bit.h",
-    ]:
-        if hdr.exists():
-            c = hdr.read_text(encoding="utf-8", errors="replace")
-            if (
-                "has_unique_object_representations_v" in c
-                and "_PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED" not in c
-            ):
-                c = c.replace(
-                    "#include <type_traits>", "#include <type_traits>" + poly, 1
-                )
-                hdr.write_text(c, encoding="utf-8")
+        shutil.copytree(STDCPP_ROOT, src_dir, dirs_exist_ok=True)
 
     # 5. Create an upstream pw_rpc + HDLC server skeleton.
     # Applications register their generated Pigweed services on this server.
