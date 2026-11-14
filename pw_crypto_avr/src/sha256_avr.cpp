@@ -2,15 +2,10 @@
 #include "pw_crypto/sha256.h"
 
 #include <string.h>
-
-#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
 #include <avr/pgmspace.h>
+
 #define READ_K(idx) pgm_read_dword(&kSha256K[idx])
 #define SHA256_PROGMEM PROGMEM
-#else
-#define READ_K(idx) kSha256K[idx]
-#define SHA256_PROGMEM
-#endif
 
 namespace pw::crypto::sha256::backend {
 
