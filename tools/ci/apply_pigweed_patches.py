@@ -412,6 +412,11 @@ from pw_rpc.client import Client""",
 #include <cstddef>
 #include <cstring>
 
+#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
+#ifndef PW_TRANSFER_COOPERATIVE
+#define PW_TRANSFER_COOPERATIVE 1
+#endif
+#endif
 #ifndef PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY
 #define PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY 2
 #endif
@@ -646,11 +651,45 @@ from pw_rpc.client import Client""",
     replace_once(
         "pw_transfer/public/pw_transfer/transfer.h",
         '#include "pw_sync/mutex.h"',
-        '''#if defined(PW_TRANSFER_COOPERATIVE)
+        '''#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
+#ifndef PW_TRANSFER_COOPERATIVE
+#define PW_TRANSFER_COOPERATIVE 1
+#endif
+#endif
+#if defined(PW_TRANSFER_COOPERATIVE)
 #include "pw_sync/no_lock.h"
 #else
 #include "pw_sync/mutex.h"
 #endif''',
+    )
+    replace_once(
+        "pw_rpc/public/pw_rpc/internal/config.h",
+        "#ifndef PW_RPC_USE_GLOBAL_MUTEX\n#define PW_RPC_USE_GLOBAL_MUTEX 1\n#endif  // PW_RPC_USE_GLOBAL_MUTEX",
+        """#ifndef PW_RPC_USE_GLOBAL_MUTEX
+#define PW_RPC_USE_GLOBAL_MUTEX 0
+#endif  // PW_RPC_USE_GLOBAL_MUTEX""",
+    )
+    replace_once(
+        "pw_rpc/public/pw_rpc/internal/config.h",
+        "#ifndef PW_RPC_ENCODING_BUFFER_SIZE_BYTES\n#define PW_RPC_ENCODING_BUFFER_SIZE_BYTES 512\n#endif  // PW_RPC_ENCODING_BUFFER_SIZE_BYTES",
+        """#ifndef PW_RPC_ENCODING_BUFFER_SIZE_BYTES
+#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
+#define PW_RPC_ENCODING_BUFFER_SIZE_BYTES 256
+#else
+#define PW_RPC_ENCODING_BUFFER_SIZE_BYTES 512
+#endif
+#endif  // PW_RPC_ENCODING_BUFFER_SIZE_BYTES""",
+    )
+    replace_once(
+        "pw_checksum/public/pw_checksum/internal/config.h",
+        "#ifndef PW_CHECKSUM_CRC32_DEFAULT_IMPL\n#define PW_CHECKSUM_CRC32_DEFAULT_IMPL PW_CHECKSUM_CRC32_8BITS\n#endif  // PW_CHECKSUM_CRC32_DEFAULT_IMPL",
+        """#ifndef PW_CHECKSUM_CRC32_DEFAULT_IMPL
+#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
+#define PW_CHECKSUM_CRC32_DEFAULT_IMPL PW_CHECKSUM_CRC32_4BITS
+#else
+#define PW_CHECKSUM_CRC32_DEFAULT_IMPL PW_CHECKSUM_CRC32_8BITS
+#endif
+#endif  // PW_CHECKSUM_CRC32_DEFAULT_IMPL""",
     )
     replace_once(
         "pw_transfer/public/pw_transfer/transfer.h",
@@ -1069,6 +1108,128 @@ bool TransferThread::HandleTimeouts() {
     header_content = transfer_header.read_text()
     if "Status Poll(size_t budget = 1);" not in header_content:
         raise RuntimeError("cooperative Status Poll declaration was not applied")
+
+    replace_once(
+        "pw_protobuf/public/pw_protobuf/encoder.h",
+        '#include "pw_memory/internal/sibling_cast.h"',
+        '#include "pw_memory/internal/sibling_cast.h"\n#include "pw_polyfill/language_feature_macros.h"',
+    )
+    replace_once(
+        "pw_protobuf/public/pw_protobuf/encoder.h",
+        "constexpr StreamEncoder(stream::Writer& writer, ByteSpan scratch_buffer)",
+        "PW_CONSTEXPR_CPP20 StreamEncoder(stream::Writer& writer,\n                                   ByteSpan scratch_buffer)",
+    )
+    replace_once(
+        "pw_protobuf/public/pw_protobuf/encoder.h",
+        "constexpr explicit StreamEncoder(ByteSpan dest)",
+        "PW_CONSTEXPR_CPP20 explicit StreamEncoder(ByteSpan dest)",
+    )
+    replace_once(
+        "pw_protobuf/public/pw_protobuf/encoder.h",
+        "constexpr StreamEncoder(StreamEncoder& parent,\n                          ByteSpan scratch_buffer,\n                          bool write_when_empty = true)",
+        "PW_CONSTEXPR_CPP20 StreamEncoder(StreamEncoder& parent,\n                                   ByteSpan scratch_buffer,\n                                   bool write_when_empty = true)",
+    )
+    replace_once(
+        "pw_protobuf/public/pw_protobuf/encoder.h",
+        "constexpr MemoryEncoder(ByteSpan dest) : StreamEncoder(dest) {}",
+        "PW_CONSTEXPR_CPP20 MemoryEncoder(ByteSpan dest) : StreamEncoder(dest) {}",
+    )
+    replace_once(
+        "pw_stream/public/pw_stream/null_stream.h",
+        "    PW_CONSTINIT static NullStream stream;",
+        """#if (defined(__cpp_constinit) && __cpp_constinit >= 201907L) || \\
+    defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 10)
+    PW_CONSTINIT static NullStream stream;
+#else
+    static NullStream stream;
+#endif""",
+    )
+    replace_once(
+        "pw_containers/public/pw_containers/internal/intrusive_list_item.h",
+        "template <typename>\nclass GenericIntrusiveList;\n",
+        """template <typename>
+class GenericIntrusiveList;
+
+template <typename, typename>
+class Incrementable;
+""",
+    )
+    replace_once(
+        "pw_rpc/public/pw_rpc/internal/call.h",
+        """        proto_on_next_local = std::move(proto_on_next);
+
+        rpc_lock().unlock();
+        proto_on_next_local(proto_struct);
+        rpc_lock().lock();
+
+        // Restore the original callback if the original call is still active
+        // and the callback has not been replaced.
+        // NOLINTNEXTLINE(bugprone-use-after-move)
+        const bool callback_replaced = proto_on_next != nullptr;""",
+        """        proto_on_next_local = std::exchange(proto_on_next, nullptr);
+
+        rpc_lock().unlock();
+        proto_on_next_local(proto_struct);
+        rpc_lock().lock();
+
+        // Restore the original callback if the original call is still active
+        // and the callback has not been replaced.
+        const bool callback_replaced = proto_on_next != nullptr;""",
+    )
+    replace_once(
+        "pw_rpc/packet.cc",
+        "namespace RpcPacket = pwpb::RpcPacket;",
+        "namespace RpcPacketProto = ::pw::rpc::internal::pwpb::RpcPacket;",
+    )
+    replace_all(
+        "pw_rpc/packet.cc",
+        "RpcPacket::",
+        "RpcPacketProto::",
+    )
+    replace_once(
+        "pw_containers/public/pw_containers/vector.h",
+        "Vector() noexcept = default;",
+        "Vector() = default;",
+    )
+    replace_all(
+        "pw_containers/public/pw_containers/vector.h",
+        "VectorStorage() : Base(kMaxSize) {}",
+        "VectorStorage() noexcept : Base(kMaxSize) {}",
+    )
+    replace_once(
+        "pw_tokenizer/public/pw_tokenizer/encode_args.h",
+        "static_assert(token_bytes.size() == sizeof(pw_tokenizer_Token));",
+        "static_assert(sizeof(token_bytes) == sizeof(pw_tokenizer_Token));",
+    )
+    replace_once(
+        "pw_stream/memory_stream.cc",
+        '#include "pw_stream/memory_stream.h"',
+        '#include "pw_stream/memory_stream.h"\n#ifdef min\n#undef min\n#endif',
+    )
+    poly = """
+#if !defined(__clang__) && defined(__GNUC__) && (__GNUC__ < 8)
+#ifndef _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
+#define _PW_HAS_UNIQUE_OBJECT_REPRESENTATIONS_V_DEFINED
+namespace std {
+template <typename T>
+// GCC < 8 does not provide this C++17 trait. Report false rather than
+// approximating it with is_trivially_copyable: the two properties differ.
+// False is conservative and only disables optimizations that require the trait.
+constexpr bool has_unique_object_representations_v = false;
+} // namespace std
+#endif
+#endif
+"""
+    replace_once(
+        "pw_bytes/public/pw_bytes/span.h",
+        "#include <type_traits>",
+        "#include <type_traits>" + poly,
+    )
+    replace_once(
+        "third_party/fuchsia/repo/sdk/lib/stdcompat/include/lib/stdcompat/bit.h",
+        "#include <type_traits>",
+        "#include <type_traits>" + poly,
+    )
 
     subprocess.run(
         ["git", "-C", str(PW_ROOT), "diff", "--check"],

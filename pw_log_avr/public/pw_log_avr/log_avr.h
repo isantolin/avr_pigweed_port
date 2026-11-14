@@ -9,15 +9,12 @@ extern "C" {
 #endif
 
 typedef void (*pw_log_avr_LogSink)(uint8_t level, const uint8_t* log_data, size_t size);
-typedef pw_log_avr_LogSink pw_log_Sink;
 
 /// Sets a custom log sink to route tokenized log packets (e.g. over HDLC channel 1 to OpenWrt daemon).
 void pw_log_avr_SetLogSink(pw_log_avr_LogSink sink);
-void pw_log_SetLogSink(pw_log_Sink sink);
 
 /// Default handler invoked by PW_LOG. Delivers tokenized bytes to the active sink.
 void pw_log_avr_HandleLog(uint8_t level, const uint8_t* log_data, size_t size);
-void pw_log_HandleLog(uint8_t level, const uint8_t* log_data, size_t size);
 
 #ifdef __cplusplus
 }
