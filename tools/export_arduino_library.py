@@ -420,31 +420,14 @@ def export_library(dest_dir: Path):
         if gcc_path.exists():
             shutil.copytree(gcc_path, dest_dir / gcc_ver, dirs_exist_ok=True)
 
-    # Copy avr-libstdcpp headers with architecture guards for host / non-AVR compatibility
+    # Copy avr-libstdcpp headers directly for AVR
     if STDCPP_ROOT.exists():
         for root, dirs, files in os.walk(STDCPP_ROOT):
             rel_dir = Path(root).relative_to(STDCPP_ROOT)
             target_dir = src_dir / rel_dir
             target_dir.mkdir(parents=True, exist_ok=True)
             for f in files:
-                src_file = Path(root) / f
-                dst_file = target_dir / f
-                content = src_file.read_text(encoding="utf-8", errors="replace")
-                if content.startswith("#pragma GCC system_header // avr-libstdcpp"):
-                    rel_header = (rel_dir / f).as_posix() if str(rel_dir) != "." else f
-                    wrapped_content = (
-                        f"#pragma GCC system_header // avr-libstdcpp\n"
-                        f"#if !defined(__AVR__) && !defined(ARDUINO_ARCH_AVR)\n"
-                        f"#if __has_include_next(<{rel_header}>)\n"
-                        f"#include_next <{rel_header}>\n"
-                        f"#endif\n"
-                        f"#else\n"
-                        f"{content}\n"
-                        f"#endif\n"
-                    )
-                    dst_file.write_text(wrapped_content, encoding="utf-8")
-                else:
-                    shutil.copy2(src_file, dst_file)
+                shutil.copy2(Path(root) / f, target_dir / f)
 
     # 5. Create an upstream pw_rpc + HDLC server skeleton.
     # Applications register their generated Pigweed services on this server.

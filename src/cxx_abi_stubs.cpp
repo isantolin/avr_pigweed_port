@@ -1,5 +1,4 @@
 // File: src/cxx_abi_stubs.cpp
-#if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
 #include <stddef.h>
 #include <stdint.h>
 
@@ -22,4 +21,3 @@ extern "C" void __cxa_guard_release(__guard* g) {
 
 extern "C" void __cxa_guard_abort(__guard*) {}
 }  // namespace __cxxabiv1
-#endif
