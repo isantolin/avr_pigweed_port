@@ -52,9 +52,37 @@ static uint16_t read_sp(const avr_t *avr) {
   return (uint16_t)(avr->data[R_SPL] | ((uint16_t)avr->data[R_SPH] << 8));
 }
 
+enum { PEAK_STACK_SNAPSHOT_BYTES = 96 };
+
+// CPU context captured when the stack reaches a new low-water mark: the PC and
+// the bytes above SP, whose return addresses identify the deepest call chain.
+static avr_flashaddr_t g_min_sp_pc = 0;
+static uint8_t g_min_sp_stack[PEAK_STACK_SNAPSHOT_BYTES];
+static size_t g_min_sp_stack_len = 0;
+
 static void sample_sp(const avr_t *avr) {
   const uint16_t sp = read_sp(avr);
-  if (sp != 0U && sp <= avr->ramend && sp < g_min_sp) g_min_sp = sp;
+  if (sp == 0U || sp > avr->ramend || sp >= g_min_sp) return;
+  g_min_sp = sp;
+  g_min_sp_pc = avr->pc;
+  g_min_sp_stack_len = 0;
+  for (uint32_t addr = (uint32_t)sp + 1U;
+       addr <= avr->ramend && g_min_sp_stack_len < PEAK_STACK_SNAPSHOT_BYTES;
+       ++addr) {
+    g_min_sp_stack[g_min_sp_stack_len++] = avr->data[addr];
+  }
+}
+
+static void report_stack_peak(const avr_t *avr) {
+  fprintf(stderr, "AVR stack low-water mark: min_sp=0x%04x ramend=0x%04x\n",
+          g_min_sp, avr->ramend);
+  fprintf(stderr, "AVR stack low-water context: pc=0x%06lx address_size=%u stack:",
+          (unsigned long)g_min_sp_pc, (unsigned)avr->address_size);
+  for (size_t i = 0; i < g_min_sp_stack_len; ++i) {
+    fprintf(stderr, " %02x", g_min_sp_stack[i]);
+  }
+  fprintf(stderr, "\n");
+  fflush(stderr);
 }
 
 // Report the CPU state needed to symbolize a firmware crash: the faulting PC
@@ -426,8 +454,7 @@ int main(int argc, char **argv) {
     report_crash(avr);
     g_failure = 1;
   }
-  fprintf(stderr, "AVR stack low-water mark: min_sp=0x%04x ramend=0x%04x\n",
-          g_min_sp, avr->ramend);
+  report_stack_peak(avr);
   avr_terminate(avr);
   return g_failure ? 1 : 0;
 }
