@@ -42,6 +42,40 @@ enum {
   BATCH_INSTRUCTION_CYCLES = 2048
 };
 
+enum { CRASH_STACK_DUMP_BYTES = 32 };
+
+// Lowest stack pointer observed while the firmware runs (stack low-water mark).
+// 0xFFFF means no valid SP has been sampled yet.
+static uint16_t g_min_sp = 0xFFFFU;
+
+static uint16_t read_sp(const avr_t *avr) {
+  return (uint16_t)(avr->data[R_SPL] | ((uint16_t)avr->data[R_SPH] << 8));
+}
+
+static void sample_sp(const avr_t *avr) {
+  const uint16_t sp = read_sp(avr);
+  if (sp != 0U && sp <= avr->ramend && sp < g_min_sp) g_min_sp = sp;
+}
+
+// Report the CPU state needed to symbolize a firmware crash: the faulting PC
+// (byte address, as used by avr-addr2line), the stack pointer, the stack
+// low-water mark, and the bytes on top of the stack (return addresses).
+static void report_crash(const avr_t *avr) {
+  const uint16_t sp = read_sp(avr);
+  fprintf(stderr,
+          "AVR crash diagnostics: pc=0x%06lx sp=0x%04x min_sp=0x%04x "
+          "ramend=0x%04x sreg=0x%02x cycle=%llu\n",
+          (unsigned long)avr->pc, sp, g_min_sp, avr->ramend,
+          avr->data[R_SREG], (unsigned long long)avr->cycle);
+  fprintf(stderr, "AVR crash stack:");
+  for (uint32_t addr = (uint32_t)sp + 1U, n = 0;
+       addr <= avr->ramend && n < CRASH_STACK_DUMP_BYTES; ++addr, ++n) {
+    fprintf(stderr, " %02x", avr->data[addr]);
+  }
+  fprintf(stderr, "\n");
+  fflush(stderr);
+}
+
 static void stop_handler(int signal_number) {
   (void)signal_number;
   g_stop = 1;
@@ -122,6 +156,7 @@ static void drain_rx_queue(struct avr_t *avr, avr_irq_t *rx) {
         return;
       }
       (void)avr_run(avr);
+      sample_sp(avr);
     }
     flush_tx_queue();
   }
@@ -205,6 +240,9 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Unable to initialize MCU: %s\n", mcu);
     return 1;
   }
+  // simavr defaults to LOG_OUTPUT, which suppresses its own crash reasons
+  // (invalid opcode, out-of-RAM write). Surface them.
+  avr->log = LOG_WARNING;
 
   elf_firmware_t firmware;
   memset(&firmware, 0, sizeof(firmware));
@@ -340,6 +378,7 @@ int main(int argc, char **argv) {
         break;
       }
       (void)avr_run(avr);
+      sample_sp(avr);
     }
 
     drain_rx_queue(avr, rx);
@@ -384,8 +423,11 @@ int main(int argc, char **argv) {
   g_pty_master = -1;
   if (avr->state == cpu_Crashed) {
     fprintf(stderr, "AVR simulation crashed\n");
+    report_crash(avr);
     g_failure = 1;
   }
+  fprintf(stderr, "AVR stack low-water mark: min_sp=0x%04x ramend=0x%04x\n",
+          g_min_sp, avr->ramend);
   avr_terminate(avr);
   return g_failure ? 1 : 0;
 }
