@@ -408,23 +408,19 @@ def export_library(dest_dir: Path):
     for header in (vector_header, decoder_header):
         content = header.read_text(encoding="utf-8")
         content = content.replace('#include "pw_containers/vector.h"\n', "")
-        if "pw::Vector<" in content:
-            # Upstream Pigweed's comments and formatting can change between
-            # pinned revisions. Remove the exact overload by its signature
-            # and balanced function body rather than matching its docstring.
-            signature = (
-                "Status WriteRepeatedDouble(uint32_t field_number,"
-                if header.name == "encoder.h"
-                else "Status ReadRepeatedDouble(pw::Vector<double>& out)"
-            )
-            method_start = content.find(signature)
-            if method_start < 0:
-                raise RuntimeError(
-                    f"Could not locate AVR-incompatible pw::Vector overload in {header}"
-                )
-            body_start = content.find("{", method_start + len(signature))
-            if body_start < 0:
-                raise RuntimeError(f"Could not locate method body in {header}")
+        # Strip every upstream overload that exposes pw::Vector. The
+        # exact overload set can change with Pigweed revisions; match C++
+        # member declarations structurally rather than relying on docstrings.
+        vector_method = re.compile(
+            r"^[ \\t]*(?:Status|pw::Status|Result<[^>]+>)\\s+"
+            r"[A-Za-z_][A-Za-z0-9_]*\\s*\\([^;{}]*pw::Vector<[^>]+>[^;{}]*\\)\\s*\\{",
+            re.MULTILINE | re.DOTALL,
+        )
+        while True:
+            match = vector_method.search(content)
+            if match is None:
+                break
+            body_start = content.find("{", match.start(), match.end())
             depth = 0
             method_end = None
             for index in range(body_start, len(content)):
@@ -437,7 +433,7 @@ def export_library(dest_dir: Path):
                         break
             if method_end is None:
                 raise RuntimeError(f"Unterminated pw::Vector overload in {header}")
-            content = content[:method_start] + content[method_end:]
+            content = content[:match.start()] + content[method_end:]
         if "pw::Vector<" in content or 'pw_containers/vector.h' in content:
             raise RuntimeError(f"AVR export still references pw::Vector in {header}")
         header.write_text(content, encoding="utf-8")
