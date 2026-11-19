@@ -1,4 +1,3 @@
-#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -182,7 +181,7 @@ class HdlcLoopbackWriter final : public pw::stream::NonSeekableWriter {
   size_t frames_to_drop_ = 0;
   size_t dropped_frames_ = 0;
   bool drop_all_frames_ = false;
-  std::array<std::byte, kHdlcDecoderBufferSize> decoder_storage_{};
+  std::byte decoder_storage_[kHdlcDecoderBufferSize] {};
   pw::hdlc::Decoder decoder_;
 };
 
@@ -311,10 +310,10 @@ int main() {
   pw_chrono_avr_InitTimer0();
   sei();
 
-  static std::array<std::byte, 128> client_chunk{};
-  static std::array<std::byte, 256> client_encode{};
-  static std::array<std::byte, 128> server_chunk{};
-  static std::array<std::byte, 256> server_encode{};
+  static std::byte client_chunk[128] {};
+  static std::byte client_encode[256] {};
+  static std::byte server_chunk[128] {};
+  static std::byte server_encode[256] {};
   static_assert(sizeof(client_encode) > sizeof(client_chunk));
   static_assert(sizeof(server_encode) > sizeof(server_chunk));
   static pw::transfer::Thread<1, 1> client_thread{
@@ -358,18 +357,18 @@ int main() {
   static HdlcLoopbackWriter server_to_client_writer;
   static pw::hdlc::RpcChannelOutput server_output(
       server_to_client_writer, kHdlcAddress, "pw-transfer-server-hdlc");
-  static std::array<pw::rpc::Channel, 1> server_channels = {
+  static pw::rpc::Channel server_channels[1] = {
       pw::rpc::Channel::Create<kRpcChannelId>(&server_output)};
   static pw::rpc::Server server(pw::span<pw::rpc::Channel>(
-      server_channels.data(), server_channels.size()));
+      server_channels, (sizeof(server_channels) / sizeof(server_channels[0]))));
 
   static HdlcLoopbackWriter client_to_server_writer(server);
   static pw::hdlc::RpcChannelOutput client_output(
       client_to_server_writer, kHdlcAddress, "pw-transfer-client-hdlc");
-  static std::array<pw::rpc::Channel, 1> client_channels = {
+  static pw::rpc::Channel client_channels[1] = {
       pw::rpc::Channel::Create<kRpcChannelId>(&client_output)};
   static pw::rpc::Client rpc_client(pw::span<pw::rpc::Channel>(
-      client_channels.data(), client_channels.size()));
+      client_channels, (sizeof(client_channels) / sizeof(client_channels[0]))));
   server_to_client_writer.set_client(rpc_client);
 
   static pw::transfer::TransferService transfer_service(
@@ -381,15 +380,15 @@ int main() {
   static pw::transfer::Client transfer_client(
       rpc_client, kRpcChannelId, client_thread, 256);
 
-  std::array<std::byte, 32> read_data{};
-  for (size_t i = 0; i < read_data.size(); ++i) {
+  std::byte read_data[32] {};
+  for (size_t i = 0; i < (sizeof(read_data) / sizeof(read_data[0])); ++i) {
     read_data[i] = static_cast<std::byte>(i + 1);
   }
   pw::stream::MemoryReader read_source{pw::ConstByteSpan(read_data)};
   pw::transfer::ReadOnlyHandler read_handler(kReadResourceId, read_source);
   if (!transfer_service.RegisterHandler(read_handler)) MarkFailure(success, failure_code, 5);
 
-  std::array<std::byte, 64> read_output_buffer{};
+  std::byte read_output_buffer[64] {};
   pw::stream::MemoryWriter read_output{pw::ByteSpan(read_output_buffer)};
   read_complete = false;
   g_client_to_server_frames = 0;
@@ -405,16 +404,16 @@ int main() {
                 static_cast<uint8_t>(40U + g_pump_failure_reason));
   }
   if (!read_completion_status.ok() ||
-      read_output.bytes_written() != read_data.size() ||
-      std::memcmp(read_output.data(), read_data.data(), read_data.size()) != 0) {
+      read_output.bytes_written() != (sizeof(read_data) / sizeof(read_data[0])) ||
+      std::memcmp(read_output.data(), read_data, (sizeof(read_data) / sizeof(read_data[0]))) != 0) {
     MarkFailure(success, failure_code, 8);
   }
 
-  std::array<std::byte, 32> write_data{};
-  for (size_t i = 0; i < write_data.size(); ++i) {
+  std::byte write_data[32] {};
+  for (size_t i = 0; i < (sizeof(write_data) / sizeof(write_data[0])); ++i) {
     write_data[i] = static_cast<std::byte>(0xA0 + i);
   }
-  std::array<std::byte, 64> write_sink_buffer{};
+  std::byte write_sink_buffer[64] {};
   pw::stream::MemoryWriter write_sink{pw::ByteSpan(write_sink_buffer)};
   pw::transfer::WriteOnlyHandler write_handler(kWriteResourceId, write_sink);
   if (!transfer_service.RegisterHandler(write_handler)) MarkFailure(success, failure_code, 9);
@@ -432,18 +431,18 @@ int main() {
     MarkFailure(success, failure_code,
                 static_cast<uint8_t>(30U +
                     static_cast<uint8_t>(write_completion_status.code())));
-  } else if (write_sink.bytes_written() != write_data.size()) {
+  } else if (write_sink.bytes_written() != (sizeof(write_data) / sizeof(write_data[0]))) {
     MarkFailure(success, failure_code, 23);
   } else if (std::memcmp(write_sink.data(),
-                         write_data.data(),
-                         write_data.size()) != 0) {
+                         write_data,
+                         (sizeof(write_data) / sizeof(write_data[0]))) != 0) {
     MarkFailure(success, failure_code, 24);
   }
 
   // Cancel an in-flight read before its payload is drained. The transfer
   // callback must report CANCELLED and release the client role.
-  std::array<std::byte, 256> cancel_data{};
-  for (size_t i = 0; i < cancel_data.size(); ++i) {
+  std::byte cancel_data[256] {};
+  for (size_t i = 0; i < (sizeof(cancel_data) / sizeof(cancel_data[0])); ++i) {
     cancel_data[i] = static_cast<std::byte>(0x20 + (i & 0x3F));
   }
   pw::stream::MemoryReader cancel_source{pw::ConstByteSpan(cancel_data)};
@@ -451,7 +450,7 @@ int main() {
                                                 cancel_source);
   if (!transfer_service.RegisterHandler(cancel_handler)) MarkFailure(success, failure_code, 13);
 
-  std::array<std::byte, 256> cancel_output_buffer{};
+  std::byte cancel_output_buffer[256] {};
   pw::stream::MemoryWriter cancel_output{pw::ByteSpan(cancel_output_buffer)};
   cancel_complete = false;
   auto cancel_result =
@@ -470,14 +469,14 @@ int main() {
 
   // Drop one server response. A zero initial-chunk timeout forces an upstream
   // retry; the next response is delivered and the transfer must complete.
-  std::array<std::byte, 32> retry_data{};
-  for (size_t i = 0; i < retry_data.size(); ++i) {
+  std::byte retry_data[32] {};
+  for (size_t i = 0; i < (sizeof(retry_data) / sizeof(retry_data[0])); ++i) {
     retry_data[i] = static_cast<std::byte>(0x60 + i);
   }
   pw::stream::MemoryReader retry_source{pw::ConstByteSpan(retry_data)};
   pw::transfer::ReadOnlyHandler retry_handler(kRetryResourceId, retry_source);
   if (!transfer_service.RegisterHandler(retry_handler)) MarkFailure(success, failure_code, 17);
-  std::array<std::byte, 64> retry_output_buffer{};
+  std::byte retry_output_buffer[64] {};
   pw::stream::MemoryWriter retry_output{pw::ByteSpan(retry_output_buffer)};
   server_to_client_writer.DropNextFrames(1);
   if (!transfer_client.set_max_retries(2).ok()) MarkFailure(success, failure_code, 18);
@@ -494,20 +493,20 @@ int main() {
     MarkFailure(success, failure_code, 20);
   }
   if (!retry_completion_status.ok() ||
-      retry_output.bytes_written() != retry_data.size() ||
-      std::memcmp(retry_output.data(), retry_data.data(), retry_data.size()) != 0 ||
+      retry_output.bytes_written() != (sizeof(retry_data) / sizeof(retry_data[0])) ||
+      std::memcmp(retry_output.data(), retry_data, (sizeof(retry_data) / sizeof(retry_data[0]))) != 0 ||
       server_to_client_writer.dropped_frames() != 1) {
     MarkFailure(success, failure_code, 21);
   }
 
   // Drop every server response and exhaust the retry budget. The cooperative
   // Poll path must complete the client with DEADLINE_EXCEEDED.
-  std::array<std::byte, 32> timeout_data{};
+  std::byte timeout_data[32] {};
   pw::stream::MemoryReader timeout_source{pw::ConstByteSpan(timeout_data)};
   pw::transfer::ReadOnlyHandler timeout_handler(kTimeoutResourceId,
                                                  timeout_source);
   if (!transfer_service.RegisterHandler(timeout_handler)) MarkFailure(success, failure_code, 22);
-  std::array<std::byte, 64> timeout_output_buffer{};
+  std::byte timeout_output_buffer[64] {};
   pw::stream::MemoryWriter timeout_output{pw::ByteSpan(timeout_output_buffer)};
   server_to_client_writer.SetDropAll(true);
   if (!transfer_client.set_max_retries(1).ok()) MarkFailure(success, failure_code, 23);
@@ -534,18 +533,18 @@ int main() {
   static HdlcLoopbackWriter reverse_server_to_client_writer;
   static pw::hdlc::RpcChannelOutput reverse_server_output(
       reverse_server_to_client_writer, kHdlcAddress, "pw-transfer-reverse-server");
-  static std::array<pw::rpc::Channel, 1> reverse_server_channels = {
+  static pw::rpc::Channel reverse_server_channels[1] = {
       pw::rpc::Channel::Create<kRpcChannelId>(&reverse_server_output)};
   static pw::rpc::Server reverse_server(pw::span<pw::rpc::Channel>(
-      reverse_server_channels.data(), reverse_server_channels.size()));
+      reverse_server_channels, reverse_(sizeof(server_channels) / sizeof(server_channels[0]))));
 
   static HdlcLoopbackWriter reverse_client_to_server_writer(reverse_server);
   static pw::hdlc::RpcChannelOutput reverse_client_output(
       reverse_client_to_server_writer, kHdlcAddress, "pw-transfer-reverse-client");
-  static std::array<pw::rpc::Channel, 1> reverse_client_channels = {
+  static pw::rpc::Channel reverse_client_channels[1] = {
       pw::rpc::Channel::Create<kRpcChannelId>(&reverse_client_output)};
   static pw::rpc::Client reverse_rpc_client(pw::span<pw::rpc::Channel>(
-      reverse_client_channels.data(), reverse_client_channels.size()));
+      reverse_client_channels, reverse_(sizeof(client_channels) / sizeof(client_channels[0]))));
   reverse_server_to_client_writer.set_client(reverse_rpc_client);
 
   static pw::transfer::TransferService reverse_transfer_service(
@@ -554,11 +553,11 @@ int main() {
   static pw::transfer::Client reverse_transfer_client(
       reverse_rpc_client, kRpcChannelId, server_thread, 256);
 
-  std::array<std::byte, 32> reverse_data{};
-  for (size_t i = 0; i < reverse_data.size(); ++i) {
+  std::byte reverse_data[32] {};
+  for (size_t i = 0; i < (sizeof(reverse_data) / sizeof(reverse_data[0])); ++i) {
     reverse_data[i] = static_cast<std::byte>(0x40 + i);
   }
-  std::array<std::byte, 64> reverse_sink_buffer{};
+  std::byte reverse_sink_buffer[64] {};
   pw::stream::MemoryWriter reverse_sink{pw::ByteSpan(reverse_sink_buffer)};
   pw::transfer::WriteOnlyHandler reverse_handler(kWriteResourceId,
                                                   reverse_sink);
@@ -576,9 +575,9 @@ int main() {
     MarkFailure(success, failure_code, 29);
   }
   if (!reverse_write_completion_status.ok() ||
-      reverse_sink.bytes_written() != reverse_data.size() ||
-      std::memcmp(reverse_sink.data(), reverse_data.data(),
-                  reverse_data.size()) != 0) {
+      reverse_sink.bytes_written() != (sizeof(reverse_data) / sizeof(reverse_data[0])) ||
+      std::memcmp(reverse_sink.data(), reverse_data,
+                  (sizeof(reverse_data) / sizeof(reverse_data[0]))) != 0) {
     MarkFailure(success, failure_code, 30);
   }
 
