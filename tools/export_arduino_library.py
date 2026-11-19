@@ -462,10 +462,10 @@ def export_library(dest_dir: Path):
         return matches[0].resolve() if len(matches) == 1 else None
 
     translation_units = list(src_dir.rglob("*.cpp"))
+    # The example sketch is generated later in this function; its direct
+    # includes are covered by the exported public umbrella and the Arduino
+    # compile probe, so do not reference examples_dir before it is created.
     public_roots = [src_dir / "PigweedAVR.h"]
-    example_root = examples_dir / "YunBridgeRpc.ino"
-    if example_root.is_file():
-        public_roots.append(example_root)
     for root in [*translation_units, *public_roots]:
         if root.is_file():
             pending_headers.extend(
