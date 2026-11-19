@@ -239,6 +239,7 @@ jobs:
           curl -fsSL "https://github.com/arduino/arduino-cli/releases/download/v${ARDUINO_CLI_VERSION}/arduino-cli_${ARDUINO_CLI_VERSION}_Linux_64bit.tar.gz" \
             | tar -xz -C "$RUNNER_TEMP/arduino-cli"
           echo "$RUNNER_TEMP/arduino-cli" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/arduino-cli:$PATH"
           arduino-cli version
           arduino-cli core update-index
           arduino-cli core install arduino:avr
