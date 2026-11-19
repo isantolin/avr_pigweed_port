@@ -397,6 +397,26 @@ def export_library(dest_dir: Path):
 
     generate_pw_rpc_packet_header(src_dir)
 
+    # Pigweed's PWPB generator currently emits an unconditional vector include
+    # for message headers, even when the schema has no repeated fields and the
+    # generated declarations never use pw::Vector. Remove only that unused
+    # include; fail closed if generated code actually depends on the container.
+    for generated_header in (
+        src_dir / "pw_rpc" / "internal" / "packet.pwpb.h",
+        src_dir / "pw_transfer" / "transfer.pwpb.h",
+    ):
+        generated = generated_header.read_text(encoding="utf-8")
+        code_only = re.sub(r"/\\*.*?\\*/|//[^\\n]*", "", generated, flags=re.DOTALL)
+        if "pw::Vector<" in code_only:
+            raise RuntimeError(
+                f"{generated_header} uses pw::Vector; AVR export cannot "
+                "provide STL-backed containers"
+            )
+        generated = generated.replace(
+            '#include "pw_containers/vector.h"\\n', ""
+        )
+        generated_header.write_text(generated, encoding="utf-8")
+
     # The Arduino AVR toolchain does not provide the C++ standard-library
     # container/lifetime facilities required by pw::Vector. The AVR transfer
     # API uses fixed caller-owned buffers and spans, so strip the optional
