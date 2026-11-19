@@ -88,7 +88,7 @@ class ProbeService final
   void Unary(pw::ConstByteSpan request,
              pw::rpc::RawUnaryResponder& responder) {
     unary_called_ = true;
-    unary_request_size_ = (sizeof(request) / sizeof(request[0]));
+    unary_request_size_ = request.size();
     (void)responder.Finish(request, pw::OkStatus());
   }
 
