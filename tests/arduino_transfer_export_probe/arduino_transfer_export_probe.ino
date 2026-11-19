@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <PigweedAVR.h>
+#include <pb.h>
 
 #include <array>
 #include <cstddef>
