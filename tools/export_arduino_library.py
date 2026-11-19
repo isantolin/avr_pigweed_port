@@ -367,6 +367,34 @@ def export_library(dest_dir: Path):
             ):
                 shutil.copy2(cc_file, src_dir / target_name)
 
+    # Export the upstream Nanopb runtime required by pw_rpc.nanopb.
+    # Pigweed pins Nanopb as a third-party dependency; Arduino libraries do
+    # not inherit CMake include paths or transitive source dependencies.
+    nanopb_roots = (
+        PW_ROOT / "third_party" / "nanopb",
+        PW_ROOT / "third_party" / "nanopb" / "generator",
+        REPO_ROOT / "third_party" / "nanopb",
+    )
+    nanopb_root = next(
+        (root for root in nanopb_roots if all((root / name).is_file() for name in (
+            "pb.h", "pb_common.h", "pb_encode.h", "pb_decode.h",
+            "pb_common.c", "pb_encode.c", "pb_decode.c",
+        ))),
+        None,
+    )
+    if nanopb_root is None:
+        searched = ", ".join(str(root) for root in nanopb_roots)
+        raise FileNotFoundError(
+            "The pinned Pigweed Nanopb runtime is missing or incomplete; "
+            f"expected pb.h, pb_common.h, pb_encode.h, pb_decode.h and runtime "
+            f"sources under one of: {searched}"
+        )
+    for nanopb_file in (
+        "pb.h", "pb_common.h", "pb_encode.h", "pb_decode.h",
+        "pb_common.c", "pb_encode.c", "pb_decode.c",
+    ):
+        shutil.copy2(nanopb_root / nanopb_file, src_dir / nanopb_file)
+
     nanopb_rpc_path = PW_ROOT / "pw_rpc" / "nanopb"
     shutil.copytree(nanopb_rpc_path / "public", src_dir, dirs_exist_ok=True)
     for cc_file in nanopb_rpc_path.glob("*.cc"):
