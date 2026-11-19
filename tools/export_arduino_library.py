@@ -355,6 +355,7 @@ def export_library(dest_dir: Path):
             if (
                 not cc_file.name.endswith(("_test.cc", "_fuzzer.cc"))
                 and cc_file.name not in EXCLUDED_SOURCES
+                and cc_file.stem not in excluded_source_stems
                 and target_name not in EXCLUDED_SOURCES
             ):
                 shutil.copy2(cc_file, src_dir / target_name)
