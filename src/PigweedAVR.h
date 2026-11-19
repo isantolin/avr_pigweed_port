@@ -16,7 +16,6 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include "pw_avr_stdlib_compat.h"
 
 #ifdef min
 #undef min
