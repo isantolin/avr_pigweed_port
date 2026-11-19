@@ -998,7 +998,7 @@ index 550ac84e290f19ede4ad18a6ab42e7a636d8163c..584f873380f5130c8a6df0c2d45936d9
    }
  
    // Returns the earliest timeout among all active transfers, if any.
-@@ -391,8 +544,28 @@ class TransferThread : public thread::ThreadCore {
+@@ -391,8 +544,29 @@ class TransferThread : public thread::ThreadCore {
  
    void GetResourceState(uint32_t resource_id);
  
