@@ -372,6 +372,7 @@ def export_library(dest_dir: Path):
     # not inherit CMake include paths or transitive source dependencies.
     nanopb_roots = (
         PW_ROOT / "third_party" / "nanopb",
+        PW_ROOT / "third_party" / "github" / "nanopb" / "nanopb",
         PW_ROOT / "third_party" / "nanopb" / "generator",
         REPO_ROOT / "third_party" / "nanopb",
     )
