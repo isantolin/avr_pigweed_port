@@ -376,6 +376,14 @@ def export_library(dest_dir: Path):
     shutil.copytree(raw_rpc_path / "public", src_dir, dirs_exist_ok=True)
     shutil.copy2(raw_rpc_path / "method.cc", src_dir / "pw_rpc_raw_method.cpp")
 
+    # pw_rpc Nanopb bindings depend on the upstream Nanopb runtime. Export its
+    # public C headers and runtime sources so Arduino CLI can compile/link it.
+    nanopb_root = PW_ROOT / "third_party" / "github" / "nanopb" / "nanopb"
+    for nanopb_header in ("pb.h", "pb_common.h", "pb_decode.h", "pb_encode.h"):
+        shutil.copy2(nanopb_root / nanopb_header, src_dir / nanopb_header)
+    for nanopb_source in ("pb_common.c", "pb_decode.c", "pb_encode.c"):
+        shutil.copy2(nanopb_root / nanopb_source, src_dir / nanopb_source)
+
     # Upstream module headers are copied after the first backend pass above.
     # Re-apply the selected AVR backend headers last so Pigweed's generic
     # pw_assert_backend templates cannot overwrite the AVR ABI/macros.
