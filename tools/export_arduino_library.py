@@ -491,16 +491,83 @@ def export_library(dest_dir: Path):
             header.unlink()
 
     # No STL containers or lifetime shims may leak into the AVR Arduino export.
-    forbidden = ("pw_containers/vector.h", "pw::Vector<", "std::launder", "std::vector<", "std::array<", "#include <array>")
+    # Strip comments lexically before checking: upstream Pigweed documentation
+    # frequently mentions std::array/vector in examples that are not compiled.
+    # Keep newlines so diagnostics retain their original source line numbers.
+    def strip_cpp_comments(source: str) -> str:
+        output = []
+        index = 0
+        state = "code"
+        while index < len(source):
+            current = source[index]
+            following = source[index + 1] if index + 1 < len(source) else ""
+            if state == "code":
+                if current == "/" and following == "/":
+                    output.extend((" ", " "))
+                    index += 2
+                    state = "line_comment"
+                    continue
+                if current == "/" and following == "*":
+                    output.extend((" ", " "))
+                    index += 2
+                    state = "block_comment"
+                    continue
+                if current == '"':
+                    state = "string"
+                elif current == "'":
+                    state = "character"
+                output.append(current)
+                index += 1
+                continue
+            if state == "line_comment":
+                if current == "\\n":
+                    output.append(current)
+                    state = "code"
+                else:
+                    output.append(" ")
+                index += 1
+                continue
+            if state == "block_comment":
+                if current == "*" and following == "/":
+                    output.extend((" ", " "))
+                    index += 2
+                    state = "code"
+                else:
+                    output.append("\\n" if current == "\\n" else " ")
+                    index += 1
+                continue
+            output.append(current)
+            if current == "\\\\":
+                if index + 1 < len(source):
+                    output.append(source[index + 1])
+                    index += 2
+                    continue
+            elif (state == "string" and current == '"') or (
+                state == "character" and current == "'"
+            ):
+                state = "code"
+            index += 1
+        return "".join(output)
+
+    forbidden = (
+        "pw_containers/vector.h",
+        "pw::Vector<",
+        "std::launder",
+        "std::vector<",
+        "std::array<",
+        "#include <array>",
+    )
     offenders = []
     for header in src_dir.rglob("*.h"):
-        content = header.read_text(encoding="utf-8", errors="replace")
+        original = header.read_text(encoding="utf-8", errors="replace")
+        content = strip_cpp_comments(original)
         for line_number, line in enumerate(content.splitlines(), 1):
             matches = [token for token in forbidden if token in line]
             if matches:
+                original_line = original.splitlines()[line_number - 1].strip()
                 offenders.append(
                     f"{header.relative_to(src_dir)}:{line_number}: "
-                    + ", ".join(matches) + f" | {line.strip()}"
+                    + ", ".join(matches) + f" | {original_line}"
                 )
     if offenders:
         raise RuntimeError(
