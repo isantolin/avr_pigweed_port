@@ -252,16 +252,19 @@ jobs:
           test -s dist/PigweedAVR/src/pw_rpc/internal/packet.pwpb.h
           test -s dist/PigweedAVR/src/pw_rpc/server.h
           test -s dist/PigweedAVR/src/pw_rpc/client.h
-          test -s dist/PigweedAVR/src/pw_rpc_client.cc
-          test -s dist/PigweedAVR/src/pw_rpc_client_call.cc
+          test -s dist/PigweedAVR/src/pw_rpc_client.cpp
+          test -s dist/PigweedAVR/src/pw_rpc_client_call.cpp
           test -s dist/PigweedAVR/src/pw_protobuf/encoder.h
           test -s dist/PigweedAVR/src/pw_transfer/transfer_thread.h
           test -s dist/PigweedAVR/src/pw_transfer/transfer.pwpb.h
           test -s dist/PigweedAVR/src/assert_avr.cpp
-          if find dist/PigweedAVR/src -maxdepth 1 -name "*.cc" -print -quit | grep -q .; then
+          cc_files="$(find dist/PigweedAVR/src -maxdepth 1 -name "*.cc" -print)"
+          if [ -n "$cc_files" ]; then
+            printf '%s\n' "$cc_files"
             echo "::error::Arduino export contains .cc files that Arduino CLI does not compile"
             exit 1
           fi
+          test -s dist/PigweedAVR/src/pw_transfer_transfer_thread.cpp
           test -s dist/PigweedAVR/src/array
           grep -q "define PW_TRANSFER_COOPERATIVE 1" dist/PigweedAVR/src/pw_transfer/transfer_thread.h
           avr-g++ -mmcu=atmega2560 -DF_CPU=16000000UL -std=gnu++17 \
