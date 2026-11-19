@@ -409,26 +409,35 @@ def export_library(dest_dir: Path):
         content = header.read_text(encoding="utf-8")
         content = content.replace('#include "pw_containers/vector.h"\n', "")
         if "pw::Vector<" in content:
-            if header.name == "encoder.h":
-                pattern = re.compile(
-                    r"  /// Writes a repeated \`double\` field using packed encoding\.\n"
-                    r"  ///\n"
-                    r"  /// @pre Encoder has no active child encoder\.\n"
-                    r"  Status WriteRepeatedDouble\(uint32_t field_number,\n"
-                    r"                             const pw::Vector<double>& values\) \{.*?\n  \}\n",
-                    re.DOTALL,
-                )
-            else:
-                pattern = re.compile(
-                    r"  /// Reads repeated \`double\` values from the current position into the vector,.*?\n"
-                    r"  Status ReadRepeatedDouble\(pw::Vector<double>& out\) \{.*?\n  \}\n",
-                    re.DOTALL,
-                )
-            content, count = pattern.subn("", content, count=1)
-            if count != 1:
+            # Upstream Pigweed's comments and formatting can change between
+            # pinned revisions. Remove the exact overload by its signature
+            # and balanced function body rather than matching its docstring.
+            signature = (
+                "Status WriteRepeatedDouble(uint32_t field_number,"
+                if header.name == "encoder.h"
+                else "Status ReadRepeatedDouble(pw::Vector<double>& out)"
+            )
+            method_start = content.find(signature)
+            if method_start < 0:
                 raise RuntimeError(
-                    f"Could not remove AVR-incompatible pw::Vector overload from {header}"
+                    f"Could not locate AVR-incompatible pw::Vector overload in {header}"
                 )
+            body_start = content.find("{", method_start + len(signature))
+            if body_start < 0:
+                raise RuntimeError(f"Could not locate method body in {header}")
+            depth = 0
+            method_end = None
+            for index in range(body_start, len(content)):
+                if content[index] == "{":
+                    depth += 1
+                elif content[index] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        method_end = index + 1
+                        break
+            if method_end is None:
+                raise RuntimeError(f"Unterminated pw::Vector overload in {header}")
+            content = content[:method_start] + content[method_end:]
         if "pw::Vector<" in content or 'pw_containers/vector.h' in content:
             raise RuntimeError(f"AVR export still references pw::Vector in {header}")
         header.write_text(content, encoding="utf-8")
