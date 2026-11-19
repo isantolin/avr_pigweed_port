@@ -12,7 +12,7 @@ class NullWriter final : public pw::stream::NonSeekableWriter {
 };
 
 std::array<std::byte, 128> chunk_storage{};
-std::array<std::byte, 128> encode_storage{};
+std::array<std::byte, 256> encode_storage{};
 pw::transfer::Thread<1, 1> transfer_thread{
     pw::ByteSpan(chunk_storage), pw::ByteSpan(encode_storage)};
 
