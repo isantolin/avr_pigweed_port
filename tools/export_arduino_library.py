@@ -434,7 +434,7 @@ def export_library(dest_dir: Path):
         header.write_text(content, encoding="utf-8")
 
     # No STL containers or lifetime shims may leak into the AVR Arduino export.
-    forbidden = ("pw_containers/vector.h", "pw::Vector<", "std::launder", "std::vector<")
+    forbidden = ("pw_containers/vector.h", "pw::Vector<", "std::launder", "std::vector<", "std::array<", "#include <array>")
     offenders = []
     for header in src_dir.rglob("*.h"):
         content = header.read_text(encoding="utf-8", errors="replace")
