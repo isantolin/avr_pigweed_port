@@ -412,8 +412,8 @@ def export_library(dest_dir: Path):
         # exact overload set can change with Pigweed revisions; match C++
         # member declarations structurally rather than relying on docstrings.
         vector_method = re.compile(
-            r"^[ \\t]*(?:Status|pw::Status|Result<[^>]+>)\\s+"
-            r"[A-Za-z_][A-Za-z0-9_]*\\s*\\([^;{}]*pw::Vector<[^>]+>[^;{}]*\\)\\s*\\{",
+            r"^[ \t]*(?:Status|pw::Status|Result<[^>]+>)\s+"
+            r"[A-Za-z_][A-Za-z0-9_]*\s*\([^;{}]*pw::Vector<[^>]+>[^;{}]*\)\s*\{",
             re.MULTILINE | re.DOTALL,
         )
         while True:
