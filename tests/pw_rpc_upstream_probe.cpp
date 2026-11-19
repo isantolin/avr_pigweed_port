@@ -177,7 +177,7 @@ int main() {
   const std::byte request[3] = {
       std::byte{0x11}, std::byte{0x22}, std::byte{0x33}};
   std::memcpy(expected_request, request, sizeof(expected_request));
-  auto unary_call = raw_client.Unary(request, OnUnaryResponse);
+  auto unary_call = raw_client.Unary(pw::ConstByteSpan(request, sizeof(request)), OnUnaryResponse);
   (void)unary_call;
   if (!service.unary_called()) failure_code = 1;
   if (failure_code == 0 &&
@@ -191,7 +191,7 @@ int main() {
 
   auto bidi_call = raw_client.Bidi();
   bidi_call.set_on_next(OnBidiResponse);
-  if (!bidi_call.Write(request).ok() && failure_code == 0) failure_code = 4;
+  if (!bidi_call.Write(pw::ConstByteSpan(request, sizeof(request))).ok() && failure_code == 0) failure_code = 4;
   if (!service.bidi_server_received() && failure_code == 0) failure_code = 5;
   if (!bidi_server_write_ok && failure_code == 0) failure_code = 6;
   if (!bidi_response_called && failure_code == 0) failure_code = 7;
