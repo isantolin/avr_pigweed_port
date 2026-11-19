@@ -275,6 +275,8 @@ def export_library(dest_dir: Path):
 
         EXCLUDED_SOURCES = {
             "pw_assert_examples.cc",
+            # Exported source name is prefixed with its Pigweed module.
+            "pw_assert_pw_assert_examples.cpp",
             "pw_assert_fake_backend.cc",
             "pw_polyfill_test.cc",
             "pw_containers_test_helpers.cc",
