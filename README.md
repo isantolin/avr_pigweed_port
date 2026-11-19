@@ -57,8 +57,8 @@ The firmware emits `PW_RPC_PROBE_PASS` only after the runtime assertions succeed
 AVR cannot run Pigweed's blocking transfer-thread loop. The port applies an idempotent patch to the exact pinned Pigweed source and exposes a bounded cooperative poll API:
 
 ```cpp
-std::array<std::byte, 128> chunk_storage{};
-std::array<std::byte, 128> encode_storage{};
+std::byte chunk_storage[128]{};
+std::byte encode_storage[128]{};
 
 pw::transfer::Thread<1, 1> transfer_thread{
     pw::ByteSpan(chunk_storage), pw::ByteSpan(encode_storage)};
