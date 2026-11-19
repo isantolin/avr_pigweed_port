@@ -186,7 +186,7 @@ index 232e94cafc45399dbfb67a2fc194db120367bab7..ebc56710b11d20dfdb1374431a7bed46
        : status_(OkStatus()),
          write_when_empty_(true),
          parent_(nullptr),
-@@ -638,20 +640,30 @@ class StreamEncoder {
+@@ -638,20 +640,32 @@ class StreamEncoder {
    ///
    /// @pre Encoder has no active child encoder.
    Status WriteDouble(uint32_t field_number, double value) {
@@ -195,9 +195,14 @@ index 232e94cafc45399dbfb67a2fc194db120367bab7..ebc56710b11d20dfdb1374431a7bed46
 +#if defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ == 8
      uint64_t integral_value;
      std::memcpy(&integral_value, &value, sizeof(value));
-     std::array<std::byte, sizeof(value)> data =
-         bytes::CopyInOrder(endian::little, integral_value);
-     return WriteFixed(field_number, data);
+-    std::array<std::byte, sizeof(value)> data =
+-        bytes::CopyInOrder(endian::little, integral_value);
+-    return WriteFixed(field_number, data);
++    std::byte data[sizeof(value)];
++    for (size_t i = 0; i < sizeof(value); ++i) {
++      data[i] = static_cast<std::byte>((integral_value >> (8U * i)) & 0xffU);
++    }
++    return WriteFixed(field_number, span<const std::byte>(data, sizeof(data)));
 +#else
 +    (void)field_number;
 +    (void)value;
@@ -786,11 +791,10 @@ diff --git a/pw_transfer/public/pw_transfer/transfer_thread.h b/pw_transfer/publ
 index 550ac84e290f19ede4ad18a6ab42e7a636d8163c..584f873380f5130c8a6df0c2d45936d96a1437ec 100644
 --- a/pw_transfer/public/pw_transfer/transfer_thread.h
 +++ b/pw_transfer/public/pw_transfer/transfer_thread.h
-@@ -21,10 +21,29 @@
+@@ -21,10 +21,28 @@
  #include "pw_function/function.h"
  #include "pw_rpc/raw/client_reader_writer.h"
  #include "pw_rpc/raw/server_reader_writer.h"
-+#include <array>
 +#include <cstddef>
 +#include <cstring>
 +
@@ -942,7 +946,7 @@ index 550ac84e290f19ede4ad18a6ab42e7a636d8163c..584f873380f5130c8a6df0c2d45936d9
 +      chunk_data = slot.event.new_transfer.raw_chunk_data;
 +      chunk_size = slot.event.new_transfer.raw_chunk_size;
 +    }
-+    if (chunk_size > slot.chunk_storage.size()) {
++    if (chunk_size > PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE) {
 +      if (slot.event.type == EventType::kNewServerTransfer) {
 +        SendStatusChunk({
 +            .session_id = slot.event.new_transfer.session_id,
@@ -958,12 +962,12 @@ index 550ac84e290f19ede4ad18a6ab42e7a636d8163c..584f873380f5130c8a6df0c2d45936d9
 +      return;
 +    }
 +    if (chunk_size != 0) {
-+      std::memcpy(slot.chunk_storage.data(), chunk_data, chunk_size);
++      std::memcpy(slot.chunk_storage, chunk_data, chunk_size);
 +      if (slot.event.type == EventType::kClientChunk ||
 +          slot.event.type == EventType::kServerChunk) {
-+        slot.event.chunk.data = slot.chunk_storage.data();
++        slot.event.chunk.data = slot.chunk_storage;
 +      } else {
-+        slot.event.new_transfer.raw_chunk_data = slot.chunk_storage.data();
++        slot.event.new_transfer.raw_chunk_data = slot.chunk_storage;
 +      }
 +    }
 +    event_queue_tail_ =
@@ -994,20 +998,18 @@ index 550ac84e290f19ede4ad18a6ab42e7a636d8163c..584f873380f5130c8a6df0c2d45936d9
    }
  
    // Returns the earliest timeout among all active transfers, if any.
-@@ -391,8 +544,31 @@ class TransferThread : public thread::ThreadCore {
+@@ -391,8 +544,28 @@ class TransferThread : public thread::ThreadCore {
  
    void GetResourceState(uint32_t resource_id);
  
 +#if defined(PW_TRANSFER_COOPERATIVE)
 +  struct CooperativeEventSlot {
 +    Event event{};
-+    std::array<std::byte, PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE>
-+        chunk_storage{};
++    std::byte chunk_storage[PW_TRANSFER_COOPERATIVE_CHUNK_BUFFER_SIZE]{};
 +  };
 +  static_assert(PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY >= 2,
 +                "The cooperative event queue must have at least two slots");
-+  std::array<CooperativeEventSlot, PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY>
-+      event_queue_{};
++  CooperativeEventSlot event_queue_[PW_TRANSFER_COOPERATIVE_QUEUE_CAPACITY]{};
 +  size_t event_queue_head_ = 0;
 +  size_t event_queue_tail_ = 0;
 +  size_t event_queue_size_ = 0;
@@ -1132,10 +1134,10 @@ index 76f7741977ae653c5c3b30e0e2becac43211b25d..bda6fa1172c944d541d6ae05c531ace6
 +    // pointers to the detached local slot before the ring slot is reused.
 +    if (current.event.type == EventType::kClientChunk ||
 +        current.event.type == EventType::kServerChunk) {
-+      current.event.chunk.data = current.chunk_storage.data();
++      current.event.chunk.data = current.chunk_storage;
 +    } else if (current.event.type == EventType::kNewClientTransfer ||
 +               current.event.type == EventType::kNewServerTransfer) {
-+      current.event.new_transfer.raw_chunk_data = current.chunk_storage.data();
++      current.event.new_transfer.raw_chunk_data = current.chunk_storage;
 +    }
 +    HandleEvent(current.event);
 +    ++processed;
