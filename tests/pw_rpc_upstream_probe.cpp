@@ -31,8 +31,10 @@ void EmitResult(uint8_t failure_code) {
   UBRR0L = static_cast<uint8_t>(ubrr & 0xFF);
   UCSR0B = (1 << TXEN0);
   UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
-  char failure_marker[] = "PW_RPC_PROBE_FAIL_0\r\n";
-  failure_marker[18] = static_cast<char>('0' + failure_code);
+  char failure_marker[] = "PW_RPC_PROBE_FAIL_00\r\n";
+  const size_t code_index = sizeof("PW_RPC_PROBE_FAIL_") - 1;
+  failure_marker[code_index] = static_cast<char>('0' + (failure_code / 10U));
+  failure_marker[code_index + 1] = static_cast<char>('0' + (failure_code % 10U));
   const char* marker =
       failure_code == 0 ? "PW_RPC_PROBE_PASS\r\n" : failure_marker;
   while (*marker != '\0') {
@@ -181,7 +183,7 @@ int main() {
   (void)unary_call;
   if (!service.unary_called()) failure_code = 1;
   if (failure_code == 0 &&
-      service.unary_request_size() != (sizeof(request) / sizeof(request[0]))) failure_code = static_cast<uint8_t>(service.unary_request_size() + 1U);
+      service.unary_request_size() != (sizeof(request) / sizeof(request[0]))) failure_code = static_cast<uint8_t>(10U + service.unary_request_size());
   if (failure_code == 0 && !unary_status_ok) failure_code = 7;
   if (failure_code == 0 &&
       unary_response_size != (sizeof(request) / sizeof(request[0]))) failure_code = 8;
