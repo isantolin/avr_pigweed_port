@@ -259,6 +259,7 @@ jobs:
           test -s dist/PigweedAVR/src/pw_transfer/transfer.pwpb.h
           test -s dist/PigweedAVR/src/assert_avr.cpp
           test ! -e dist/PigweedAVR/src/pw_assert_examples.cpp
+          test ! -e dist/PigweedAVR/src/pw_assert_pw_assert_examples.cpp
           cc_files="$(find dist/PigweedAVR/src -maxdepth 1 -name "*.cc" -print)"
           if [ -n "$cc_files" ]; then
             printf '%s\n' "$cc_files"
