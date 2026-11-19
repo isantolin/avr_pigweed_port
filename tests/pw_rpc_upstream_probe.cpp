@@ -181,7 +181,7 @@ int main() {
   (void)unary_call;
   if (!service.unary_called()) failure_code = 1;
   if (failure_code == 0 &&
-      service.unary_request_size() != (sizeof(request) / sizeof(request[0]))) failure_code = 2;
+      service.unary_request_size() != (sizeof(request) / sizeof(request[0]))) failure_code = static_cast<uint8_t>(service.unary_request_size() + 1U);
   if (failure_code == 0 && !unary_status_ok) failure_code = 7;
   if (failure_code == 0 &&
       unary_response_size != (sizeof(request) / sizeof(request[0]))) failure_code = 8;
