@@ -272,13 +272,17 @@ jobs:
           # Use the same modern AVR toolchain as the CMake port build. The
           # Arduino AVR core's bundled GCC 7.3 is too old for avr-libstdcpp.
           AVR_TOOLCHAIN_DIR="$(dirname "$(command -v avr-g++)")"
+          # Install the exported library in the standard Arduino sketchbook
+          # path so the CLI's dependency resolver compiles its src/*.cpp files.
+          mkdir -p "$HOME/Arduino/libraries"
+          cp -a dist/PigweedAVR "$HOME/Arduino/libraries/PigweedAVR"
           # Compile and link a real Arduino sketch against the exported library.
-          # Syntax-only compilation cannot catch missing upstream .cc symbols.
+          # Syntax-only compilation cannot catch missing upstream source symbols.
           arduino-cli compile \
             --fqbn arduino:avr:mega \
             --build-property "compiler.path=${AVR_TOOLCHAIN_DIR}/" \
-            --build-property "compiler.cpp.extra_flags=-std=gnu++17 -I$GITHUB_WORKSPACE/dist/PigweedAVR/src" \
-            --libraries "$GITHUB_WORKSPACE/dist" \
+            --build-property compiler.cpp.extra_flags=-std=gnu++17 \
+            --libraries "$HOME/Arduino/libraries" \
             --verbose \
             --build-path build/arduino-transfer-export-probe \
             tests/arduino_transfer_export_probe
