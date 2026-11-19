@@ -440,6 +440,20 @@ def export_library(dest_dir: Path):
             match = vector_method.search(content)
             if match is None:
                 break
+            # A templated member declaration has its own template header
+            # immediately before the return type. Remove that header with the
+            # overload; otherwise it becomes attached to the next declaration
+            # and can produce duplicate/shadowed template parameters in the
+            # exported header.
+            method_start = match.start()
+            template_prefix = re.search(
+                r"(?:^[ \\t]*template\\s*<[^;{}]*>[ \\t]*\\n)+[ \\t]*$",
+                content[:method_start],
+                re.MULTILINE | re.DOTALL,
+            )
+            if template_prefix is not None:
+                method_start = template_prefix.start()
+
             body_start = content.find("{", match.start(), match.end())
             depth = 0
             method_end = None
@@ -453,7 +467,7 @@ def export_library(dest_dir: Path):
                         break
             if method_end is None:
                 raise RuntimeError(f"Unterminated pw::Vector overload in {header}")
-            content = content[:match.start()] + content[method_end:]
+            content = content[:method_start] + content[method_end:]
         if "pw::Vector<" in content or 'pw_containers/vector.h' in content:
             raise RuntimeError(f"AVR export still references pw::Vector in {header}")
         header.write_text(content, encoding="utf-8")
