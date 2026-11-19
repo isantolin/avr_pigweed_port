@@ -438,6 +438,58 @@ def export_library(dest_dir: Path):
             raise RuntimeError(f"AVR export still references pw::Vector in {header}")
         header.write_text(content, encoding="utf-8")
 
+    # Keep only headers reachable from the actual exported translation units and
+    # the supported public umbrella. Pigweed's recursive public-header trees
+    # contain host-only APIs (including STL-backed containers) that are not
+    # part of the AVR library. Copying them makes the export validator reject
+    # unused code and, worse, exposes unsupported APIs to Arduino consumers.
+    include_pattern = re.compile(
+        r'^\\s*#\\s*include\\s*[<"]([^>"]+)[>"]', re.MULTILINE
+    )
+    reachable_headers = set()
+    pending_headers = []
+
+    def resolve_local_include(including_file: Path, include_name: str):
+        candidates = (including_file.parent / include_name, src_dir / include_name)
+        for candidate in candidates:
+            if candidate.is_file() and candidate.suffix in {".h", ".hpp"}:
+                return candidate.resolve()
+        # Includes may be rooted below a copied module directory even when
+        # the including file uses an angle-bracket spelling.
+        matches = list(src_dir.glob(f"**/{include_name}"))
+        matches = [item for item in matches if item.is_file()
+                   and item.suffix in {".h", ".hpp"}]
+        return matches[0].resolve() if len(matches) == 1 else None
+
+    translation_units = list(src_dir.rglob("*.cpp"))
+    public_roots = [src_dir / "PigweedAVR.h"]
+    example_root = examples_dir / "YunBridgeRpc.ino"
+    if example_root.is_file():
+        public_roots.append(example_root)
+    for root in [*translation_units, *public_roots]:
+        if root.is_file():
+            pending_headers.extend(
+                resolve_local_include(root, name)
+                for name in include_pattern.findall(
+                    root.read_text(encoding="utf-8", errors="replace")
+                )
+            )
+    while pending_headers:
+        header = pending_headers.pop()
+        if header is None or header in reachable_headers:
+            continue
+        reachable_headers.add(header)
+        content = header.read_text(encoding="utf-8", errors="replace")
+        pending_headers.extend(
+            resolve_local_include(header, name)
+            for name in include_pattern.findall(content)
+        )
+
+    for header in src_dir.rglob("*"):
+        if (header.is_file() and header.suffix in {".h", ".hpp"}
+                and header.resolve() not in reachable_headers):
+            header.unlink()
+
     # No STL containers or lifetime shims may leak into the AVR Arduino export.
     forbidden = ("pw_containers/vector.h", "pw::Vector<", "std::launder", "std::vector<", "std::array<", "#include <array>")
     offenders = []
