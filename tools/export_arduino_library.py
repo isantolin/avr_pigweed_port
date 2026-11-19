@@ -209,6 +209,7 @@ def export_library(dest_dir: Path):
     # 2. Copy root header and minimal runtime stubs
     for f in [
         "PigweedAVR.h",
+        "pw_avr_stdlib_compat.h",
         "arduino_stream.h",
         "avr_stdio_compat.h",
         "cxx_abi_stubs.cpp",
