@@ -41,7 +41,10 @@ namespace pw {
 using byte = std::byte;
 }
 #include "pw_varint/varint.h"
-#include "pw_containers/vector.h"
+// pw_containers/vector.h is intentionally not part of this Arduino umbrella:
+// its allocator/temporary-buffer implementation requires STL facilities that
+// the AVR Arduino toolchain does not provide. The CMake firmware target uses
+// pw::Vector directly with the dedicated AVR toolchain configuration.
 #include "pw_function/function.h"
 
 // 2. Framing and Data Streaming

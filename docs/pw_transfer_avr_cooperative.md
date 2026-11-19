@@ -102,7 +102,7 @@ The existing `FileSystemService.Read` server stream is not automatically equival
 ## Remaining release gates
 
 - Complete CI for both CRC configurations after the latest source/export changes.
-- Verify the exported Arduino library links a sketch that uses upstream `pw_transfer`.
+- CI compiles and links `tests/arduino_transfer_export_probe` against the exported Arduino library on the minimum supported ATmega2560 target; this catches missing headers and unresolved upstream `pw_transfer` symbols.
 - Measure flash, static SRAM, and worst-case stack on the minimum supported Arduino Mega 2560 target, including the complete Bridge application.
 - Exercise sequential client-to-server and server-to-client role reuse on one `Thread<1, 1>`.
 

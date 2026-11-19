@@ -55,7 +55,7 @@ jobs:
           # Ubuntu mirror or lock cannot stall both matrix jobs indefinitely.
           bash tools/ci/apt_update_with_fallback.sh
 
-          sudo timeout --signal=TERM --kill-after=30s 300s apt-get \
+          sudo timeout --signal=TERM --kill-after=30s 900s apt-get \
             -o Acquire::Retries=3 \
             -o Acquire::http::Timeout=30 \
             -o Acquire::https::Timeout=30 \
@@ -231,22 +231,122 @@ jobs:
           grep -q "100% OF PORTED PIGWEED MODULES VERIFIED OK!" build/test_runner.log
           ccache --show-stats
 
+      - name: Install Arduino CLI and AVR core
+        if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
+        run: |
+          ARDUINO_CLI_VERSION=1.2.2
+          mkdir -p "$RUNNER_TEMP/arduino-cli"
+          curl -fsSL "https://github.com/arduino/arduino-cli/releases/download/v${ARDUINO_CLI_VERSION}/arduino-cli_${ARDUINO_CLI_VERSION}_Linux_64bit.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP/arduino-cli"
+          echo "$RUNNER_TEMP/arduino-cli" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/arduino-cli:$PATH"
+          arduino-cli version
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr
+
       - name: Verify Python Host Tools & Arduino Export
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: |
           python3 -m py_compile tools/receive_telemetry.py tools/export_arduino_library.py
           python3 tools/export_arduino_library.py
-          test -s dist/PigweedAVR/src/pw_rpc/internal/packet.pwpb.h
-          test -s dist/PigweedAVR/src/pw_rpc/server.h
-          test -s dist/PigweedAVR/src/pw_rpc/client.h
-          test -s dist/PigweedAVR/src/pw_rpc_client.cc
-          test -s dist/PigweedAVR/src/pw_rpc_client_call.cc
-          test -s dist/PigweedAVR/src/pw_protobuf/encoder.h
-          test -s dist/PigweedAVR/src/pw_transfer/transfer_thread.h
-          test -s dist/PigweedAVR/src/pw_transfer/transfer.pwpb.h
-          grep -q "define PW_TRANSFER_COOPERATIVE 1" dist/PigweedAVR/src/pw_transfer/transfer_thread.h
+          required_files=(
+            dist/PigweedAVR/src/pw_rpc/internal/packet.pwpb.h
+            dist/PigweedAVR/src/pw_rpc/server.h
+            dist/PigweedAVR/src/pw_rpc/client.h
+            dist/PigweedAVR/src/pw_rpc_client.cpp
+            dist/PigweedAVR/src/pw_rpc_client_call.cpp
+            dist/PigweedAVR/src/pw_containers/vector.h
+            dist/PigweedAVR/src/pw_protobuf/encoder.h
+            dist/PigweedAVR/src/pw_transfer/transfer_thread.h
+            dist/PigweedAVR/src/pw_transfer/transfer.pwpb.h
+            dist/PigweedAVR/src/assert_avr.cpp
+            dist/PigweedAVR/src/pw_transfer_transfer_thread.cpp
+            dist/PigweedAVR/src/array
+          )
+          for required_file in "${required_files[@]}"; do
+            if [ ! -s "$required_file" ]; then
+              echo "::error::Missing or empty Arduino export component: $required_file"
+              find dist/PigweedAVR/src -maxdepth 2 -type f | sort | tail -n 80
+              exit 1
+            fi
+          done
+          if [ -e dist/PigweedAVR/src/pw_assert_examples.cpp ] || [ -e dist/PigweedAVR/src/pw_assert_pw_assert_examples.cpp ]; then
+            find dist/PigweedAVR/src -maxdepth 1 -type f -iname "*assert*example*" -print
+            echo "::error::Unexpected assertion example source in Arduino export"
+            exit 1
+          fi
+          mapfile -t cc_files < <(find dist/PigweedAVR/src -maxdepth 1 -type f -name '*.cc' -print | sort)
+          if [ "${#cc_files[@]}" -ne 0 ]; then
+            printf 'Unexpected .cc source: %s\n' "${cc_files[@]}"
+            echo "::error::Arduino export contains .cc files that Arduino CLI does not compile"
+            exit 1
+          fi
+          if ! grep -q "define PW_TRANSFER_COOPERATIVE 1" dist/PigweedAVR/src/pw_transfer/transfer_thread.h; then
+            echo "::error::Exported transfer_thread.h is missing the cooperative upstream patch"
+            exit 1
+          fi
           avr-g++ -mmcu=atmega2560 -DF_CPU=16000000UL -std=gnu++17 \
             -fsyntax-only -Idist/PigweedAVR/src tools/ci/arduino_export_probe.cpp
+          # Use the same modern AVR toolchain as the CMake port build. The
+          # Arduino AVR core's bundled GCC 7.3 is too old for avr-libstdcpp.
+          AVR_TOOLCHAIN_DIR="$(dirname "$(command -v avr-g++)")"
+          AVR_GCC_MAJOR="$(avr-g++ -dumpversion | cut -d. -f1)"
+          # Install the exported library in the standard Arduino sketchbook
+          # path so the CLI's dependency resolver compiles its src/*.cpp files.
+          mkdir -p "$HOME/Arduino/libraries" "$HOME/Arduino/libraries/Nanopb/src"
+          rm -rf "$HOME/Arduino/libraries/PigweedAVR"
+          cp -a dist/PigweedAVR "$HOME/Arduino/libraries/"
+          # Select the matching versioned avr-libstdcpp header tree and place
+          # it in compiler.cpp.extra_flags (ahead of cores/arduino) so C++17
+          # <new> (std::launder, aligned operator new) is not shadowed by the
+          # Arduino AVR core's C++11 cores/arduino/new, while keeping
+          # PigweedAVR/src out of extra_flags so Arduino CLI discovers and
+          # compiles PigweedAVR's translation units.
+          if [ "$AVR_GCC_MAJOR" -ge 16 ]; then
+            AVR_STDCPP_INC="$HOME/Arduino/libraries/PigweedAVR/gcc16/include"
+          elif [ "$AVR_GCC_MAJOR" -ge 14 ]; then
+            AVR_STDCPP_INC="$HOME/Arduino/libraries/PigweedAVR/gcc15/include"
+          elif [ "$AVR_GCC_MAJOR" -ge 13 ]; then
+            AVR_STDCPP_INC="$HOME/Arduino/libraries/PigweedAVR/gcc13/include"
+          elif [ "$AVR_GCC_MAJOR" -ge 11 ]; then
+            AVR_STDCPP_INC="$HOME/Arduino/libraries/PigweedAVR/gcc12/include"
+          else
+            AVR_STDCPP_INC="$HOME/Arduino/libraries/PigweedAVR/gcc10/include"
+          fi
+          test -d "$AVR_STDCPP_INC"
+          # The Bridge application supplies Nanopb separately; mirror its
+          # pinned runtime dependency (nanopb-0.4.9.2) without bundling
+          # duplicate pb_* symbols in PigweedAVR.
+          NANOPB_REVISION="$(tr -d '[:space:]' < tools/ci/nanopb_revision.txt)"
+          test "$NANOPB_REVISION" = "160d4f09e5fabb2b66aa2dea32d4f38ace2c4b3f"
+          NANOPB_BASE="https://raw.githubusercontent.com/nanopb/nanopb/${NANOPB_REVISION}"
+          for file in pb.h pb_common.h pb_common.c pb_decode.h pb_decode.c pb_encode.h pb_encode.c; do
+            curl -fsSL "$NANOPB_BASE/$file" -o "$HOME/Arduino/libraries/Nanopb/src/$file"
+            test -s "$HOME/Arduino/libraries/Nanopb/src/$file"
+          done
+          cat > "$HOME/Arduino/libraries/Nanopb/library.properties" <<'EOF'
+          name=Nanopb
+          version=0.4.9.2
+          author=nanopb
+          maintainer=nanopb
+          sentence=Zero-copy Protocol Buffers runtime
+          paragraph=Pinned Nanopb runtime used by Pigweed pw_rpc nanopb bindings.
+          category=Communication
+          architectures=*
+          includes=pb.h
+          EOF
+          # Compile and link a real Arduino sketch against the exported library.
+          # Syntax-only compilation cannot catch missing upstream source symbols.
+          arduino-cli compile \
+            --fqbn arduino:avr:mega \
+            --build-property "compiler.path=${AVR_TOOLCHAIN_DIR}/" \
+            --build-property "compiler.cpp.extra_flags=-std=gnu++17 -D__cpp_lib_endian=201907L -I${AVR_STDCPP_INC}" \
+            --libraries "$HOME/Arduino/libraries" \
+            --verbose \
+            --build-path build/arduino-transfer-export-probe \
+            tests/arduino_transfer_export_probe
+          avr-size --format=avr --mcu=atmega2560 \
+            build/arduino-transfer-export-probe/arduino_transfer_export_probe.ino.elf
 
       - name: Upload Build Artifacts
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'

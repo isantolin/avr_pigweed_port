@@ -1,4 +1,3 @@
-#include <array>
 #include <cstddef>
 
 #include "PigweedAVR.h"
@@ -13,19 +12,19 @@ class NullWriter final : public pw::stream::NonSeekableWriter {
 }  // namespace
 
 int main() {
-  std::array<std::byte, 128> chunk_storage{};
-  std::array<std::byte, 128> encode_storage{};
+  std::byte chunk_storage[128] {};
+  std::byte encode_storage[128] {};
   pw::transfer::Thread<1, 1> transfer_thread{
       pw::ByteSpan(chunk_storage), pw::ByteSpan(encode_storage)};
 
   NullWriter writer;
   pw::hdlc::RpcChannelOutput output(writer, 1, "arduino-export-probe");
-  std::array<pw::rpc::Channel, 1> channels = {
+  pw::rpc::Channel channels[1] = {
       pw::rpc::Channel::Create<1>(&output)};
   pw::rpc::Server server(
-      pw::span<pw::rpc::Channel>(channels.data(), channels.size()));
+      pw::span<pw::rpc::Channel>(channels, (sizeof(channels) / sizeof(channels[0]))));
   pw::rpc::Client client(
-      pw::span<pw::rpc::Channel>(channels.data(), channels.size()));
+      pw::span<pw::rpc::Channel>(channels, (sizeof(channels) / sizeof(channels[0]))));
 
   pw::transfer::TransferService service(transfer_thread, 256);
   server.RegisterService(service);

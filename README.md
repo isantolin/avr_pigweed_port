@@ -57,8 +57,8 @@ The firmware emits `PW_RPC_PROBE_PASS` only after the runtime assertions succeed
 AVR cannot run Pigweed's blocking transfer-thread loop. The port applies an idempotent patch to the exact pinned Pigweed source and exposes a bounded cooperative poll API:
 
 ```cpp
-std::array<std::byte, 128> chunk_storage{};
-std::array<std::byte, 128> encode_storage{};
+pw::byte chunk_storage[128]{};
+pw::byte encode_storage[128]{};
 
 pw::transfer::Thread<1, 1> transfer_thread{
     pw::ByteSpan(chunk_storage), pw::ByteSpan(encode_storage)};
@@ -102,7 +102,7 @@ python3 tools/export_arduino_library.py
 
 Run the CMake configure/build steps above first, including the ATmega1284P transfer probe, so the generated `pw_transfer` PWPB and raw-RPC headers exist. Host-only and non-Mega exports may omit those generated bindings; the exporter warns when they are absent. `PigweedAVR.h` exposes the transfer API only when compiling for ATmega2560.
 
-The exported umbrella header is `PigweedAVR.h`. It exposes upstream RPC on supported Arduino targets and adds cooperative transfer headers/configuration only for ATmega2560.
+The exported umbrella header is `PigweedAVR.h`. It exposes upstream RPC on supported Arduino targets and adds cooperative transfer headers/configuration only for ATmega2560. Port-owned headers, sketches, and probes avoid STL containers (`std::array`, `std::vector`) and `PigweedAVR.h` intentionally omits `pw_containers/vector.h`. Because upstream Google Pigweed C++17 internals rely on freestanding `<new>`, `<array>`, and `<type_traits>`, Arduino CLI AVR builds must use a modern `avr-g++` (>= 8) with `-std=gnu++17 -D__cpp_lib_endian=201907L` and pass `-I<libraries>/PigweedAVR/gcc<ver>/include` in `compiler.cpp.extra_flags` so `avr-libstdcpp`'s freestanding C++17 `<new>` takes precedence over the Arduino AVR core's C++11 `cores/arduino/new` while allowing Arduino CLI to discover and compile `PigweedAVR/src/*.cpp`. The export does not bundle the Nanopb C runtime: applications that use `pw_rpc.nanopb` must provide Nanopb 0.4.9.2 separately. The Arduino Bridge installer supplies those `pb_*` sources in its application library, avoiding duplicate runtime symbols in `PigweedAVR`.
 
 ## `pw_emu` + simavr
 
