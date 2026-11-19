@@ -324,6 +324,7 @@ def export_library(dest_dir: Path):
         # platform mutex backend solely for an unused allocation API.
         "pw_transfer_handler_allocator.cc",
         }
+        excluded_source_stems = {Path(name).stem for name in EXCLUDED_SOURCES}
 
         # Copy .cc sources for compilation
         for cc_file in mod_path.glob("*.cc"):
@@ -345,6 +346,7 @@ def export_library(dest_dir: Path):
             if (
                 not cc_file.name.endswith(("_test.cc", "_fuzzer.cc", "_perf_test.cc"))
                 and cc_file.name not in EXCLUDED_SOURCES
+                and cc_file.stem not in excluded_source_stems
                 and target_name not in EXCLUDED_SOURCES
             ):
                 shutil.copy2(cc_file, src_dir / target_name)
