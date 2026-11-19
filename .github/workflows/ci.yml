@@ -303,8 +303,8 @@ jobs:
           AVR_TOOLCHAIN_DIR="$(dirname "$(command -v avr-g++)")"
           # Install the exported library in the standard Arduino sketchbook
           # path so the CLI's dependency resolver compiles its src/*.cpp files.
-          mkdir -p "$HOME/Arduino/libraries/PigweedAVR" "$HOME/Arduino/libraries/Nanopb/src"
-          cp -a dist/PigweedAVR "$HOME/Arduino/libraries/PigweedAVR"
+          mkdir -p "$HOME/Arduino/libraries" "$HOME/Arduino/libraries/Nanopb/src"
+          cp -a dist/PigweedAVR "$HOME/Arduino/libraries/"
           # The Bridge application supplies Nanopb separately; mirror its
           # pinned runtime dependency without bundling duplicate pb_* symbols.
           NANOPB_BASE="https://raw.githubusercontent.com/nanopb/nanopb/nanopb-0.4.9.2"
