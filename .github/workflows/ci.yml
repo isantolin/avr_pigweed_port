@@ -231,18 +231,6 @@ jobs:
           grep -q "100% OF PORTED PIGWEED MODULES VERIFIED OK!" build/test_runner.log
           ccache --show-stats
 
-      - name: Fetch pinned upstream Nanopb runtime
-        run: |
-          NANOPB_REVISION="$(tr -d '[:space:]' < tools/ci/nanopb_revision.txt)"
-          test "$NANOPB_REVISION" = "cad3c18ef15a663e30e3e43e3a752b66378adec1"
-          git init third_party/nanopb
-          git -C third_party/nanopb remote add origin https://github.com/nanopb/nanopb.git
-          git -C third_party/nanopb fetch --depth 1 origin "$NANOPB_REVISION"
-          git -C third_party/nanopb checkout --detach FETCH_HEAD
-          for source in pb.h pb_common.h pb_encode.h pb_decode.h pb_common.c pb_encode.c pb_decode.c; do
-            test -s "third_party/nanopb/$source"
-          done
-
       - name: Install Arduino CLI and AVR core
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: |
@@ -267,6 +255,7 @@ jobs:
             dist/PigweedAVR/src/pw_rpc/client.h
             dist/PigweedAVR/src/pw_rpc_client.cpp
             dist/PigweedAVR/src/pw_rpc_client_call.cpp
+            dist/PigweedAVR/src/pw_containers/vector.h
             dist/PigweedAVR/src/pw_protobuf/encoder.h
             dist/PigweedAVR/src/pw_transfer/transfer_thread.h
             dist/PigweedAVR/src/pw_transfer/transfer.pwpb.h
@@ -301,15 +290,39 @@ jobs:
           # Use the same modern AVR toolchain as the CMake port build. The
           # Arduino AVR core's bundled GCC 7.3 is too old for avr-libstdcpp.
           AVR_TOOLCHAIN_DIR="$(dirname "$(command -v avr-g++)")"
+          AVR_GCC_MAJOR="$(avr-g++ -dumpversion | cut -d. -f1)"
           # Install the exported library in the standard Arduino sketchbook
           # path so the CLI's dependency resolver compiles its src/*.cpp files.
           mkdir -p "$HOME/Arduino/libraries" "$HOME/Arduino/libraries/Nanopb/src"
+          rm -rf "$HOME/Arduino/libraries/PigweedAVR"
           cp -a dist/PigweedAVR "$HOME/Arduino/libraries/"
+          # Select the matching versioned avr-libstdcpp header tree and place
+          # it in compiler.cpp.extra_flags (ahead of cores/arduino) so C++17
+          # <new> (std::launder, aligned operator new) is not shadowed by the
+          # Arduino AVR core's C++11 cores/arduino/new, while keeping
+          # PigweedAVR/src out of extra_flags so Arduino CLI discovers and
+          # compiles PigweedAVR's translation units.
+          if [ "$AVR_GCC_MAJOR" -ge 16 ]; then
+            AVR_STDCPP_INC="$HOME/Arduino/libraries/PigweedAVR/gcc16/include"
+          elif [ "$AVR_GCC_MAJOR" -ge 14 ]; then
+            AVR_STDCPP_INC="$HOME/Arduino/libraries/PigweedAVR/gcc15/include"
+          elif [ "$AVR_GCC_MAJOR" -ge 13 ]; then
+            AVR_STDCPP_INC="$HOME/Arduino/libraries/PigweedAVR/gcc13/include"
+          elif [ "$AVR_GCC_MAJOR" -ge 11 ]; then
+            AVR_STDCPP_INC="$HOME/Arduino/libraries/PigweedAVR/gcc12/include"
+          else
+            AVR_STDCPP_INC="$HOME/Arduino/libraries/PigweedAVR/gcc10/include"
+          fi
+          test -d "$AVR_STDCPP_INC"
           # The Bridge application supplies Nanopb separately; mirror its
-          # pinned runtime dependency without bundling duplicate pb_* symbols.
-          NANOPB_BASE="https://raw.githubusercontent.com/nanopb/nanopb/nanopb-0.4.9.2"
+          # pinned runtime dependency (nanopb-0.4.9.2) without bundling
+          # duplicate pb_* symbols in PigweedAVR.
+          NANOPB_REVISION="$(tr -d '[:space:]' < tools/ci/nanopb_revision.txt)"
+          test "$NANOPB_REVISION" = "160d4f09e5fabb2b66aa2dea32d4f38ace2c4b3f"
+          NANOPB_BASE="https://raw.githubusercontent.com/nanopb/nanopb/${NANOPB_REVISION}"
           for file in pb.h pb_common.h pb_common.c pb_decode.h pb_decode.c pb_encode.h pb_encode.c; do
             curl -fsSL "$NANOPB_BASE/$file" -o "$HOME/Arduino/libraries/Nanopb/src/$file"
+            test -s "$HOME/Arduino/libraries/Nanopb/src/$file"
           done
           cat > "$HOME/Arduino/libraries/Nanopb/library.properties" <<'EOF'
           name=Nanopb
@@ -327,11 +340,13 @@ jobs:
           arduino-cli compile \
             --fqbn arduino:avr:mega \
             --build-property "compiler.path=${AVR_TOOLCHAIN_DIR}/" \
-            --build-property "compiler.cpp.extra_flags=-std=gnu++17" \
+            --build-property "compiler.cpp.extra_flags=-std=gnu++17 -D__cpp_lib_endian=201907L -I${AVR_STDCPP_INC}" \
             --libraries "$HOME/Arduino/libraries" \
             --verbose \
             --build-path build/arduino-transfer-export-probe \
             tests/arduino_transfer_export_probe
+          avr-size --format=avr --mcu=atmega2560 \
+            build/arduino-transfer-export-probe/arduino_transfer_export_probe.ino.elf
 
       - name: Upload Build Artifacts
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'

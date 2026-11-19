@@ -3,7 +3,6 @@
 """Packages Pigweed AVR port into a standalone Arduino IDE / Arduino CLI library."""
 
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -276,8 +275,6 @@ def export_library(dest_dir: Path):
 
         EXCLUDED_SOURCES = {
             "pw_assert_examples.cc",
-            # Exported source name is prefixed with its Pigweed module.
-            "pw_assert_pw_assert_examples.cpp",
             "pw_assert_fake_backend.cc",
             "pw_polyfill_test.cc",
             "pw_containers_test_helpers.cc",
@@ -298,11 +295,8 @@ def export_library(dest_dir: Path):
             "pw_hdlc_router.cc",
             "pw_hdlc_wire_packet_parser.cc",
             "pw_chrono_wrap_time_build_time.cc",
-            "pw_chrono_wrap_time_build_time.cpp",
             "pw_chrono_wrap_time_system_clock.cc",
-            "pw_chrono_wrap_time_system_clock.cpp",
             "pw_chrono_system_clock.cc",
-            "pw_chrono_system_clock.cpp",
             "pw_log_proto_utils.cc",
             "pw_crypto_aes_boringssl.cc",
             "pw_crypto_aes_mbedtls.cc",
@@ -325,10 +319,10 @@ def export_library(dest_dir: Path):
             "pw_containers_var_len_entry.cc",
             "pw_containers_var_len_entry_queue_iterator.cc",
             "pw_transfer_atomic_file_transfer_handler.cc",
-        # The Bridge uses fixed-lifetime stream handlers, not allocator-backed
-        # file handlers; excluding this unused source avoids pulling in a
-        # platform mutex backend solely for an unused allocation API.
-        "pw_transfer_handler_allocator.cc",
+            # The Bridge uses fixed-lifetime stream handlers, not allocator-backed
+            # file handlers; excluding this unused source avoids pulling in a
+            # platform mutex backend solely for an unused allocation API.
+            "pw_transfer_handler_allocator.cc",
         }
         excluded_source_stems = {Path(name).stem for name in EXCLUDED_SOURCES}
 
@@ -397,223 +391,6 @@ def export_library(dest_dir: Path):
 
     generate_pw_rpc_packet_header(src_dir)
 
-    # Pigweed's PWPB generator currently emits an unconditional vector include
-    # for message headers, even when the schema has no repeated fields and the
-    # generated declarations never use pw::Vector. Remove only that unused
-    # include; fail closed if generated code actually depends on the container.
-    for generated_header in (
-        src_dir / "pw_rpc" / "internal" / "packet.pwpb.h",
-        src_dir / "pw_transfer" / "transfer.pwpb.h",
-    ):
-        generated = generated_header.read_text(encoding="utf-8")
-        code_only = re.sub(r"/\*.*?\*/|//[^\n]*", "", generated, flags=re.DOTALL)
-        if "pw::Vector<" in code_only:
-            raise RuntimeError(
-                f"{generated_header} uses pw::Vector; AVR export cannot "
-                "provide STL-backed containers"
-            )
-        generated = generated.replace(
-            '#include "pw_containers/vector.h"\n', ""
-        )
-        generated_header.write_text(generated, encoding="utf-8")
-
-    # The Arduino AVR toolchain does not provide the C++ standard-library
-    # container/lifetime facilities required by pw::Vector. The AVR transfer
-    # API uses fixed caller-owned buffers and spans, so strip the optional
-    # repeated-double Vector overloads from the exported PWPB headers instead
-    # of emulating STL facilities such as std::launder or aligned operator new.
-    (src_dir / "pw_containers" / "vector.h").unlink(missing_ok=True)
-    vector_header = src_dir / "pw_protobuf" / "encoder.h"
-    decoder_header = src_dir / "pw_protobuf" / "stream_decoder.h"
-    for header in (vector_header, decoder_header):
-        content = header.read_text(encoding="utf-8")
-        content = content.replace('#include "pw_containers/vector.h"\n', "")
-        # Strip every upstream overload that exposes pw::Vector. The
-        # exact overload set can change with Pigweed revisions; match C++
-        # member declarations structurally rather than relying on docstrings.
-        vector_method = re.compile(
-            r"^[ \t]*(?:Status|pw::Status|Result<[^>]+>)\s+"
-            r"[A-Za-z_][A-Za-z0-9_]*\s*\([^;{}]*pw::Vector<[^>]+>[^;{}]*\)\s*\{",
-            re.MULTILINE | re.DOTALL,
-        )
-        while True:
-            match = vector_method.search(content)
-            if match is None:
-                break
-            # A templated member declaration has its own template header
-            # immediately before the return type. Remove that header with the
-            # overload; otherwise it becomes attached to the next declaration
-            # and can produce duplicate/shadowed template parameters in the
-            # exported header.
-            method_start = match.start()
-            template_prefix = re.search(
-                r"(?:^[ \t]*template\s*<[^;{}]*>[ \t]*\n)+[ \t]*$",
-                content[:method_start],
-                re.MULTILINE | re.DOTALL,
-            )
-            if template_prefix is not None:
-                method_start = template_prefix.start()
-
-            body_start = content.find("{", match.start(), match.end())
-            depth = 0
-            method_end = None
-            for index in range(body_start, len(content)):
-                if content[index] == "{":
-                    depth += 1
-                elif content[index] == "}":
-                    depth -= 1
-                    if depth == 0:
-                        method_end = index + 1
-                        break
-            if method_end is None:
-                raise RuntimeError(f"Unterminated pw::Vector overload in {header}")
-            content = content[:method_start] + content[method_end:]
-        if "pw::Vector<" in content or 'pw_containers/vector.h' in content:
-            raise RuntimeError(f"AVR export still references pw::Vector in {header}")
-        header.write_text(content, encoding="utf-8")
-
-    # Keep only headers reachable from the actual exported translation units and
-    # the supported public umbrella. Pigweed's recursive public-header trees
-    # contain host-only APIs (including STL-backed containers) that are not
-    # part of the AVR library. Copying them makes the export validator reject
-    # unused code and, worse, exposes unsupported APIs to Arduino consumers.
-    include_pattern = re.compile(
-        r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE
-    )
-    reachable_headers = set()
-    pending_headers = []
-
-    def resolve_local_include(including_file: Path, include_name: str):
-        candidates = (including_file.parent / include_name, src_dir / include_name)
-        for candidate in candidates:
-            if candidate.is_file() and candidate.suffix in {".h", ".hpp"}:
-                return candidate.resolve()
-        # Includes may be rooted below a copied module directory even when
-        # the including file uses an angle-bracket spelling.
-        matches = list(src_dir.glob(f"**/{include_name}"))
-        matches = [item for item in matches if item.is_file()
-                   and item.suffix in {".h", ".hpp"}]
-        return matches[0].resolve() if len(matches) == 1 else None
-
-    translation_units = list(src_dir.rglob("*.cpp"))
-    # The example sketch is generated later in this function; its direct
-    # includes are covered by the exported public umbrella and the Arduino
-    # compile probe, so do not reference examples_dir before it is created.
-    public_roots = [src_dir / "PigweedAVR.h"]
-    for root in [*translation_units, *public_roots]:
-        if root.is_file():
-            # The umbrella is itself an exported public header. Mark it as
-            # reachable before traversing its dependencies; otherwise the
-            # pruning pass below deletes PigweedAVR.h after using its includes.
-            if root in public_roots:
-                reachable_headers.add(root.resolve())
-            pending_headers.extend(
-                resolve_local_include(root, name)
-                for name in include_pattern.findall(
-                    root.read_text(encoding="utf-8", errors="replace")
-                )
-            )
-    while pending_headers:
-        header = pending_headers.pop()
-        if header is None or header in reachable_headers:
-            continue
-        reachable_headers.add(header)
-        content = header.read_text(encoding="utf-8", errors="replace")
-        pending_headers.extend(
-            resolve_local_include(header, name)
-            for name in include_pattern.findall(content)
-        )
-
-    for header in src_dir.rglob("*"):
-        if (header.is_file() and header.suffix in {".h", ".hpp"}
-                and header.resolve() not in reachable_headers):
-            header.unlink()
-
-    # No STL containers or lifetime shims may leak into the AVR Arduino export.
-    # Strip comments lexically before checking: upstream Pigweed documentation
-    # frequently mentions std::array/vector in examples that are not compiled.
-    # Keep newlines so diagnostics retain their original source line numbers.
-    def strip_cpp_comments(source: str) -> str:
-        output = []
-        index = 0
-        state = "code"
-        while index < len(source):
-            current = source[index]
-            following = source[index + 1] if index + 1 < len(source) else ""
-            if state == "code":
-                if current == "/" and following == "/":
-                    output.extend((" ", " "))
-                    index += 2
-                    state = "line_comment"
-                    continue
-                if current == "/" and following == "*":
-                    output.extend((" ", " "))
-                    index += 2
-                    state = "block_comment"
-                    continue
-                if current == '"':
-                    state = "string"
-                elif current == "'":
-                    state = "character"
-                output.append(current)
-                index += 1
-                continue
-            if state == "line_comment":
-                if current == "\n":
-                    output.append(current)
-                    state = "code"
-                else:
-                    output.append(" ")
-                index += 1
-                continue
-            if state == "block_comment":
-                if current == "*" and following == "/":
-                    output.extend((" ", " "))
-                    index += 2
-                    state = "code"
-                else:
-                    output.append("\n" if current == "\n" else " ")
-                    index += 1
-                continue
-            output.append(current)
-            if current == "\\\\":
-                if index + 1 < len(source):
-                    output.append(source[index + 1])
-                    index += 2
-                    continue
-            elif (state == "string" and current == '"') or (
-                state == "character" and current == "'"
-            ):
-                state = "code"
-            index += 1
-        return "".join(output)
-
-    forbidden = (
-        "pw_containers/vector.h",
-        "pw::Vector<",
-        "std::launder",
-        "std::vector<",
-        "std::array<",
-        "#include <array>",
-    )
-    offenders = []
-    for header in src_dir.rglob("*.h"):
-        original = header.read_text(encoding="utf-8", errors="replace")
-        content = strip_cpp_comments(original)
-        for line_number, line in enumerate(content.splitlines(), 1):
-            matches = [token for token in forbidden if token in line]
-            if matches:
-                original_line = original.splitlines()[line_number - 1].strip()
-                offenders.append(
-                    f"{header.relative_to(src_dir)}:{line_number}: "
-                    + ", ".join(matches) + f" | {original_line}"
-                )
-    if offenders:
-        raise RuntimeError(
-            "AVR Arduino export contains unsupported STL/vector dependencies:\n"
-            + "\n".join(offenders)
-        )
-
     # pw_transfer's protocol bindings are generated by the CMake build. Search
     # both build trees because the AVR transfer probe is configured separately
     # from the main ATmega2560 build.
@@ -673,6 +450,7 @@ def export_library(dest_dir: Path):
 
     example_ino = """// Arduino Yún: upstream Pigweed pw_rpc over HDLC/UART.
 #include <Arduino.h>
+#include <array>
 #include <PigweedAVR.h>
 #include "avr_uart_stream.h"
 #include "pw_hdlc/rpc_channel.h"
@@ -684,9 +462,10 @@ constexpr uint32_t kRpcChannelId = 1;
 
 avr_port::AvrUartStream uart(115200, avr_port::UartPort::kUsart1);
 pw::hdlc::RpcChannelOutput output(uart, kHdlcAddress, "yun-rpc");
-pw::rpc::Channel channels[] = {
+std::array<pw::rpc::Channel, 1> channels = {
     pw::rpc::Channel::Create<kRpcChannelId>(&output)};
-pw::rpc::Server server(pw::span<pw::rpc::Channel>(channels, 1));
+pw::rpc::Server server(pw::span<pw::rpc::Channel>(channels.data(),
+                                                   channels.size()));
 std::byte decoder_storage[128]{};
 pw::hdlc::Decoder decoder{pw::ByteSpan(decoder_storage)};
 
