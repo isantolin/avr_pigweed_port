@@ -229,6 +229,8 @@ def export_library(dest_dir: Path):
             shutil.copytree(b_path / "public_overrides", src_dir, dirs_exist_ok=True)
         if (b_path / "src").exists():
             for src_file in (b_path / "src").glob("*.cpp"):
+                if src_file.name.endswith(("_test.cpp", "_example.cpp", "_examples.cpp")):
+                    continue
                 shutil.copy2(src_file, src_dir / src_file.name)
 
     # 4. Copy Pigweed modules public headers and implementation sources
