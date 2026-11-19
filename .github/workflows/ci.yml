@@ -55,7 +55,7 @@ jobs:
           # Ubuntu mirror or lock cannot stall both matrix jobs indefinitely.
           bash tools/ci/apt_update_with_fallback.sh
 
-          sudo timeout --signal=TERM --kill-after=30s 300s apt-get \
+          sudo timeout --signal=TERM --kill-after=30s 900s apt-get \
             -o Acquire::Retries=3 \
             -o Acquire::http::Timeout=30 \
             -o Acquire::https::Timeout=30 \
