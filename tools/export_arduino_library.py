@@ -241,6 +241,7 @@ def export_library(dest_dir: Path):
         "pw_span",
         "pw_bytes",
         "pw_varint",
+        "pw_containers",
         "pw_stream",
         "pw_checksum",
         "pw_hdlc",
@@ -401,6 +402,7 @@ def export_library(dest_dir: Path):
     # API uses fixed caller-owned buffers and spans, so strip the optional
     # repeated-double Vector overloads from the exported PWPB headers instead
     # of emulating STL facilities such as std::launder or aligned operator new.
+    (src_dir / "pw_containers" / "vector.h").unlink(missing_ok=True)
     vector_header = src_dir / "pw_protobuf" / "encoder.h"
     decoder_header = src_dir / "pw_protobuf" / "stream_decoder.h"
     for header in (vector_header, decoder_header):
