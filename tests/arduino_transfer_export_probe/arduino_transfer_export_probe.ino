@@ -2,7 +2,6 @@
 #include <PigweedAVR.h>
 #include <pb.h>
 
-#include <array>
 #include <cstddef>
 
 namespace {
@@ -12,17 +11,16 @@ class NullWriter final : public pw::stream::NonSeekableWriter {
   pw::Status DoWrite(pw::ConstByteSpan) override { return pw::OkStatus(); }
 };
 
-std::array<std::byte, 128> chunk_storage{};
-std::array<std::byte, 256> encode_storage{};
+std::byte chunk_storage[128]{};
+std::byte encode_storage[256]{};
 pw::transfer::Thread<1, 1> transfer_thread{
     pw::ByteSpan(chunk_storage), pw::ByteSpan(encode_storage)};
 
 NullWriter writer;
 pw::hdlc::RpcChannelOutput output(writer, 1, "mega-transfer-export-probe");
-std::array<pw::rpc::Channel, 1> channels = {
-    pw::rpc::Channel::Create<1>(&output)};
+pw::rpc::Channel channels[] = {pw::rpc::Channel::Create<1>(&output)};
 pw::rpc::Server server(
-    pw::span<pw::rpc::Channel>(channels.data(), channels.size()));
+    pw::span<pw::rpc::Channel>(channels, 1));
 pw::rpc::Client client(
     pw::span<pw::rpc::Channel>(channels.data(), channels.size()));
 
