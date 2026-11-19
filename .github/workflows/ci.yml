@@ -261,6 +261,13 @@ jobs:
             dist/PigweedAVR/src/assert_avr.cpp
             dist/PigweedAVR/src/pw_transfer_transfer_thread.cpp
             dist/PigweedAVR/src/array
+            dist/PigweedAVR/src/pb.h
+            dist/PigweedAVR/src/pb_common.h
+            dist/PigweedAVR/src/pb_decode.h
+            dist/PigweedAVR/src/pb_encode.h
+            dist/PigweedAVR/src/pb_common.c
+            dist/PigweedAVR/src/pb_decode.c
+            dist/PigweedAVR/src/pb_encode.c
           )
           for required_file in "${required_files[@]}"; do
             if [ ! -s "$required_file" ]; then
