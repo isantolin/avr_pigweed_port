@@ -102,7 +102,7 @@ python3 tools/export_arduino_library.py
 
 Run the CMake configure/build steps above first, including the ATmega1284P transfer probe, so the generated `pw_transfer` PWPB and raw-RPC headers exist. Host-only and non-Mega exports may omit those generated bindings; the exporter warns when they are absent. `PigweedAVR.h` exposes the transfer API only when compiling for ATmega2560.
 
-The exported umbrella header is `PigweedAVR.h`. It exposes upstream RPC on supported Arduino targets and adds cooperative transfer headers/configuration only for ATmega2560. The export does not bundle the Nanopb C runtime: applications that use `pw_rpc.nanopb` must provide Nanopb 0.4.9.2 separately. The Arduino Bridge installer supplies those `pb_*` sources in its application library, avoiding duplicate runtime symbols in `PigweedAVR`.
+The exported umbrella header is `PigweedAVR.h`. It exposes upstream RPC on supported Arduino targets and adds cooperative transfer headers/configuration only for ATmega2560. The umbrella intentionally omits `pw_containers/vector.h`: its allocator/temporary-buffer surface is not supported by the Arduino AVR standard-library headers. The CMake firmware build continues to use upstream `pw::Vector` with its dedicated AVR toolchain configuration. The export does not bundle the Nanopb C runtime: applications that use `pw_rpc.nanopb` must provide Nanopb 0.4.9.2 separately. The Arduino Bridge installer supplies those `pb_*` sources in its application library, avoiding duplicate runtime symbols in `PigweedAVR`.
 
 ## `pw_emu` + simavr
 
