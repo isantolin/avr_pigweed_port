@@ -350,7 +350,7 @@ def export_library(dest_dir: Path):
                 and not any(token in cc_file.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake"))
                 and cc_file.name not in EXCLUDED_SOURCES
                 and cc_file.stem not in excluded_source_stems
-                and target_name not in EXCLUDED_SOURCES
+                and Path(target_name).stem not in excluded_source_stems
             ):
                 shutil.copy2(cc_file, src_dir / target_name)
         for cc_file in (mod_path / "cpp").glob("*.cc"):
@@ -360,7 +360,7 @@ def export_library(dest_dir: Path):
                 and not any(token in cc_file.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake"))
                 and cc_file.name not in EXCLUDED_SOURCES
                 and cc_file.stem not in excluded_source_stems
-                and target_name not in EXCLUDED_SOURCES
+                and Path(target_name).stem not in excluded_source_stems
             ):
                 shutil.copy2(cc_file, src_dir / target_name)
 
