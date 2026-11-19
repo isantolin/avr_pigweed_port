@@ -273,13 +273,6 @@ jobs:
             dist/PigweedAVR/src/assert_avr.cpp
             dist/PigweedAVR/src/pw_transfer_transfer_thread.cpp
             dist/PigweedAVR/src/array
-            dist/PigweedAVR/src/pb.h
-            dist/PigweedAVR/src/pb_common.h
-            dist/PigweedAVR/src/pb_decode.h
-            dist/PigweedAVR/src/pb_encode.h
-            dist/PigweedAVR/src/pb_common.c
-            dist/PigweedAVR/src/pb_decode.c
-            dist/PigweedAVR/src/pb_encode.c
           )
           for required_file in "${required_files[@]}"; do
             if [ ! -s "$required_file" ]; then
@@ -310,14 +303,31 @@ jobs:
           AVR_TOOLCHAIN_DIR="$(dirname "$(command -v avr-g++)")"
           # Install the exported library in the standard Arduino sketchbook
           # path so the CLI's dependency resolver compiles its src/*.cpp files.
-          mkdir -p "$HOME/Arduino/libraries"
+          mkdir -p "$HOME/Arduino/libraries/PigweedAVR" "$HOME/Arduino/libraries/Nanopb/src"
           cp -a dist/PigweedAVR "$HOME/Arduino/libraries/PigweedAVR"
+          # The Bridge application supplies Nanopb separately; mirror its
+          # pinned runtime dependency without bundling duplicate pb_* symbols.
+          NANOPB_BASE="https://raw.githubusercontent.com/nanopb/nanopb/nanopb-0.4.9.2"
+          for file in pb.h pb_common.h pb_common.c pb_decode.h pb_decode.c pb_encode.h pb_encode.c; do
+            curl -fsSL "$NANOPB_BASE/$file" -o "$HOME/Arduino/libraries/Nanopb/src/$file"
+          done
+          cat > "$HOME/Arduino/libraries/Nanopb/library.properties" <<'EOF'
+          name=Nanopb
+          version=0.4.9.2
+          author=nanopb
+          maintainer=nanopb
+          sentence=Zero-copy Protocol Buffers runtime
+          paragraph=Pinned Nanopb runtime used by Pigweed pw_rpc nanopb bindings.
+          category=Communication
+          architectures=*
+          includes=pb.h
+          EOF
           # Compile and link a real Arduino sketch against the exported library.
           # Syntax-only compilation cannot catch missing upstream source symbols.
           arduino-cli compile \
             --fqbn arduino:avr:mega \
             --build-property "compiler.path=${AVR_TOOLCHAIN_DIR}/" \
-            --build-property compiler.cpp.extra_flags=-std=gnu++17 \
+            --build-property "compiler.cpp.extra_flags=-std=gnu++17 -I$HOME/Arduino/libraries/Nanopb/src" \
             --libraries "$HOME/Arduino/libraries" \
             --verbose \
             --build-path build/arduino-transfer-export-probe \
