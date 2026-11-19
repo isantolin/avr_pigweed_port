@@ -405,21 +405,21 @@ def export_library(dest_dir: Path):
     decoder_header = src_dir / "pw_protobuf" / "stream_decoder.h"
     for header in (vector_header, decoder_header):
         content = header.read_text(encoding="utf-8")
-        content = content.replace('#include "pw_containers/vector.h"\\n', "")
+        content = content.replace('#include "pw_containers/vector.h"\n', "")
         if "pw::Vector<" in content:
             if header.name == "encoder.h":
                 pattern = re.compile(
-                    r"  /// Writes a repeated `double` field using packed encoding\\.\\n"
-                    r"  ///\\n"
-                    r"  /// @pre Encoder has no active child encoder\\.\\n"
-                    r"  Status WriteRepeatedDouble\\(uint32_t field_number,\\n"
-                    r"                             const pw::Vector<double>& values\\) \\{.*?\\n  \\}\\n",
+                    r"  /// Writes a repeated \`double\` field using packed encoding\.\n"
+                    r"  ///\n"
+                    r"  /// @pre Encoder has no active child encoder\.\n"
+                    r"  Status WriteRepeatedDouble\(uint32_t field_number,\n"
+                    r"                             const pw::Vector<double>& values\) \{.*?\n  \}\n",
                     re.DOTALL,
                 )
             else:
                 pattern = re.compile(
-                    r"  /// Reads repeated `double` values from the current position into the vector,.*?\\n"
-                    r"  Status ReadRepeatedDouble\\(pw::Vector<double>& out\\) \\{.*?\\n  \\}\\n",
+                    r"  /// Reads repeated \`double\` values from the current position into the vector,.*?\n"
+                    r"  Status ReadRepeatedDouble\(pw::Vector<double>& out\) \{.*?\n  \}\n",
                     re.DOTALL,
                 )
             content, count = pattern.subn("", content, count=1)
