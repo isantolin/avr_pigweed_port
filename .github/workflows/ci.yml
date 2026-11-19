@@ -270,6 +270,7 @@ jobs:
             fi
           done
           if [ -e dist/PigweedAVR/src/pw_assert_examples.cpp ] || [ -e dist/PigweedAVR/src/pw_assert_pw_assert_examples.cpp ]; then
+            find dist/PigweedAVR/src -maxdepth 1 -type f -iname "*assert*example*" -print
             echo "::error::Unexpected assertion example source in Arduino export"
             exit 1
           fi
