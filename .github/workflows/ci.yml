@@ -261,10 +261,14 @@ jobs:
           grep -q "define PW_TRANSFER_COOPERATIVE 1" dist/PigweedAVR/src/pw_transfer/transfer_thread.h
           avr-g++ -mmcu=atmega2560 -DF_CPU=16000000UL -std=gnu++17 \
             -fsyntax-only -Idist/PigweedAVR/src tools/ci/arduino_export_probe.cpp
+          # Use the same modern AVR toolchain as the CMake port build. The
+          # Arduino AVR core's bundled GCC 7.3 is too old for avr-libstdcpp.
+          AVR_TOOLCHAIN_DIR="$(dirname "$(command -v avr-g++)")"
           # Compile and link a real Arduino sketch against the exported library.
           # Syntax-only compilation cannot catch missing upstream .cc symbols.
           arduino-cli compile \
             --fqbn arduino:avr:mega \
+            --build-property "compiler.path=${AVR_TOOLCHAIN_DIR}/" \
             --build-property compiler.cpp.extra_flags=-std=gnu++17 \
             --libraries dist \
             --build-path build/arduino-transfer-export-probe \
