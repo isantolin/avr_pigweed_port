@@ -505,7 +505,6 @@ def export_library(dest_dir: Path):
 
     example_ino = """// Arduino Yún: upstream Pigweed pw_rpc over HDLC/UART.
 #include <Arduino.h>
-#include <array>
 #include <PigweedAVR.h>
 #include "avr_uart_stream.h"
 #include "pw_hdlc/rpc_channel.h"
@@ -517,10 +516,9 @@ constexpr uint32_t kRpcChannelId = 1;
 
 avr_port::AvrUartStream uart(115200, avr_port::UartPort::kUsart1);
 pw::hdlc::RpcChannelOutput output(uart, kHdlcAddress, "yun-rpc");
-std::array<pw::rpc::Channel, 1> channels = {
+pw::rpc::Channel channels[] = {
     pw::rpc::Channel::Create<kRpcChannelId>(&output)};
-pw::rpc::Server server(pw::span<pw::rpc::Channel>(channels.data(),
-                                                   channels.size()));
+pw::rpc::Server server(pw::span<pw::rpc::Channel>(channels, 1));
 std::byte decoder_storage[128]{};
 pw::hdlc::Decoder decoder{pw::ByteSpan(decoder_storage)};
 
