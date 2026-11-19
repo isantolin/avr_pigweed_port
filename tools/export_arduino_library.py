@@ -468,6 +468,11 @@ def export_library(dest_dir: Path):
     public_roots = [src_dir / "PigweedAVR.h"]
     for root in [*translation_units, *public_roots]:
         if root.is_file():
+            # The umbrella is itself an exported public header. Mark it as
+            # reachable before traversing its dependencies; otherwise the
+            # pruning pass below deletes PigweedAVR.h after using its includes.
+            if root in public_roots:
+                reachable_headers.add(root.resolve())
             pending_headers.extend(
                 resolve_local_include(root, name)
                 for name in include_pattern.findall(
