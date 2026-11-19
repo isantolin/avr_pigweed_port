@@ -536,7 +536,7 @@ int main() {
   static pw::rpc::Channel reverse_server_channels[1] = {
       pw::rpc::Channel::Create<kRpcChannelId>(&reverse_server_output)};
   static pw::rpc::Server reverse_server(pw::span<pw::rpc::Channel>(
-      reverse_server_channels, reverse_(sizeof(server_channels) / sizeof(server_channels[0]))));
+      reverse_server_channels, 1));
 
   static HdlcLoopbackWriter reverse_client_to_server_writer(reverse_server);
   static pw::hdlc::RpcChannelOutput reverse_client_output(
@@ -544,7 +544,7 @@ int main() {
   static pw::rpc::Channel reverse_client_channels[1] = {
       pw::rpc::Channel::Create<kRpcChannelId>(&reverse_client_output)};
   static pw::rpc::Client reverse_rpc_client(pw::span<pw::rpc::Channel>(
-      reverse_client_channels, reverse_(sizeof(client_channels) / sizeof(client_channels[0]))));
+      reverse_client_channels, 1));
   reverse_server_to_client_writer.set_client(reverse_rpc_client);
 
   static pw::transfer::TransferService reverse_transfer_service(
