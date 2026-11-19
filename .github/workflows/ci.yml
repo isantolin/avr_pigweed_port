@@ -264,6 +264,7 @@ jobs:
           # Syntax-only compilation cannot catch missing upstream .cc symbols.
           arduino-cli compile \
             --fqbn arduino:avr:mega \
+            --build-property compiler.cpp.extra_flags=-std=gnu++17 \
             --libraries dist \
             --build-path build/arduino-transfer-export-probe \
             tests/arduino_transfer_export_probe
