@@ -444,7 +444,7 @@ def export_library(dest_dir: Path):
     # part of the AVR library. Copying them makes the export validator reject
     # unused code and, worse, exposes unsupported APIs to Arduino consumers.
     include_pattern = re.compile(
-        r'^\\s*#\\s*include\\s*[<"]([^>"]+)[>"]', re.MULTILINE
+        r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE
     )
     reachable_headers = set()
     pending_headers = []
