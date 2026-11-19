@@ -339,7 +339,7 @@ def export_library(dest_dir: Path):
                 "service.cc",
             }:
                 continue
-            target_name = f"{mod}_{cc_file.name}"
+            target_name = f"{mod}_{cc_file.stem}.cpp"
             if (
                 not cc_file.name.endswith(("_test.cc", "_fuzzer.cc", "_perf_test.cc"))
                 and cc_file.name not in EXCLUDED_SOURCES
@@ -347,7 +347,7 @@ def export_library(dest_dir: Path):
             ):
                 shutil.copy2(cc_file, src_dir / target_name)
         for cc_file in (mod_path / "cpp").glob("*.cc"):
-            target_name = f"{mod}_{cc_file.name}"
+            target_name = f"{mod}_{cc_file.stem}.cpp"
             if (
                 not cc_file.name.endswith(("_test.cc", "_fuzzer.cc"))
                 and cc_file.name not in EXCLUDED_SOURCES
@@ -359,10 +359,10 @@ def export_library(dest_dir: Path):
     shutil.copytree(nanopb_rpc_path / "public", src_dir, dirs_exist_ok=True)
     for cc_file in nanopb_rpc_path.glob("*.cc"):
         if cc_file.name in {"common.cc", "method.cc", "server_reader_writer.cc"}:
-            shutil.copy2(cc_file, src_dir / f"pw_rpc_nanopb_{cc_file.name}")
+            shutil.copy2(cc_file, src_dir / f"pw_rpc_nanopb_{cc_file.stem}.cpp")
     raw_rpc_path = PW_ROOT / "pw_rpc" / "raw"
     shutil.copytree(raw_rpc_path / "public", src_dir, dirs_exist_ok=True)
-    shutil.copy2(raw_rpc_path / "method.cc", src_dir / "pw_rpc_raw_method.cc")
+    shutil.copy2(raw_rpc_path / "method.cc", src_dir / "pw_rpc_raw_method.cpp")
 
     # Upstream module headers are copied after the first backend pass above.
     # Re-apply the selected AVR backend headers last so Pigweed's generic
