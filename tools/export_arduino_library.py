@@ -3,6 +3,7 @@
 """Packages Pigweed AVR port into a standalone Arduino IDE / Arduino CLI library."""
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -450,7 +451,6 @@ def export_library(dest_dir: Path):
 
     example_ino = """// Arduino Yún: upstream Pigweed pw_rpc over HDLC/UART.
 #include <Arduino.h>
-#include <array>
 #include <PigweedAVR.h>
 #include "avr_uart_stream.h"
 #include "pw_hdlc/rpc_channel.h"
@@ -462,16 +462,15 @@ constexpr uint32_t kRpcChannelId = 1;
 
 avr_port::AvrUartStream uart(115200, avr_port::UartPort::kUsart1);
 pw::hdlc::RpcChannelOutput output(uart, kHdlcAddress, "yun-rpc");
-std::array<pw::rpc::Channel, 1> channels = {
+pw::rpc::Channel channels[] = {
     pw::rpc::Channel::Create<kRpcChannelId>(&output)};
-pw::rpc::Server server(pw::span<pw::rpc::Channel>(channels.data(),
-                                                   channels.size()));
-std::byte decoder_storage[128]{};
+pw::rpc::Server server(pw::span<pw::rpc::Channel>(channels, 1));
+pw::byte decoder_storage[128]{};
 pw::hdlc::Decoder decoder{pw::ByteSpan(decoder_storage)};
 
 void PollUart() {
   while (Serial1.available() > 0) {
-    const std::byte value{static_cast<uint8_t>(Serial1.read())};
+    const pw::byte value{static_cast<uint8_t>(Serial1.read())};
     auto frame = decoder.Process(value);
     if (!frame.ok()) continue;
     if (frame->address() != kHdlcAddress) continue;
@@ -491,9 +490,75 @@ void loop() {
 """
     (examples_dir / "YunBridgeRpc.ino").write_text(example_ino)
 
+    audit_export_no_hosted_stl(dest_dir)
+
     print(
         f"[+] Successfully exported Arduino Library ({len(list(src_dir.glob('*')))} components)."
     )
+
+
+_PORT_FORBIDDEN_STL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("#include <array>", re.compile(r"#\s*include\s*<array>")),
+    ("#include <vector>", re.compile(r"#\s*include\s*<vector>")),
+    ("std::array", re.compile(r"\bstd::array\b")),
+    ("std::vector", re.compile(r"\bstd::vector\b")),
+    ("pw_containers/vector.h", re.compile(r'pw_containers/vector\.h')),
+    ("pw::Vector", re.compile(r"\bpw::Vector\b")),
+)
+
+_HOSTED_STL_INCLUDE_RE = re.compile(
+    r"#\s*include\s*<("
+    r"vector|string|iostream|sstream|fstream|thread|condition_variable|"
+    r"future|map|set|unordered_map|unordered_set|list|deque|queue|stack|"
+    r"stdexcept|regex"
+    r")>"
+)
+
+
+def _strip_cpp_comments(text: str) -> str:
+    text = re.sub(r"/\*.*?\*/", lambda m: "\n" * m.group(0).count("\n"), text, flags=re.S)
+    return re.sub(r"//[^\n]*", "", text)
+
+
+def audit_export_no_hosted_stl(dest_dir: Path) -> None:
+    """Enforce Option A AVR policy: zero STL containers/pw::Vector in port code,
+    and zero hosted/dynamic STL includes in exported Arduino .cpp translation units."""
+    violations: list[str] = []
+
+    port_owned_files = (
+        REPO_ROOT / "src" / "PigweedAVR.h",
+        REPO_ROOT / "src" / "main.cpp",
+        REPO_ROOT / "src" / "arduino_stream.h",
+        REPO_ROOT / "src" / "avr_uart_stream.h",
+        REPO_ROOT / "tests" / "arduino_transfer_export_probe" / "arduino_transfer_export_probe.ino",
+        REPO_ROOT / "tests" / "pw_rpc_upstream_probe.cpp",
+        REPO_ROOT / "tests" / "pw_transfer_upstream_probe.cpp",
+        REPO_ROOT / "tools" / "ci" / "arduino_export_probe.cpp",
+        dest_dir / "examples" / "YunBridgeRpc" / "YunBridgeRpc.ino",
+    )
+    for path in port_owned_files:
+        if not path.is_file():
+            continue
+        cleaned = _strip_cpp_comments(path.read_text(encoding="utf-8", errors="ignore"))
+        for lineno, line in enumerate(cleaned.splitlines(), start=1):
+            for label, pattern in _PORT_FORBIDDEN_STL_PATTERNS:
+                if pattern.search(line):
+                    violations.append(f"{path}:{lineno}: forbidden AVR port token '{label}'")
+
+    src_dir = dest_dir / "src"
+    for cpp_file in sorted(src_dir.glob("*.cpp")):
+        cleaned = _strip_cpp_comments(cpp_file.read_text(encoding="utf-8", errors="ignore"))
+        for lineno, line in enumerate(cleaned.splitlines(), start=1):
+            match = _HOSTED_STL_INCLUDE_RE.search(line)
+            if match:
+                violations.append(
+                    f"{cpp_file.name}:{lineno}: forbidden hosted STL header <{match.group(1)}>"
+                )
+
+    if violations:
+        raise RuntimeError(
+            "AVR Arduino export STL policy audit failed:\n" + "\n".join(violations)
+        )
 
 
 if __name__ == "__main__":

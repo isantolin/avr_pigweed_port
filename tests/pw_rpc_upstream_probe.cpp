@@ -1,4 +1,3 @@
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <avr/io.h>
@@ -32,8 +31,10 @@ void EmitResult(uint8_t failure_code) {
   UBRR0L = static_cast<uint8_t>(ubrr & 0xFF);
   UCSR0B = (1 << TXEN0);
   UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
-  char failure_marker[] = "PW_RPC_PROBE_FAIL_0\r\n";
-  failure_marker[18] = static_cast<char>('0' + failure_code);
+  char failure_marker[] = "PW_RPC_PROBE_FAIL_00\r\n";
+  const size_t code_index = sizeof("PW_RPC_PROBE_FAIL_") - 1;
+  failure_marker[code_index] = static_cast<char>('0' + (failure_code / 10U));
+  failure_marker[code_index + 1] = static_cast<char>('0' + (failure_code % 10U));
   const char* marker =
       failure_code == 0 ? "PW_RPC_PROBE_PASS\r\n" : failure_marker;
   while (*marker != '\0') {
@@ -46,7 +47,7 @@ void EmitResult(uint8_t failure_code) {
   sleep_cpu();
 }
 
-std::array<std::byte, 3> expected_request{};
+std::byte expected_request[3] {};
 bool unary_response_ok = false;
 bool unary_status_ok = false;
 size_t unary_response_size = 0;
@@ -66,7 +67,7 @@ void OnUnaryResponse(pw::ConstByteSpan response, pw::Status status) {
     unary_response_last = static_cast<uint8_t>(response[response.size() - 1]);
   }
   unary_response_ok = unary_status_ok &&
-                      response.size() == expected_request.size() &&
+                      response.size() == (sizeof(expected_request) / sizeof(expected_request[0])) &&
                       response[0] == expected_request[0] &&
                       response[2] == expected_request[2];
 }
@@ -77,7 +78,7 @@ void OnBidiResponse(pw::ConstByteSpan response) {
   if (response.size() > 1) {
     bidi_response_middle = static_cast<uint8_t>(response[1]);
   }
-  bidi_response_ok = response.size() == expected_request.size() &&
+  bidi_response_ok = response.size() == (sizeof(expected_request) / sizeof(expected_request[0])) &&
                      response[1] == expected_request[1];
 }
 
@@ -142,7 +143,7 @@ class HdlcLoopbackWriter final : public pw::stream::NonSeekableWriter {
 
   pw::rpc::Server* server_ = nullptr;
   pw::rpc::Client* client_ = nullptr;
-  std::array<std::byte, kHdlcDecoderBufferSize> decoder_storage_{};
+  std::byte decoder_storage_[kHdlcDecoderBufferSize] {};
   pw::hdlc::Decoder decoder_;
 };
 }  // namespace
@@ -155,10 +156,10 @@ int main() {
   static HdlcLoopbackWriter server_to_client_writer;
   static pw::hdlc::RpcChannelOutput server_output(
       server_to_client_writer, kHdlcAddress, "avr-server-hdlc");
-  static std::array<pw::rpc::Channel, 1> server_channels = {
+  static pw::rpc::Channel server_channels[1] = {
       pw::rpc::Channel::Create<kRpcChannelId>(&server_output)};
   static pw::rpc::Server server(pw::span<pw::rpc::Channel>(
-      server_channels.data(), server_channels.size()));
+      server_channels, (sizeof(server_channels) / sizeof(server_channels[0]))));
 
   static ProbeService service;
   server.RegisterService(service);
@@ -166,37 +167,37 @@ int main() {
   static HdlcLoopbackWriter client_to_server_writer(server);
   static pw::hdlc::RpcChannelOutput client_output(
       client_to_server_writer, kHdlcAddress, "avr-client-hdlc");
-  static std::array<pw::rpc::Channel, 1> client_channels = {
+  static pw::rpc::Channel client_channels[1] = {
       pw::rpc::Channel::Create<kRpcChannelId>(&client_output)};
   static pw::rpc::Client client(pw::span<pw::rpc::Channel>(
-      client_channels.data(), client_channels.size()));
+      client_channels, (sizeof(client_channels) / sizeof(client_channels[0]))));
   server_to_client_writer.set_client(client);
 
   using RawProbeClient = ::avr::port::rpc::pw_rpc::raw::RpcProbe::Client;
   static RawProbeClient raw_client(client, kRpcChannelId);
 
-  const std::array<std::byte, 3> request = {
+  const std::byte request[3] = {
       std::byte{0x11}, std::byte{0x22}, std::byte{0x33}};
-  expected_request = request;
-  auto unary_call = raw_client.Unary(request, OnUnaryResponse);
+  std::memcpy(expected_request, request, sizeof(expected_request));
+  auto unary_call = raw_client.Unary(pw::ConstByteSpan(request, sizeof(request)), OnUnaryResponse);
   (void)unary_call;
   if (!service.unary_called()) failure_code = 1;
   if (failure_code == 0 &&
-      service.unary_request_size() != request.size()) failure_code = 2;
+      service.unary_request_size() != (sizeof(request) / sizeof(request[0]))) failure_code = static_cast<uint8_t>(10U + service.unary_request_size());
   if (failure_code == 0 && !unary_status_ok) failure_code = 7;
   if (failure_code == 0 &&
-      unary_response_size != request.size()) failure_code = 8;
+      unary_response_size != (sizeof(request) / sizeof(request[0]))) failure_code = 8;
   if (failure_code == 0 &&
       (unary_response_first != static_cast<uint8_t>(request[0]) ||
        unary_response_last != static_cast<uint8_t>(request[2]))) failure_code = 9;
 
   auto bidi_call = raw_client.Bidi();
   bidi_call.set_on_next(OnBidiResponse);
-  if (!bidi_call.Write(request).ok() && failure_code == 0) failure_code = 4;
+  if (!bidi_call.Write(pw::ConstByteSpan(request, sizeof(request))).ok() && failure_code == 0) failure_code = 4;
   if (!service.bidi_server_received() && failure_code == 0) failure_code = 5;
   if (!bidi_server_write_ok && failure_code == 0) failure_code = 6;
   if (!bidi_response_called && failure_code == 0) failure_code = 7;
-  if (bidi_response_size != request.size() && failure_code == 0) failure_code = 8;
+  if (bidi_response_size != (sizeof(request) / sizeof(request[0])) && failure_code == 0) failure_code = 8;
   if (bidi_response_middle != static_cast<uint8_t>(request[1]) &&
       failure_code == 0) failure_code = 9;
 
