@@ -1,8 +1,8 @@
 #include <Arduino.h>
+#include <PigweedAVR.h>
+
 #include <array>
 #include <cstddef>
-
-#include <PigweedAVR.h>
 
 namespace {
 
