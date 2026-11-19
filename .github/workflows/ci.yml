@@ -269,7 +269,7 @@ jobs:
           arduino-cli compile \
             --fqbn arduino:avr:mega \
             --build-property "compiler.path=${AVR_TOOLCHAIN_DIR}/" \
-            --build-property compiler.cpp.extra_flags=-std=gnu++17 \
+            --build-property "compiler.cpp.extra_flags=-std=gnu++17 -I$GITHUB_WORKSPACE/dist/PigweedAVR/src" \
             --libraries dist \
             --build-path build/arduino-transfer-export-probe \
             tests/arduino_transfer_export_probe
