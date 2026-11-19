@@ -231,6 +231,18 @@ jobs:
           grep -q "100% OF PORTED PIGWEED MODULES VERIFIED OK!" build/test_runner.log
           ccache --show-stats
 
+      - name: Install Arduino CLI and AVR core
+        if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
+        run: |
+          ARDUINO_CLI_VERSION=1.2.2
+          mkdir -p "$RUNNER_TEMP/arduino-cli"
+          curl -fsSL "https://github.com/arduino/arduino-cli/releases/download/v${ARDUINO_CLI_VERSION}/arduino-cli_${ARDUINO_CLI_VERSION}_Linux_64bit.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP/arduino-cli"
+          echo "$RUNNER_TEMP/arduino-cli" >> "$GITHUB_PATH"
+          arduino-cli version
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr
+
       - name: Verify Python Host Tools & Arduino Export
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: |
