@@ -231,6 +231,18 @@ jobs:
           grep -q "100% OF PORTED PIGWEED MODULES VERIFIED OK!" build/test_runner.log
           ccache --show-stats
 
+      - name: Fetch pinned upstream Nanopb runtime
+        run: |
+          NANOPB_REVISION="$(tr -d '[:space:]' < tools/ci/nanopb_revision.txt)"
+          test "$NANOPB_REVISION" = "cad3c18ef15a663e30e3e43e3a752b66378adec1"
+          git init third_party/nanopb
+          git -C third_party/nanopb remote add origin https://github.com/nanopb/nanopb.git
+          git -C third_party/nanopb fetch --depth 1 origin "$NANOPB_REVISION"
+          git -C third_party/nanopb checkout --detach FETCH_HEAD
+          for source in pb.h pb_common.h pb_encode.h pb_decode.h pb_common.c pb_encode.c pb_decode.c; do
+            test -s "third_party/nanopb/$source"
+          done
+
       - name: Install Arduino CLI and AVR core
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: |
