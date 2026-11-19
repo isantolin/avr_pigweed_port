@@ -406,14 +406,14 @@ def export_library(dest_dir: Path):
         src_dir / "pw_transfer" / "transfer.pwpb.h",
     ):
         generated = generated_header.read_text(encoding="utf-8")
-        code_only = re.sub(r"/\\*.*?\\*/|//[^\\n]*", "", generated, flags=re.DOTALL)
+        code_only = re.sub(r"/\*.*?\*/|//[^\n]*", "", generated, flags=re.DOTALL)
         if "pw::Vector<" in code_only:
             raise RuntimeError(
                 f"{generated_header} uses pw::Vector; AVR export cannot "
                 "provide STL-backed containers"
             )
         generated = generated.replace(
-            '#include "pw_containers/vector.h"\\n', ""
+            '#include "pw_containers/vector.h"\n', ""
         )
         generated_header.write_text(generated, encoding="utf-8")
 
