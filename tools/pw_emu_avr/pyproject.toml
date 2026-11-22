@@ -4,12 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pw-emu-avr"
-version = "0.1.0"
+version = "0.2.0"
 description = "Pigweed pw_emu backend for simavr"
 requires-python = ">=3.10"
+dependencies = [
+  "psutil",
+  "pyserial",
+]
 
 [tool.setuptools]
 package-dir = {"" = "python"}
 
 [tool.setuptools.packages.find]
 where = ["python"]
+
+[tool.setuptools.package-data]
+pw_emu_avr = ["py.typed"]

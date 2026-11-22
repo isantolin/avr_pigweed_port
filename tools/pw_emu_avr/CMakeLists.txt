@@ -28,6 +28,7 @@ add_custom_command(
     -DF_CPU=16000000UL
     -std=gnu11
     -Os
+    -g
     -Wall -Wextra -Werror
     ${CMAKE_CURRENT_SOURCE_DIR}/test_firmware.c
     -o ${PW_EMU_TEST_FIRMWARE}
@@ -35,3 +36,20 @@ add_custom_command(
   VERBATIM
 )
 add_custom_target(pw_emu_test_firmware ALL DEPENDS ${PW_EMU_TEST_FIRMWARE})
+
+set(PW_EMU_TEST_FIRMWARE_MEGA2560 ${CMAKE_CURRENT_BINARY_DIR}/pw_emu_test_firmware_mega2560.elf)
+add_custom_command(
+  OUTPUT ${PW_EMU_TEST_FIRMWARE_MEGA2560}
+  COMMAND ${AVR_GCC_EXECUTABLE}
+    -mmcu=atmega2560
+    -DF_CPU=16000000UL
+    -std=gnu11
+    -Os
+    -g
+    -Wall -Wextra -Werror
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_firmware_mega2560.c
+    -o ${PW_EMU_TEST_FIRMWARE_MEGA2560}
+  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/test_firmware_mega2560.c
+  VERBATIM
+)
+add_custom_target(pw_emu_test_firmware_mega2560 ALL DEPENDS ${PW_EMU_TEST_FIRMWARE_MEGA2560})

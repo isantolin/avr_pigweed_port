@@ -61,10 +61,11 @@ jobs:
             -o Acquire::https::Timeout=30 \
             -o DPkg::Lock::Timeout=120 \
             install -y --no-install-recommends \
-              gcc-avr avr-libc binutils-avr cmake ninja-build simavr \
+              gcc-avr avr-libc binutils-avr gdb-avr cmake ninja-build simavr \
               libsimavr-dev protobuf-compiler libprotobuf-dev python3-protobuf python3-jinja2 python3-serial python3-psutil ccache
 
           avr-gcc --version
+          avr-gdb --version | head -n1
           protoc --version
           simavr --help >/dev/null 2>&1 || test "$?" -eq 1
           ccache --set-config=max_size=500M
@@ -91,9 +92,10 @@ jobs:
           cmake -S tools/pw_emu_avr -B build/pw_emu_avr -G Ninja -DCMAKE_C_COMPILER_LAUNCHER=ccache
           cmake --build build/pw_emu_avr
 
-      - name: Test pw_emu simavr runner and UART PTY lifecycle
+      - name: Test pw_emu simavr runner and full pw_emu_avr suite
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: |
+          python3 -m py_compile tools/pw_emu_avr/python/pw_emu_avr/*.py tools/pw_emu_avr/tests/*.py
           PYTHONPATH="$GITHUB_WORKSPACE/tools/pw_emu_avr/python:$GITHUB_WORKSPACE/third_party/pigweed/pw_emu/py:$GITHUB_WORKSPACE/third_party/pigweed/pw_env_setup/py" python3 -m unittest discover -s tools/pw_emu_avr/tests -v
 
       - name: Configure CMake (${{ matrix.crc_impl }})

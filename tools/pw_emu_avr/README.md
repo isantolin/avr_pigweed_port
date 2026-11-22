@@ -1,12 +1,20 @@
-# AVR simulator backend for pw_emu
+# AVR simulator backend for `pw_emu`
 
-This directory contains the host-side `libsimavr` runner used by the AVR `pw_emu` integration.
+This directory contains the host-side `libsimavr` runner and Pigweed `pw_emu`
+adapter (`pw_emu_avr`) for AVR targets.
 
 ## Boundary
 
-- Firmware remains a normal AVR ELF and is built by the existing AVR toolchain.
-- `simavr_pty_runner` runs on the host and links to `libsimavr`.
-- USART0 is exposed as a raw POSIX PTY. The PTY is a byte stream in both directions.
+- Firmware remains a normal AVR ELF (or Intel HEX) built by the AVR toolchain.
+- `simavr_pty_runner` runs strictly on the host and links to `libsimavr`.
+- Up to four AVR USART channels (`0..3`, depending on MCU) can be exposed as
+  POSIX PTYs or loopback TCP sockets.
+- A synchronous loopback TCP `monitor` channel provides deterministic control
+  (`reset`, `pause`, `cont`, `step`, `status`, `stack_stats`, `quit`) and a
+  `libsimavr`-backed property model (`/cpu`, `/stack`, `/sram`, `/io`, `/flash`,
+  `/eeprom`, `/gpio/port<A..L>`, `/adc`, `/uart/<name>`).
+- Optional native `libsimavr` GDB RSP support (`avr_gdb_init`) exposes a `gdb`
+  TCP channel for `pw emu gdb`, `pw emu gdb-cmds`, and `pw emu load`.
 - No emulator code, threads, or host dependencies are linked into AVR firmware.
 
 ## Build
@@ -14,32 +22,32 @@ This directory contains the host-side `libsimavr` runner used by the AVR `pw_emu
 On Debian/Ubuntu:
 
 ```sh
-sudo apt-get install libsimavr-dev cmake build-essential
+sudo apt-get install libsimavr-dev cmake build-essential gdb-avr
 cmake -S tools/pw_emu_avr -B build/pw_emu_avr
 cmake --build build/pw_emu_avr
 ```
 
-## Run
+## Run standalone
 
 ```sh
 build/pw_emu_avr/simavr_pty_runner \
   --firmware build/test_runner.elf \
-  --mcu atmega328p \
-  --frequency 16000000
+  --mcu atmega2560 \
+  --frequency 16000000 \
+  --uart-channel uart0:0:pty \
+  --uart-channel uart1:1:tcp \
+  --monitor-port 0 \
+  --gdb-port 1234
 ```
 
-Pass `--pause` to create the PTY and wait without advancing the MCU. Send
-`SIGUSR2` to the runner PID to resume, `SIGUSR1` to reset the MCU, and
-`SIGINT`/`SIGTERM` to stop it. Reset discards pending UART TX bytes.
+Pass `--pause` to start halted before advancing the MCU. Legacy `--uart` and
+`--pty-file` options, as well as `SIGUSR1` (reset), `SIGUSR2` (continue), and
+`SIGINT`/`SIGTERM` (stop), remain supported for standalone invocations.
 
+## `pw_emu` integration
 
-The runner prints the PTY slave path on stdout. Connect a serial client to that path using the firmware's configured baud rate and framing. Diagnostics are written to stderr.
-
-## pw_emu integration
-
-The repository registers a `simavr` emulator in the root `pigweed.json` and
-provides a Python `Launcher`/`Connector` package at
-`tools/pw_emu_avr/python/pw_emu_avr`.
+The repository registers `simavr` in the root `pigweed.json` and provides the
+Python package at `tools/pw_emu_avr/python/pw_emu_avr`.
 
 Install the pinned Pigweed environment packages and the local adapter:
 
@@ -47,28 +55,31 @@ Install the pinned Pigweed environment packages and the local adapter:
 python3 -m pip install -e third_party/pigweed/pw_env_setup/py
 python3 -m pip install -e third_party/pigweed/pw_cli/py
 python3 -m pip install -e third_party/pigweed/pw_emu/py
-python3 -m pip install -e tools/pw_emu_avr
+python3 -m pip install --no-build-isolation --no-deps -e tools/pw_emu_avr
 ```
 
-Build the runner, then launch an ELF through the normal frontend:
+Launch an ELF through the standard `pw_emu` frontend or CLI:
 
 ```sh
-cmake -S tools/pw_emu_avr -B build/pw_emu_avr
-cmake --build build/pw_emu_avr
-pw emu start --file build/test_runner.elf --pause atmega328p
+pw emu start --file build/test_runner.elf --pause atmega2560
+pw emu prop-get /cpu mcu
+pw emu resume
 pw emu term uart0
+pw emu gdb -e build/test_runner.elf
+pw emu stop
 ```
 
-The configured targets are `atmega328p` and `atmega2560`. The launcher
-publishes the runner's PTY path through an instance metadata file and registers
-it as the `uart0` channel. The connector maps `pw emu reset` and
-`pw emu resume` to `SIGUSR1` and `SIGUSR2`.
+Configured targets in `tools/pw_emu_avr/targets.json`: `atmega328p`,
+`atmega2560`, `atmega1284p`, and `atmega32u4`.
 
-## Scope and limitations
+> Note on multi-emulator `pigweed.json` configurations: upstream
+> `pw_emu.core.Config` merges top-level `emulators` shallowly. Projects using
+> `simavr` alongside `qemu` and/or `renode` in a single config file should list
+> all desired backends under `pw.pw_emu.emulators`.
 
-The backend currently exposes one selected UART (USART0 by default), loads ELF
-firmware, and supports start, pause, resume, reset, stop, and PTY stream access.
-It does not yet implement GDB, multiple UARTs, simulation-time pacing, or a
-simavr object-property model. Those operations are intentionally not advertised
-by the connector. All emulation code and dependencies remain host-side; the AVR
-firmware has no `pw_emu` dependency.
+## Diagnostics
+
+`simavr_pty_runner` tracks the runtime AVR stack low-water mark (`min_sp`), peak
+call context, and crash snapshots, exposing them live via `/stack` and writing
+`diagnostics.json` atomically on exit. `pw_emu_avr.diagnostics.symbolize_diagnostics()`
+enriches those records using `avr-nm` and `avr-addr2line`.
