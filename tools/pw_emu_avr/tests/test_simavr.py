@@ -94,7 +94,7 @@ def _base_config(
         'simavr': simavr_emu,
         'targets': {
             target_name: {
-                'gdb': ['avr-gdb'],
+                'gdb': ['avr-gdb', '-ex', 'set remote memory-map-packet off'],
                 'simavr': simavr_target,
             }
         },
@@ -598,7 +598,10 @@ class SimavrIntegrationTest(unittest.TestCase):
             # Start without firmware in pause=True + GDB mode (pw emu load flow).
             with TemporaryEmulator(config_path=cfg_path) as emu:
                 emu.start('atmega328p', file=None, pause=True)
-                self.assertEqual(emu.get_gdb_cmd(), ['avr-gdb'])
+                self.assertEqual(
+                    emu.get_gdb_cmd(),
+                    ['avr-gdb', '-ex', 'set remote memory-map-packet off'],
+                )
                 remote = emu.get_gdb_remote()
                 host, port_s = remote.rsplit(':', 1)
                 port = int(port_s)
@@ -612,19 +615,50 @@ class SimavrIntegrationTest(unittest.TestCase):
                     b'$T05' in stop_reply or b'$S05' in stop_reply,
                     f'unexpected GDB stop reply: {stop_reply!r}',
                 )
+                # Disconnecting before firmware is loaded must not crash an
+                # unprogrammed MCU; detach ($D) must not terminate the runner.
+                self.assertTrue(emu.running())
+                self.assertFalse(emu.get_property('/stack', 'crashed'))
                 regs_reply = _gdb_rsp_exchange(host, port, b'$g#67')
                 self.assertIn(b'$', regs_reply)
                 self.assertGreater(len(regs_reply), 64)
+                detach_reply = _gdb_rsp_exchange(host, port, b'$D#44')
+                self.assertIn(b'$OK', detach_reply)
+                time.sleep(0.05)
+                self.assertTrue(emu.running())
 
                 # When avr-gdb is installed (e.g. Ubuntu CI with gdb-avr), also
-                # verify Emulator.run_gdb_cmds(['load']) end-to-end!
+                # verify Emulator.run_gdb_cmds(['load']) and detach end-to-end!
                 if shutil.which('avr-gdb'):
                     with emu.get_channel_stream('uart0', timeout=2.0) as stream:
                         res = emu.run_gdb_cmds(['load'], executable=str(FIRMWARE_328P), pause=True)
-                        self.assertEqual(res.returncode, 0, res.stderr.decode('utf-8', errors='replace'))
+                        self.assertEqual(
+                            res.returncode,
+                            0,
+                            f'avr-gdb load failed: stdout={res.stdout!r} stderr={res.stderr!r}',
+                        )
+                        # Confirm flash vector 0 was programmed (no longer erased 0xFF).
+                        self.assertNotEqual(
+                            emu.get_property('/flash', '0x0000'),
+                            0xFF,
+                            f'flash remained erased after avr-gdb load; stdout={res.stdout!r} stderr={res.stderr!r}',
+                        )
                         emu.cont()
                         out = _read_until(stream, b'PW_EMU_UART_READY')
-                        self.assertIn(b'PW_EMU_UART_READY', out)
+                        self.assertIn(
+                            b'PW_EMU_UART_READY',
+                            out,
+                            f'UART READY missing after gdb load; state={emu.get_property("/cpu", "state")!r} '
+                            f'pc={emu.get_property("/cpu", "pc")!r} crashed={emu.get_property("/stack", "crashed")!r}',
+                        )
+                        stream.write(b'G')
+                        out = _read_until(stream, b'PW_EMU_UART_PASS', buf=out)
+                        self.assertIn(b'PW_EMU_UART_PASS', out)
+
+                    # Default pause=False exits avr-gdb normally; runner must stay alive.
+                    info_res = emu.run_gdb_cmds(['info registers pc'])
+                    self.assertEqual(info_res.returncode, 0, info_res.stderr.decode('utf-8', errors='replace'))
+                    self.assertTrue(emu.running())
 
     def test_pw_emu_cli_end_to_end(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

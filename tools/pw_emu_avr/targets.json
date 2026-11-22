@@ -2,7 +2,9 @@
   "targets": {
     "atmega328p": {
       "gdb": [
-        "avr-gdb"
+        "avr-gdb",
+        "-ex",
+        "set remote memory-map-packet off"
       ],
       "simavr": {
         "mcu": "atmega328p",
@@ -18,7 +20,9 @@
     },
     "atmega2560": {
       "gdb": [
-        "avr-gdb"
+        "avr-gdb",
+        "-ex",
+        "set remote memory-map-packet off"
       ],
       "simavr": {
         "mcu": "atmega2560",
@@ -37,7 +41,9 @@
     },
     "atmega1284p": {
       "gdb": [
-        "avr-gdb"
+        "avr-gdb",
+        "-ex",
+        "set remote memory-map-packet off"
       ],
       "simavr": {
         "mcu": "atmega1284p",
@@ -56,7 +62,9 @@
     },
     "atmega32u4": {
       "gdb": [
-        "avr-gdb"
+        "avr-gdb",
+        "-ex",
+        "set remote memory-map-packet off"
       ],
       "simavr": {
         "mcu": "atmega32u4",

@@ -2005,6 +2005,20 @@ static void close_monitor_server(void) {
   }
 }
 
+static bool is_unprogrammed_reset_vector(const avr_t *avr) {
+  return avr->pc == 0U && avr->flashend >= 1U && avr->flash[0] == 0xFFU &&
+         avr->flash[1] == 0xFFU;
+}
+
+static bool is_firmware_sleep_halt(const avr_t *avr) {
+  if (avr->sreg[S_I] != 0U || avr->pc < 2U || avr->pc - 2U + 1U > avr->flashend) {
+    return false;
+  }
+  const uint16_t prev_opcode = (uint16_t)(avr->flash[avr->pc - 2U] |
+                                          ((uint16_t)avr->flash[avr->pc - 1U] << 8));
+  return prev_opcode == 0x9588U;  // AVR SLEEP instruction with interrupts off
+}
+
 /* ---- Unified non-blocking poll() loop ----------------------------------- */
 
 static void poll_host_io(avr_t *avr, int timeout_ms) {
@@ -2711,7 +2725,16 @@ int main(int argc, char **argv) {
     if (g_paused || avr->state == cpu_Stopped) {
       if (avr->gdb) {
         (void)avr_gdb_processor(avr, 0);
-        if (avr->state == cpu_Running || avr->state == cpu_Step) {
+        // libsimavr's GDB 'D' (detach) handler sets cpu_Done; keep the
+        // simulator alive so subsequent pw_emu/monitor/GDB sessions work.
+        if (avr->state == cpu_Done) {
+          avr->state = cpu_Stopped;
+        } else if ((avr->state == cpu_Running || avr->state == cpu_Step) &&
+                   is_unprogrammed_reset_vector(avr)) {
+          // Do not execute erased 0xFF flash when a GDB client disconnects
+          // before loading firmware.
+          avr->state = cpu_Stopped;
+        } else if (avr->state == cpu_Running || avr->state == cpu_Step) {
           g_paused = false;
           continue;
         }
@@ -2735,6 +2758,9 @@ int main(int argc, char **argv) {
         break;
       }
       (void)avr_run(avr);
+      if (avr->gdb && avr->state == cpu_Done && !is_firmware_sleep_halt(avr)) {
+        avr->state = cpu_Running;
+      }
       sample_sp(avr);
     }
 
