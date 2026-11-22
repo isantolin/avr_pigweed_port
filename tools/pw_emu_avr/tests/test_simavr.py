@@ -622,8 +622,12 @@ class SimavrIntegrationTest(unittest.TestCase):
                 regs_reply = _gdb_rsp_exchange(host, port, b'$g#67')
                 self.assertIn(b'$', regs_reply)
                 self.assertGreater(len(regs_reply), 64)
+                # simavr 1.7 replies `$OK` (and sets cpu_Done); simavr 1.6 replies `$#00`.
                 detach_reply = _gdb_rsp_exchange(host, port, b'$D#44')
-                self.assertIn(b'$OK', detach_reply)
+                self.assertTrue(
+                    b'$OK' in detach_reply or b'$#00' in detach_reply,
+                    f'unexpected GDB detach reply: {detach_reply!r}',
+                )
                 time.sleep(0.05)
                 self.assertTrue(emu.running())
 
