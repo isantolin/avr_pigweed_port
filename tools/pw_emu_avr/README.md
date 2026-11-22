@@ -36,13 +36,18 @@ build/pw_emu_avr/simavr_pty_runner \
   --frequency 16000000 \
   --uart-channel uart0:0:pty \
   --uart-channel uart1:1:tcp \
+  --channels-file /tmp/simavr-channels.json \
+  --diagnostics-file /tmp/simavr-diagnostics.json \
   --monitor-port 0 \
   --gdb-port 1234
 ```
 
-Pass `--pause` to start halted before advancing the MCU. Legacy `--uart` and
-`--pty-file` options, as well as `SIGUSR1` (reset), `SIGUSR2` (continue), and
-`SIGINT`/`SIGTERM` (stop), remain supported for standalone invocations.
+`--mcu`, `--frequency`, and at least one `--uart-channel NAME:ID:pty|tcp` are
+required. Pass `--pause` to start halted before advancing the MCU. Channel
+endpoints are published atomically via `--channels-file`, runtime control
+(`reset`, `pause`, `cont`, `step`, `quit`, properties) is handled over the
+synchronous TCP `monitor` channel, and `SIGINT`/`SIGTERM` trigger graceful
+shutdown and atomic `--diagnostics-file` emission.
 
 ## `pw_emu` integration
 

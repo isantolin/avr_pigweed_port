@@ -111,8 +111,6 @@ typedef struct {
 } uart_spec_t;
 
 static volatile sig_atomic_t g_stop = 0;
-static volatile sig_atomic_t g_reset = 0;
-static volatile sig_atomic_t g_continue = 0;
 
 static int g_failure = 0;
 static bool g_paused = false;
@@ -183,16 +181,6 @@ static void safe_simavr_logger(struct avr_t *avr, const int level,
 static void stop_handler(int signal_number) {
   (void)signal_number;
   g_stop = 1;
-}
-
-static void reset_handler(int signal_number) {
-  (void)signal_number;
-  g_reset = 1;
-}
-
-static void continue_handler(int signal_number) {
-  (void)signal_number;
-  g_continue = 1;
 }
 
 /* ---- Atomic file helper ------------------------------------------------- */
@@ -650,52 +638,6 @@ static void write_diagnostics_file(const char *path, const avr_t *avr) {
   }
 }
 
-static void report_stack_peak(const avr_t *avr) {
-  if (!is_min_sp_valid(avr)) {
-    fprintf(stderr,
-            "AVR stack low-water mark: min_sp=uninitialized ramend=0x%04x\n",
-            avr->ramend);
-    fflush(stderr);
-    return;
-  }
-  fprintf(stderr, "AVR stack low-water mark: min_sp=0x%04x ramend=0x%04x\n",
-          g_diag.min_sp, avr->ramend);
-  fprintf(stderr,
-          "AVR stack low-water context: pc=0x%06lx address_size=%u stack:",
-          (unsigned long)g_diag.min_sp_pc, (unsigned)avr->address_size);
-  for (size_t i = 0; i < g_diag.min_sp_stack_len; ++i) {
-    fprintf(stderr, " %02x", g_diag.min_sp_stack[i]);
-  }
-  fprintf(stderr, "\n");
-  fflush(stderr);
-}
-
-static void report_crash(const avr_t *avr) {
-  const uint16_t sp = g_diag.crashed ? g_diag.crash_sp : read_sp(avr);
-  const avr_flashaddr_t pc = g_diag.crashed ? g_diag.crash_pc : avr->pc;
-  const uint8_t sreg = g_diag.crashed ? g_diag.crash_sreg : avr->data[R_SREG];
-  const avr_cycle_count_t cycle =
-      g_diag.crashed ? g_diag.crash_cycle : avr->cycle;
-  fprintf(stderr,
-          "AVR crash diagnostics: pc=0x%06lx sp=0x%04x min_sp=0x%04x "
-          "ramend=0x%04x sreg=0x%02x cycle=%llu\n",
-          (unsigned long)pc, sp, g_diag.min_sp, avr->ramend, sreg,
-          (unsigned long long)cycle);
-  fprintf(stderr, "AVR crash stack:");
-  if (g_diag.crashed) {
-    for (size_t i = 0; i < g_diag.crash_stack_len; ++i) {
-      fprintf(stderr, " %02x", g_diag.crash_stack[i]);
-    }
-  } else {
-    for (uint32_t addr = (uint32_t)sp + 1U, n = 0;
-         addr <= avr->ramend && n < CRASH_STACK_DUMP_BYTES; ++addr, ++n) {
-      fprintf(stderr, " %02x", avr->data[addr]);
-    }
-  }
-  fprintf(stderr, "\n");
-  fflush(stderr);
-}
-
 /* ---- Socket helpers ----------------------------------------------------- */
 
 static int set_nonblocking(int fd) {
@@ -999,7 +941,7 @@ static void drain_all_rx_queues(avr_t *avr) {
       avr_raise_irq(ch->rx_irq, byte);
       for (uint32_t c = 0; c < g_cycles_per_uart_byte; ++c) {
         if (avr->state == cpu_Done || avr->state == cpu_Crashed ||
-            avr->state == cpu_Stopped || g_stop || g_reset || g_paused) {
+            avr->state == cpu_Stopped || g_stop || g_paused) {
           return;
         }
         (void)avr_run(avr);
@@ -1827,7 +1769,6 @@ static void handle_monitor_line(avr_t *avr, monitor_client_t *client,
               g_diag.crashed ? "true" : "false", (unsigned long)avr->pc,
               (unsigned)read_sp(avr), (unsigned long long)avr->cycle);
   } else if (strcmp(cmd, "reset") == 0) {
-    g_reset = 0;
     reset_mcu(avr);
     sb_printf(&sb, "{\"ok\":true,\"result\":{\"state\":");
     sb_json_string(&sb, avr_state_name(avr->state));
@@ -1841,7 +1782,6 @@ static void handle_monitor_line(avr_t *avr, monitor_client_t *client,
               (unsigned long)avr->pc, (unsigned long long)avr->cycle);
   } else if (strcmp(cmd, "cont") == 0) {
     g_paused = false;
-    g_continue = 0;
     if (avr->state == cpu_Stopped) {
       avr->state = cpu_Running;
     }
@@ -2141,7 +2081,7 @@ static void poll_host_io(avr_t *avr, int timeout_ms) {
  */
 static void simavr_responsive_sleep(avr_t *avr, avr_cycle_count_t how_long) {
   (void)how_long;
-  if (g_stop || g_reset || g_paused) {
+  if (g_stop || g_paused) {
     return;
   }
   if (avr->gdb) {
@@ -2382,179 +2322,133 @@ static bool parse_log_level_arg(const char *val, int *out_level) {
 
 static void usage(const char *program) {
   fprintf(stderr,
-          "Usage: %s [--firmware FILE] [--mcu atmega328p] [--frequency HZ] "
-          "[--uart 0] [--uart-channel NAME:ID:pty|tcp] [--pty-file PATH] "
-          "[--channels-file PATH] [--diagnostics-file PATH] "
-          "[--monitor-port PORT] [--gdb-port PORT] [--pause] "
-          "[--log-level LEVEL] [--cycles-per-uart-byte N] "
-          "[--vcc MV] [--avcc MV] [--aref MV] [--eeprom FILE] "
-          "[--reset-pc ADDR]\n",
+          "Usage: %s --mcu MCU --frequency HZ "
+          "--uart-channel NAME:ID:pty|tcp [--uart-channel ...] "
+          "[--firmware FILE] [--channels-file PATH] "
+          "[--diagnostics-file PATH] [--monitor-port PORT] "
+          "[--gdb-port PORT] [--pause] [--log-level LEVEL] "
+          "[--cycles-per-uart-byte N] [--vcc MV] [--avcc MV] "
+          "[--aref MV] [--eeprom FILE] [--reset-pc ADDR]\n",
           program);
 }
 
 int main(int argc, char **argv) {
   const char *firmware_path = NULL;
   const char *eeprom_path = NULL;
-  const char *pty_file_path = NULL;
   const char *channels_file_path = NULL;
   const char *diagnostics_file_path = NULL;
-  const char *mcu = "atmega328p";
-  uint32_t frequency = 16000000;
-  char legacy_uart = '0';
-  bool legacy_uart_set = false;
+  const char *mcu = NULL;
+  uint32_t frequency = 0;
   int monitor_port = -1;
   bool monitor_port_explicit = false;
   uart_spec_t uart_specs[MAX_UART_CHANNELS];
   size_t uart_spec_count = 0;
 
-  if (argc >= 2 && argv[1][0] != '-') {
-    firmware_path = argv[1];
-    if (argc >= 3) {
-      mcu = argv[2];
-    }
-    if (argc >= 4) {
+  for (int i = 1; i < argc; ++i) {
+    if (!strcmp(argv[i], "--firmware") && i + 1 < argc) {
+      firmware_path = argv[++i];
+    } else if (!strcmp(argv[i], "--eeprom") && i + 1 < argc) {
+      eeprom_path = argv[++i];
+    } else if (!strcmp(argv[i], "--mcu") && i + 1 < argc) {
+      mcu = argv[++i];
+    } else if (!strcmp(argv[i], "--frequency") && i + 1 < argc) {
       uint64_t parsed = 0;
-      if (!parse_u64_str(argv[3], &parsed) || parsed == 0 ||
+      if (!parse_u64_str(argv[++i], &parsed) || parsed == 0 ||
           parsed > UINT32_MAX) {
         fprintf(stderr, "Invalid frequency\n");
         return 2;
       }
       frequency = (uint32_t)parsed;
-    }
-    if (argc >= 5) {
-      if (strlen(argv[4]) != 1 || argv[4][0] < '0' || argv[4][0] > '3') {
-        fprintf(stderr, "Invalid UART index\n");
+    } else if (!strcmp(argv[i], "--channels-file") && i + 1 < argc) {
+      channels_file_path = argv[++i];
+    } else if (!strcmp(argv[i], "--diagnostics-file") && i + 1 < argc) {
+      diagnostics_file_path = argv[++i];
+    } else if (!strcmp(argv[i], "--pause")) {
+      g_paused = true;
+    } else if (!strcmp(argv[i], "--uart-channel") && i + 1 < argc) {
+      if (uart_spec_count >= MAX_UART_CHANNELS) {
+        fprintf(stderr, "Too many --uart-channel entries (max %d)\n",
+                MAX_UART_CHANNELS);
         return 2;
       }
-      legacy_uart = argv[4][0];
-      legacy_uart_set = true;
-    }
-  } else {
-    for (int i = 1; i < argc; ++i) {
-      if (!strcmp(argv[i], "--firmware") && i + 1 < argc) {
-        firmware_path = argv[++i];
-      } else if (!strcmp(argv[i], "--eeprom") && i + 1 < argc) {
-        eeprom_path = argv[++i];
-      } else if (!strcmp(argv[i], "--mcu") && i + 1 < argc) {
-        mcu = argv[++i];
-      } else if (!strcmp(argv[i], "--frequency") && i + 1 < argc) {
-        uint64_t parsed = 0;
-        if (!parse_u64_str(argv[++i], &parsed) || parsed == 0 ||
-            parsed > UINT32_MAX) {
-          fprintf(stderr, "Invalid frequency\n");
-          return 2;
-        }
-        frequency = (uint32_t)parsed;
-      } else if (!strcmp(argv[i], "--pty-file") && i + 1 < argc) {
-        pty_file_path = argv[++i];
-      } else if (!strcmp(argv[i], "--channels-file") && i + 1 < argc) {
-        channels_file_path = argv[++i];
-      } else if (!strcmp(argv[i], "--diagnostics-file") && i + 1 < argc) {
-        diagnostics_file_path = argv[++i];
-      } else if (!strcmp(argv[i], "--pause")) {
-        g_paused = true;
-      } else if (!strcmp(argv[i], "--uart") && i + 1 < argc) {
-        const char *value = argv[++i];
-        if (strlen(value) != 1 || value[0] < '0' || value[0] > '3') {
-          fprintf(stderr, "Invalid UART index\n");
-          return 2;
-        }
-        legacy_uart = value[0];
-        legacy_uart_set = true;
-      } else if (!strcmp(argv[i], "--uart-channel") && i + 1 < argc) {
-        if (uart_spec_count >= MAX_UART_CHANNELS) {
-          fprintf(stderr, "Too many --uart-channel entries (max %d)\n",
-                  MAX_UART_CHANNELS);
-          return 2;
-        }
-        if (!parse_uart_spec(argv[++i], &uart_specs[uart_spec_count])) {
-          fprintf(stderr, "Invalid --uart-channel (expected NAME:ID:pty|tcp)\n");
-          return 2;
-        }
-        ++uart_spec_count;
-      } else if (!strcmp(argv[i], "--monitor-port") && i + 1 < argc) {
-        const char *val = argv[++i];
-        if (strcmp(val, "-1") == 0) {
-          monitor_port = -1;
-        } else {
-          uint64_t parsed = 0;
-          if (!parse_u64_str(val, &parsed) || parsed > 65535U) {
-            fprintf(stderr, "Invalid --monitor-port\n");
-            return 2;
-          }
-          monitor_port = (int)parsed;
-        }
-        monitor_port_explicit = true;
-      } else if (!strcmp(argv[i], "--gdb-port") && i + 1 < argc) {
-        uint64_t parsed = 0;
-        if (!parse_u64_str(argv[++i], &parsed) || parsed == 0 ||
-            parsed > 65535U) {
-          fprintf(stderr, "Invalid --gdb-port\n");
-          return 2;
-        }
-        g_gdb_port = (int)parsed;
-      } else if (!strcmp(argv[i], "--log-level") && i + 1 < argc) {
-        if (!parse_log_level_arg(argv[++i], &g_log_level)) {
-          fprintf(stderr, "Invalid --log-level\n");
-          return 2;
-        }
-      } else if (!strcmp(argv[i], "--cycles-per-uart-byte") && i + 1 < argc) {
-        uint64_t parsed = 0;
-        if (!parse_u64_str(argv[++i], &parsed) || parsed == 0 ||
-            parsed > 1000000U) {
-          fprintf(stderr, "Invalid --cycles-per-uart-byte\n");
-          return 2;
-        }
-        g_cycles_per_uart_byte = (uint32_t)parsed;
-      } else if (!strcmp(argv[i], "--vcc") && i + 1 < argc) {
-        uint64_t parsed = 0;
-        if (!parse_u64_str(argv[++i], &parsed) || parsed > UINT32_MAX) {
-          fprintf(stderr, "Invalid --vcc\n");
-          return 2;
-        }
-        g_vcc_mv = (uint32_t)parsed;
-      } else if (!strcmp(argv[i], "--avcc") && i + 1 < argc) {
-        uint64_t parsed = 0;
-        if (!parse_u64_str(argv[++i], &parsed) || parsed > UINT32_MAX) {
-          fprintf(stderr, "Invalid --avcc\n");
-          return 2;
-        }
-        g_avcc_mv = (uint32_t)parsed;
-      } else if (!strcmp(argv[i], "--aref") && i + 1 < argc) {
-        uint64_t parsed = 0;
-        if (!parse_u64_str(argv[++i], &parsed) || parsed > UINT32_MAX) {
-          fprintf(stderr, "Invalid --aref\n");
-          return 2;
-        }
-        g_aref_mv = (uint32_t)parsed;
-      } else if (!strcmp(argv[i], "--reset-pc") && i + 1 < argc) {
-        uint64_t parsed = 0;
-        if (!parse_u64_str(argv[++i], &parsed) || parsed > UINT32_MAX) {
-          fprintf(stderr, "Invalid --reset-pc\n");
-          return 2;
-        }
-        g_reset_pc = (avr_flashaddr_t)parsed;
-        g_has_reset_pc = true;
+      if (!parse_uart_spec(argv[++i], &uart_specs[uart_spec_count])) {
+        fprintf(stderr, "Invalid --uart-channel (expected NAME:ID:pty|tcp)\n");
+        return 2;
+      }
+      ++uart_spec_count;
+    } else if (!strcmp(argv[i], "--monitor-port") && i + 1 < argc) {
+      const char *val = argv[++i];
+      if (strcmp(val, "-1") == 0) {
+        monitor_port = -1;
       } else {
-        usage(argv[0]);
+        uint64_t parsed = 0;
+        if (!parse_u64_str(val, &parsed) || parsed > 65535U) {
+          fprintf(stderr, "Invalid --monitor-port\n");
+          return 2;
+        }
+        monitor_port = (int)parsed;
+      }
+      monitor_port_explicit = true;
+    } else if (!strcmp(argv[i], "--gdb-port") && i + 1 < argc) {
+      uint64_t parsed = 0;
+      if (!parse_u64_str(argv[++i], &parsed) || parsed == 0 ||
+          parsed > 65535U) {
+        fprintf(stderr, "Invalid --gdb-port\n");
         return 2;
       }
+      g_gdb_port = (int)parsed;
+    } else if (!strcmp(argv[i], "--log-level") && i + 1 < argc) {
+      if (!parse_log_level_arg(argv[++i], &g_log_level)) {
+        fprintf(stderr, "Invalid --log-level\n");
+        return 2;
+      }
+    } else if (!strcmp(argv[i], "--cycles-per-uart-byte") && i + 1 < argc) {
+      uint64_t parsed = 0;
+      if (!parse_u64_str(argv[++i], &parsed) || parsed == 0 ||
+          parsed > 1000000U) {
+        fprintf(stderr, "Invalid --cycles-per-uart-byte\n");
+        return 2;
+      }
+      g_cycles_per_uart_byte = (uint32_t)parsed;
+    } else if (!strcmp(argv[i], "--vcc") && i + 1 < argc) {
+      uint64_t parsed = 0;
+      if (!parse_u64_str(argv[++i], &parsed) || parsed > UINT32_MAX) {
+        fprintf(stderr, "Invalid --vcc\n");
+        return 2;
+      }
+      g_vcc_mv = (uint32_t)parsed;
+    } else if (!strcmp(argv[i], "--avcc") && i + 1 < argc) {
+      uint64_t parsed = 0;
+      if (!parse_u64_str(argv[++i], &parsed) || parsed > UINT32_MAX) {
+        fprintf(stderr, "Invalid --avcc\n");
+        return 2;
+      }
+      g_avcc_mv = (uint32_t)parsed;
+    } else if (!strcmp(argv[i], "--aref") && i + 1 < argc) {
+      uint64_t parsed = 0;
+      if (!parse_u64_str(argv[++i], &parsed) || parsed > UINT32_MAX) {
+        fprintf(stderr, "Invalid --aref\n");
+        return 2;
+      }
+      g_aref_mv = (uint32_t)parsed;
+    } else if (!strcmp(argv[i], "--reset-pc") && i + 1 < argc) {
+      uint64_t parsed = 0;
+      if (!parse_u64_str(argv[++i], &parsed) || parsed > UINT32_MAX) {
+        fprintf(stderr, "Invalid --reset-pc\n");
+        return 2;
+      }
+      g_reset_pc = (avr_flashaddr_t)parsed;
+      g_has_reset_pc = true;
+    } else {
+      usage(argv[0]);
+      return 2;
     }
   }
 
-  if (!firmware_path && !(g_paused && g_gdb_port > 0)) {
+  if (!mcu || frequency == 0 || uart_spec_count == 0 ||
+      (!firmware_path && !(g_paused && g_gdb_port > 0))) {
     usage(argv[0]);
     return 2;
-  }
-
-  if (uart_spec_count == 0) {
-    uart_spec_t def;
-    snprintf(def.name, sizeof(def.name), "uart%c",
-             legacy_uart_set ? legacy_uart : '0');
-    def.uart_id = legacy_uart_set ? legacy_uart : '0';
-    def.backend = CHAN_TYPE_PTY;
-    uart_specs[0] = def;
-    uart_spec_count = 1;
   }
 
   // Validate unique UART names and IDs.
@@ -2575,8 +2469,6 @@ int main(int argc, char **argv) {
   signal(SIGPIPE, SIG_IGN);
   signal(SIGINT, stop_handler);
   signal(SIGTERM, stop_handler);
-  signal(SIGUSR1, reset_handler);
-  signal(SIGUSR2, continue_handler);
 
   reset_diagnostics();
   init_monitor_struct();
@@ -2661,31 +2553,6 @@ int main(int argc, char **argv) {
     avr->state = cpu_Stopped;
   }
 
-  if (pty_file_path) {
-    if (g_uart_count == 0 || g_uarts[0].backend != CHAN_TYPE_PTY) {
-      fprintf(stderr, "--pty-file requires primary UART to use pty backend\n");
-      if (avr->gdb) {
-        avr_deinit_gdb(avr);
-      }
-      close_monitor_server();
-      close_uart_channels();
-      avr_terminate(avr);
-      return 1;
-    }
-    char line[300];
-    const int n = snprintf(line, sizeof(line), "%s\n", g_uarts[0].pty_path);
-    if (n <= 0 || (size_t)n >= sizeof(line) ||
-        write_file_atomic(pty_file_path, line, (size_t)n) != 0) {
-      if (avr->gdb) {
-        avr_deinit_gdb(avr);
-      }
-      close_monitor_server();
-      close_uart_channels();
-      avr_terminate(avr);
-      return 1;
-    }
-  }
-
   if (channels_file_path) {
     if (write_channels_file(channels_file_path, mcu, frequency) != 0) {
       if (avr->gdb) {
@@ -2698,30 +2565,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  for (size_t i = 0; i < g_uart_count; ++i) {
-    const uart_channel_t *ch = &g_uarts[i];
-    if (ch->backend == CHAN_TYPE_PTY) {
-      printf("[SIMAVR] UART%c PTY ready on: %s\n", ch->uart_id, ch->pty_path);
-    } else {
-      printf("[SIMAVR] UART%c TCP ready on: 127.0.0.1:%u\n", ch->uart_id,
-             (unsigned)ch->tcp_port);
-    }
-  }
-  fflush(stdout);
-
   while (!g_stop && avr->state != cpu_Done && avr->state != cpu_Crashed) {
-    if (g_reset) {
-      g_reset = 0;
-      reset_mcu(avr);
-    }
-    if (g_continue) {
-      g_continue = 0;
-      g_paused = false;
-      if (avr->state == cpu_Stopped) {
-        avr->state = cpu_Running;
-      }
-    }
-
     if (g_paused || avr->state == cpu_Stopped) {
       if (avr->gdb) {
         (void)avr_gdb_processor(avr, 0);
@@ -2746,7 +2590,7 @@ int main(int argc, char **argv) {
     }
 
     poll_host_io(avr, 0);
-    if (g_stop || g_reset || g_paused || avr->state == cpu_Stopped) {
+    if (g_stop || g_paused || avr->state == cpu_Stopped) {
       continue;
     }
 
@@ -2754,7 +2598,7 @@ int main(int argc, char **argv) {
 
     for (size_t step = 0; step < BATCH_INSTRUCTION_CYCLES; ++step) {
       if (avr->state == cpu_Done || avr->state == cpu_Crashed ||
-          avr->state == cpu_Stopped || g_stop || g_reset || g_paused) {
+          avr->state == cpu_Stopped || g_stop || g_paused) {
         break;
       }
       (void)avr_run(avr);
@@ -2812,10 +2656,8 @@ int main(int argc, char **argv) {
 
   if (avr->state == cpu_Crashed || g_diag.crashed) {
     fprintf(stderr, "AVR simulation crashed\n");
-    report_crash(avr);
     g_failure = 1;
   }
-  report_stack_peak(avr);
 
   if (avr->gdb) {
     avr_deinit_gdb(avr);
