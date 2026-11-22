@@ -142,7 +142,7 @@ def _gdb_rsp_exchange(host: str, port: int, packet: bytes) -> bytes:
 class SimavrUnitTest(unittest.TestCase):
     """Pure unit tests that do not require launching simavr."""
 
-    def test_launcher_builds_command_for_channels_args_debug_and_legacy_uart(self) -> None:
+    def test_launcher_builds_command_for_channels_args_and_debug(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             workdir = Path(directory)
             firmware = workdir / 'firmware.elf'
@@ -184,15 +184,29 @@ class SimavrUnitTest(unittest.TestCase):
             self.assertIn('--cycles-per-uart-byte', command)
             self.assertIn('--aref', command)
 
-    def test_launcher_supports_legacy_single_uart_and_no_firmware_with_gdb(self) -> None:
+    def test_launcher_requires_channels_uarts_and_supports_gdb_without_firmware(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             workdir = Path(directory)
-            cfg_dict = _base_config()
-            del cfg_dict['targets']['atmega328p']['simavr']['channels']['uarts']
-            cfg_dict['targets']['atmega328p']['simavr']['uart'] = '1'
-            cfg_path = _write_temp_config(workdir, cfg_dict)
+            cfg_missing = _base_config()
+            del cfg_missing['targets']['atmega328p']['simavr']['channels']['uarts']
+            cfg_missing['targets']['atmega328p']['simavr']['uart'] = '1'
+            cfg_missing_path = _write_temp_config(workdir, cfg_missing)
 
-            launcher = SimavrLauncher(cfg_path)
+            launcher_missing = SimavrLauncher(cfg_missing_path)
+            launcher_missing._wdir = workdir
+            launcher_missing._config.set_target('atmega328p')
+            with self.assertRaises(ConfigError):
+                launcher_missing._pre_start(target='atmega328p', file=None, pause=True)
+
+            cfg_empty_path = _write_temp_config(workdir, _base_config(uarts={}))
+            launcher_empty = SimavrLauncher(cfg_empty_path)
+            launcher_empty._wdir = workdir
+            launcher_empty._config.set_target('atmega328p')
+            with self.assertRaises(ConfigError):
+                launcher_empty._pre_start(target='atmega328p', file=None, pause=True)
+
+            cfg_valid_path = _write_temp_config(workdir, _base_config(uarts={'uart1': {'id': '1'}}))
+            launcher = SimavrLauncher(cfg_valid_path)
             launcher._wdir = workdir
             launcher._config.set_target('atmega328p')
             cmd = launcher._pre_start(target='atmega328p', file=None, pause=True)
@@ -715,6 +729,41 @@ class SimavrIntegrationTest(unittest.TestCase):
                 stop_res = _cli('stop')
                 self.assertEqual(stop_res.returncode, 0, stop_res.stdout + stop_res.stderr)
             self.assertFalse((wdir / 'simavr.pid').exists())
+
+    def test_runner_rejects_legacy_cli_options(self) -> None:
+        invalid_invocations = [
+            # Positional legacy CLI
+            [str(FIRMWARE_328P), 'atmega328p', '16000000', '0'],
+            # Missing --uart-channel
+            ['--firmware', str(FIRMWARE_328P), '--mcu', 'atmega328p', '--frequency', '16000000'],
+            # Missing --mcu
+            ['--firmware', str(FIRMWARE_328P), '--frequency', '16000000', '--uart-channel', 'uart0:0:pty'],
+            # Missing --frequency
+            ['--firmware', str(FIRMWARE_328P), '--mcu', 'atmega328p', '--uart-channel', 'uart0:0:pty'],
+            # Removed --uart flag
+            ['--firmware', str(FIRMWARE_328P), '--mcu', 'atmega328p', '--frequency', '16000000', '--uart', '0'],
+            # Removed --pty-file flag
+            [
+                '--firmware',
+                str(FIRMWARE_328P),
+                '--mcu',
+                'atmega328p',
+                '--frequency',
+                '16000000',
+                '--uart-channel',
+                'uart0:0:pty',
+                '--pty-file',
+                '/tmp/unused.pty',
+            ],
+        ]
+        for args in invalid_invocations:
+            res = subprocess.run(
+                [str(RUNNER_BIN), *args],
+                capture_output=True,
+                text=True,
+                timeout=5.0,
+            )
+            self.assertEqual(res.returncode, 2, f'expected exit 2 for {args}: {res.stderr}')
 
 
 if __name__ == '__main__':

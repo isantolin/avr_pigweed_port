@@ -155,34 +155,26 @@ class SimavrLauncher(Launcher):
 
     def _configure_uarts(self) -> list[tuple[str, str, str]]:
         uarts_cfg = self._config.get_target_emu(['channels', 'uarts'], entry_type=dict)
-        result: list[tuple[str, str, str]] = []
-        if uarts_cfg:
-            for name, cfg in uarts_cfg.items():
-                if not isinstance(cfg, dict) or 'id' not in cfg:
-                    raise ConfigError(
-                        self._config.path,
-                        f'simavr UART channel `{name}` is missing required `id` field',
-                    )
-                uart_id = str(cfg['id'])
-                if len(uart_id) != 1 or uart_id not in '0123':
-                    raise ConfigError(
-                        self._config.path,
-                        f'simavr UART channel `{name}` has invalid id `{uart_id}` (expected 0..3)',
-                    )
-                chan_type = self._get_channel_type(name, cfg.get('type'), group='uarts', default='pty')
-                result.append((str(name), uart_id, chan_type))
-            return result
-
-        # Legacy single-UART configuration fallback (`uart: "0"`).
-        legacy_uart = str(self._config.get_target_emu(['uart']) or '0')
-        if len(legacy_uart) != 1 or legacy_uart not in '0123':
+        if not uarts_cfg:
             raise ConfigError(
                 self._config.path,
-                f'simavr target has invalid uart `{legacy_uart}` (expected 0..3)',
+                'simavr target must configure a non-empty `channels.uarts` map',
             )
-        chan_name = f'uart{legacy_uart}'
-        chan_type = self._get_channel_type(chan_name, group='uarts', default='pty')
-        result.append((chan_name, legacy_uart, chan_type))
+        result: list[tuple[str, str, str]] = []
+        for name, cfg in uarts_cfg.items():
+            if not isinstance(cfg, dict) or 'id' not in cfg:
+                raise ConfigError(
+                    self._config.path,
+                    f'simavr UART channel `{name}` is missing required `id` field',
+                )
+            uart_id = str(cfg['id'])
+            if len(uart_id) != 1 or uart_id not in '0123':
+                raise ConfigError(
+                    self._config.path,
+                    f'simavr UART channel `{name}` has invalid id `{uart_id}` (expected 0..3)',
+                )
+            chan_type = self._get_channel_type(name, cfg.get('type'), group='uarts', default='pty')
+            result.append((str(name), uart_id, chan_type))
         return result
 
     def _configure_gdb_port(self) -> int | None:
@@ -217,7 +209,7 @@ class SimavrLauncher(Launcher):
         args: str | None = None,
     ) -> list[str]:
         # Remove stale metadata from any prior interrupted run in the same wdir.
-        for stale in ('channels.json', 'diagnostics.json', 'uart0.pty'):
+        for stale in ('channels.json', 'diagnostics.json'):
             try:
                 self._path(stale).unlink()
             except FileNotFoundError:
@@ -463,8 +455,7 @@ class SimavrConnector(Connector):
                         link_path.unlink()
                     except OSError:
                         pass
-        for artifact in ('channels.json', 'uart0.pty'):
-            try:
-                (self._wdir / artifact).unlink()
-            except FileNotFoundError:
-                pass
+        try:
+            (self._wdir / 'channels.json').unlink()
+        except FileNotFoundError:
+            pass
