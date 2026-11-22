@@ -7,6 +7,15 @@
           "connector": "pw_emu_avr.simavr.SimavrConnector"
         }
       },
+      "simavr": {
+        "executable": "build/pw_emu_avr/simavr_pty_runner",
+        "channels": {
+          "type": "pty",
+          "gdb": {
+            "type": "tcp"
+          }
+        }
+      },
       "target_files": [
         "tools/pw_emu_avr/targets.json"
       ]

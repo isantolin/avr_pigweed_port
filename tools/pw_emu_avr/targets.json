@@ -1,19 +1,81 @@
 {
   "targets": {
     "atmega328p": {
+      "gdb": [
+        "avr-gdb",
+        "-ex",
+        "set remote memory-map-packet off"
+      ],
       "simavr": {
-        "executable": "build/pw_emu_avr/simavr_pty_runner",
         "mcu": "atmega328p",
         "frequency": 16000000,
-        "uart": "0"
+        "channels": {
+          "uarts": {
+            "uart0": {
+              "id": "0"
+            }
+          }
+        }
       }
     },
     "atmega2560": {
+      "gdb": [
+        "avr-gdb",
+        "-ex",
+        "set remote memory-map-packet off"
+      ],
       "simavr": {
-        "executable": "build/pw_emu_avr/simavr_pty_runner",
         "mcu": "atmega2560",
         "frequency": 16000000,
-        "uart": "0"
+        "channels": {
+          "uarts": {
+            "uart0": {
+              "id": "0"
+            },
+            "uart1": {
+              "id": "1"
+            }
+          }
+        }
+      }
+    },
+    "atmega1284p": {
+      "gdb": [
+        "avr-gdb",
+        "-ex",
+        "set remote memory-map-packet off"
+      ],
+      "simavr": {
+        "mcu": "atmega1284p",
+        "frequency": 16000000,
+        "channels": {
+          "uarts": {
+            "uart0": {
+              "id": "0"
+            },
+            "uart1": {
+              "id": "1"
+            }
+          }
+        }
+      }
+    },
+    "atmega32u4": {
+      "gdb": [
+        "avr-gdb",
+        "-ex",
+        "set remote memory-map-packet off"
+      ],
+      "simavr": {
+        "mcu": "atmega32u4",
+        "frequency": 16000000,
+        "channels": {
+          "uarts": {
+            "uart1": {
+              "id": "1"
+            }
+          }
+        }
       }
     }
   }
