@@ -179,29 +179,29 @@ if(EXISTS "${PW_ROOT}/pw_analog/CMakeLists.txt")
   add_subdirectory("${PW_ROOT}/pw_analog" pw_analog EXCLUDE_FROM_ALL)
 endif()
 
-pw_add_library(pw_spi_arduino STATIC
+pw_add_library(pw_spi_avr STATIC
   SOURCES
-    pw_spi_arduino/src/initiator.cpp
+    pw_spi_avr/src/initiator.cpp
   PUBLIC_INCLUDES
-    pw_spi_arduino/public
+    pw_spi_avr/public
   PUBLIC_DEPS
     pw_bytes
     pw_status
 )
 
-pw_add_library(pw_digital_io_arduino STATIC
+pw_add_library(pw_digital_io_avr STATIC
   SOURCES
-    pw_digital_io_arduino/src/digital_io.cpp
+    pw_digital_io_avr/src/digital_io.cpp
   PUBLIC_INCLUDES
-    pw_digital_io_arduino/public
+    pw_digital_io_avr/public
   PUBLIC_DEPS
     pw_result
     pw_status
 )
 
-pw_add_library(pw_analog_arduino INTERFACE
+pw_add_library(pw_analog_avr INTERFACE
   PUBLIC_INCLUDES
-    pw_analog_arduino/public
+    pw_analog_avr/public
   PUBLIC_DEPS
     pw_chrono.system_clock
     pw_result

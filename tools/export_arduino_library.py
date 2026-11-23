@@ -221,9 +221,9 @@ def export_library(dest_dir: Path):
         "pw_assert_avr",
         "pw_chrono_avr",
         "pw_log_avr",
-        "pw_spi_arduino",
-        "pw_digital_io_arduino",
-        "pw_analog_arduino",
+        "pw_spi_avr",
+        "pw_digital_io_avr",
+        "pw_analog_avr",
     ]
     for backend in backends:
         b_path = REPO_ROOT / backend
@@ -390,9 +390,9 @@ def export_library(dest_dir: Path):
         "pw_assert_avr",
         "pw_chrono_avr",
         "pw_log_avr",
-        "pw_spi_arduino",
-        "pw_digital_io_arduino",
-        "pw_analog_arduino",
+        "pw_spi_avr",
+        "pw_digital_io_avr",
+        "pw_analog_avr",
     ):
         backend_public = REPO_ROOT / backend / "public"
         if backend_public.is_dir():
