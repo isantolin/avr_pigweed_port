@@ -420,6 +420,9 @@ target_link_libraries(test_runner.elf PRIVATE
   pw_chrono.system_clock
   pw_log
 )
+if(TARGET pw_metric)
+  target_link_libraries(test_runner.elf PRIVATE pw_metric)
+endif()
 
 add_custom_command(TARGET test_runner.elf POST_BUILD
   COMMAND avr-size --format=avr --mcu=${AVR_MCU} $<TARGET_FILE:test_runner.elf>
