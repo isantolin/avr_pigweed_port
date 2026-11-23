@@ -221,6 +221,9 @@ def export_library(dest_dir: Path):
         "pw_assert_avr",
         "pw_chrono_avr",
         "pw_log_avr",
+        "pw_spi_arduino",
+        "pw_digital_io_arduino",
+        "pw_analog_arduino",
     ]
     for backend in backends:
         b_path = REPO_ROOT / backend
@@ -261,6 +264,10 @@ def export_library(dest_dir: Path):
         "pw_rpc",
         "pw_transfer",
         "pw_log",
+        "pw_metric",
+        "pw_spi",
+        "pw_digital_io",
+        "pw_analog",
         "pw_toolchain",
     ]
 
@@ -299,6 +306,10 @@ def export_library(dest_dir: Path):
             "pw_chrono_wrap_time_system_clock.cc",
             "pw_chrono_system_clock.cc",
             "pw_log_proto_utils.cc",
+            "pw_metric_service_nanopb.cc",
+            "pw_metric_service_pwpb.cc",
+            "pw_digital_io_digital_io_service.cc",
+            "pw_spi_mock_initiator.cc",
             "pw_crypto_aes_boringssl.cc",
             "pw_crypto_aes_mbedtls.cc",
             "pw_crypto_chacha20_boringssl.cc",
@@ -375,7 +386,14 @@ def export_library(dest_dir: Path):
     # Upstream module headers are copied after the first backend pass above.
     # Re-apply the selected AVR backend headers last so Pigweed's generic
     # pw_assert_backend templates cannot overwrite the AVR ABI/macros.
-    for backend in ("pw_assert_avr", "pw_chrono_avr", "pw_log_avr"):
+    for backend in (
+        "pw_assert_avr",
+        "pw_chrono_avr",
+        "pw_log_avr",
+        "pw_spi_arduino",
+        "pw_digital_io_arduino",
+        "pw_analog_arduino",
+    ):
         backend_public = REPO_ROOT / backend / "public"
         if backend_public.is_dir():
             shutil.copytree(backend_public, src_dir, dirs_exist_ok=True)

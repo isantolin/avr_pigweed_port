@@ -108,6 +108,7 @@ include("${PW_ROOT}/pw_chrono/backend.cmake")
 pw_add_library(pw_chrono_avr.system_clock STATIC
   SOURCES
     pw_chrono_avr/src/system_clock_avr.cpp
+    pw_chrono_avr/src/system_timer.cpp
   PUBLIC_INCLUDES
     pw_chrono_avr/public
     pw_chrono_avr/public_overrides
@@ -165,6 +166,46 @@ add_subdirectory("${PW_ROOT}/pw_sync" pw_sync EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_hdlc" pw_hdlc EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_rpc" pw_rpc EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_transfer" pw_transfer EXCLUDE_FROM_ALL)
+if(EXISTS "${PW_ROOT}/pw_metric/CMakeLists.txt")
+  add_subdirectory("${PW_ROOT}/pw_metric" pw_metric EXCLUDE_FROM_ALL)
+endif()
+if(EXISTS "${PW_ROOT}/pw_spi/CMakeLists.txt")
+  add_subdirectory("${PW_ROOT}/pw_spi" pw_spi EXCLUDE_FROM_ALL)
+endif()
+if(EXISTS "${PW_ROOT}/pw_digital_io/CMakeLists.txt")
+  add_subdirectory("${PW_ROOT}/pw_digital_io" pw_digital_io EXCLUDE_FROM_ALL)
+endif()
+if(EXISTS "${PW_ROOT}/pw_analog/CMakeLists.txt")
+  add_subdirectory("${PW_ROOT}/pw_analog" pw_analog EXCLUDE_FROM_ALL)
+endif()
+
+pw_add_library(pw_spi_arduino STATIC
+  SOURCES
+    pw_spi_arduino/src/initiator.cpp
+  PUBLIC_INCLUDES
+    pw_spi_arduino/public
+  PUBLIC_DEPS
+    pw_bytes
+    pw_status
+)
+
+pw_add_library(pw_digital_io_arduino STATIC
+  SOURCES
+    pw_digital_io_arduino/src/digital_io.cpp
+  PUBLIC_INCLUDES
+    pw_digital_io_arduino/public
+  PUBLIC_DEPS
+    pw_result
+    pw_status
+)
+
+pw_add_library(pw_analog_arduino INTERFACE
+  PUBLIC_INCLUDES
+    pw_analog_arduino/public
+  PUBLIC_DEPS
+    pw_chrono.system_clock
+    pw_result
+)
 
 # Generate a real upstream raw RPC service used by the UART/HDLC integration
 # probe. This exercises generated service dispatch, unary responders and
