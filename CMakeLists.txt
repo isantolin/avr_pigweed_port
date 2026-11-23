@@ -108,7 +108,6 @@ include("${PW_ROOT}/pw_chrono/backend.cmake")
 pw_add_library(pw_chrono_avr.system_clock STATIC
   SOURCES
     pw_chrono_avr/src/system_clock_avr.cpp
-    pw_chrono_avr/src/system_timer.cpp
   PUBLIC_INCLUDES
     pw_chrono_avr/public
     pw_chrono_avr/public_overrides
@@ -166,45 +165,27 @@ add_subdirectory("${PW_ROOT}/pw_sync" pw_sync EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_hdlc" pw_hdlc EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_rpc" pw_rpc EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_transfer" pw_transfer EXCLUDE_FROM_ALL)
-if(EXISTS "${PW_ROOT}/pw_metric/CMakeLists.txt")
-  add_subdirectory("${PW_ROOT}/pw_metric" pw_metric EXCLUDE_FROM_ALL)
-endif()
-if(EXISTS "${PW_ROOT}/pw_spi/CMakeLists.txt")
-  add_subdirectory("${PW_ROOT}/pw_spi" pw_spi EXCLUDE_FROM_ALL)
-endif()
-if(EXISTS "${PW_ROOT}/pw_digital_io/CMakeLists.txt")
-  add_subdirectory("${PW_ROOT}/pw_digital_io" pw_digital_io EXCLUDE_FROM_ALL)
-endif()
-if(EXISTS "${PW_ROOT}/pw_analog/CMakeLists.txt")
-  add_subdirectory("${PW_ROOT}/pw_analog" pw_analog EXCLUDE_FROM_ALL)
-endif()
-
-pw_add_library(pw_spi_avr STATIC
+pw_add_library(pw_chrono_avr.system_timer STATIC
   SOURCES
-    pw_spi_avr/src/initiator.cpp
+    pw_chrono_avr/src/system_timer.cpp
   PUBLIC_INCLUDES
-    pw_spi_avr/public
-  PUBLIC_DEPS
-    pw_bytes
-    pw_status
-)
-
-pw_add_library(pw_digital_io_avr STATIC
-  SOURCES
-    pw_digital_io_avr/src/digital_io.cpp
-  PUBLIC_INCLUDES
-    pw_digital_io_avr/public
-  PUBLIC_DEPS
-    pw_result
-    pw_status
-)
-
-pw_add_library(pw_analog_avr INTERFACE
-  PUBLIC_INCLUDES
-    pw_analog_avr/public
+    pw_chrono_avr/public
   PUBLIC_DEPS
     pw_chrono.system_clock
-    pw_result
+    pw_function
+)
+
+pw_add_library(pw_metric STATIC
+  SOURCES
+    ${PW_ROOT}/pw_metric/metric.cc
+  PUBLIC_INCLUDES
+    ${PW_ROOT}/pw_metric/public
+  PUBLIC_DEPS
+    pw_assert
+    pw_containers.intrusive_list
+    pw_preprocessor
+    pw_span
+    pw_tokenizer
 )
 
 # Generate a real upstream raw RPC service used by the UART/HDLC integration
@@ -418,11 +399,10 @@ target_link_libraries(test_runner.elf PRIVATE
   pw_base64
   pw_tokenizer
   pw_chrono.system_clock
+  pw_chrono_avr.system_timer
+  pw_metric
   pw_log
 )
-if(TARGET pw_metric)
-  target_link_libraries(test_runner.elf PRIVATE pw_metric)
-endif()
 
 add_custom_command(TARGET test_runner.elf POST_BUILD
   COMMAND avr-size --format=avr --mcu=${AVR_MCU} $<TARGET_FILE:test_runner.elf>
