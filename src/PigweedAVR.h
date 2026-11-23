@@ -80,3 +80,8 @@ using byte = std::byte;
 #include "pw_chrono_avr/system_clock_avr.h"
 #include "pw_log/log.h"
 #include "pw_log_avr/log_avr.h"
+
+// 5. Metrics (with AVR ATOMIC_BLOCK shims)
+#if __has_include("pw_metric/metric.h")
+#include "pw_metric/metric.h"
+#endif

@@ -32,6 +32,7 @@
 #include "pw_chrono_avr/system_clock_avr.h"
 #include "pw_log/log.h"
 #include "pw_log_avr/log_avr.h"
+#include "pw_metric/metric.h"
 
 namespace {
 
@@ -476,18 +477,18 @@ bool TestPwString() {
   return true;
 }
 
-// 18. Test pw_base64
+// 18. Test pw_base64 (Encoding and decoding)
 bool TestPwBase64() {
   const char* plain = "Pigweed";
   char encoded[16];
   const size_t encoded_len = pw::base64::Encode(
       pw::as_bytes(pw::span(plain, 7)), pw::span(encoded));
   if (encoded_len != 12) {
-    uart::Puts_P(PSTR("Base64: encoded length mismatch\\r\\n"));
+    uart::Puts_P(PSTR("Base64: encoded length mismatch\r\n"));
     return false;
   }
   if (std::memcmp(encoded, "UGlnd2VlZA==", 12) != 0) {
-    uart::Puts_P(PSTR("Base64: encoded payload mismatch\\r\\n"));
+    uart::Puts_P(PSTR("Base64: encoded payload mismatch\r\n"));
     return false;
   }
 
@@ -501,7 +502,7 @@ bool TestPwBase64() {
       uart::PutInt(std::to_integer<uint8_t>(decoded[i]));
       uart::Putc(' ');
     }
-    uart::Puts_P(PSTR("\\r\\n"));
+    uart::Puts_P(PSTR("\r\n"));
     return false;
   }
 
@@ -509,7 +510,7 @@ bool TestPwBase64() {
   const size_t decoded_len = pw::base64::Decode(
       std::string_view(encoded, encoded_len), pw::span(decoded));
   if (decoded_len != 7) {
-    uart::Puts_P(PSTR("Base64: C++ decoded length mismatch\\r\\n"));
+    uart::Puts_P(PSTR("Base64: C++ decoded length mismatch\r\n"));
     return false;
   }
   if (std::memcmp(decoded, plain, 7) != 0) {
@@ -518,7 +519,7 @@ bool TestPwBase64() {
       uart::PutInt(std::to_integer<uint8_t>(decoded[i]));
       uart::Putc(' ');
     }
-    uart::Puts_P(PSTR("\\r\\n"));
+    uart::Puts_P(PSTR("\r\n"));
     return false;
   }
 
@@ -576,6 +577,16 @@ bool TestPwLog() {
   return true;
 }
 
+// 22. Test pw_metric (static metric group & atomic uint32_t counter on AVR)
+bool TestPwMetric() {
+  PW_METRIC_GROUP_STATIC(avr_group, "avr_test");
+  PW_METRIC_STATIC(avr_group, avr_counter, "counter", 0u);
+  avr_counter.Set(0u);
+  avr_counter.Increment();
+  avr_counter.Increment(3u);
+  avr_counter.Decrement(1u);
+  return avr_counter.value() == 3u;
+}
 
 }  // namespace
 
@@ -605,6 +616,7 @@ int main() {
   RUN_TEST(TestPwTokenizer);
   RUN_TEST(TestPwChrono);
   RUN_TEST(TestPwLog);
+  RUN_TEST(TestPwMetric);
 
   uart::Finish(g_total_tests, g_passed_tests);
   return 0;

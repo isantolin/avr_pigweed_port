@@ -166,6 +166,29 @@ add_subdirectory("${PW_ROOT}/pw_hdlc" pw_hdlc EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_rpc" pw_rpc EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_transfer" pw_transfer EXCLUDE_FROM_ALL)
 
+# Atomic shims for 8-bit AVR required by upstream pw_metric (std::atomic<uint32_t>)
+pw_add_library(pw_metric_avr STATIC
+  SOURCES
+    pw_metric_avr/src/atomic_avr.cpp
+)
+
+pw_add_library(pw_metric STATIC
+  SOURCES
+    ${PW_ROOT}/pw_metric/metric.cc
+    ${PW_ROOT}/pw_metric/global.cc
+  PUBLIC_INCLUDES
+    ${PW_ROOT}/pw_metric/public
+  PUBLIC_DEPS
+    pw_assert
+    pw_containers.intrusive_list
+    pw_log
+    pw_metric_avr
+    pw_preprocessor
+    pw_span
+    pw_tokenizer
+    pw_tokenizer.base64
+)
+
 # Generate a real upstream raw RPC service used by the UART/HDLC integration
 # probe. This exercises generated service dispatch, unary responders and
 # bidirectional raw streams rather than only linking the RPC server.
@@ -377,6 +400,7 @@ target_link_libraries(test_runner.elf PRIVATE
   pw_base64
   pw_tokenizer
   pw_chrono.system_clock
+  pw_metric
   pw_log
 )
 
