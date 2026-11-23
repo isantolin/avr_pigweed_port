@@ -6,10 +6,10 @@
 
 #include "Arduino.h"
 #include "SPI.h"
-#include "pw_analog_arduino/analog_input.h"
+#include "pw_analog_avr/analog_input.h"
 #include "pw_chrono_avr/system_timer.h"
-#include "pw_digital_io_arduino/digital_io.h"
-#include "pw_spi_arduino/initiator.h"
+#include "pw_digital_io_avr/digital_io.h"
+#include "pw_spi_avr/initiator.h"
 
 extern "C" uint32_t pw_chrono_avr_GetMillis(void) {
   return host_stub::g_millis;
@@ -50,7 +50,7 @@ int main() {
     assert(!fired);
   }
 
-  // 2. pw_spi_arduino: ArduinoInitiator + ChipSelectors
+  // 2. pw_spi_avr: ArduinoInitiator + ChipSelectors
   {
     pw::spi::ArduinoInitiator spi(2000000U, 50U);
     assert(!spi.IsInitialized());
@@ -104,7 +104,7 @@ int main() {
     assert(!spi.IsInitialized());
   }
 
-  // 3. pw_digital_io_arduino: DigitalIn, DigitalOut, DigitalInOut
+  // 3. pw_digital_io_avr: DigitalIn, DigitalOut, DigitalInOut
   {
     pw::digital_io::ArduinoDigitalIn din(4, true);
     assert(din.GetState().status() == pw::Status::FailedPrecondition());
@@ -135,7 +135,7 @@ int main() {
            dio_state.value() == pw::digital_io::State::kActive);
   }
 
-  // 4. pw_analog_arduino: ArduinoAnalogInput
+  // 4. pw_analog_avr: ArduinoAnalogInput
   {
     pw::analog::ArduinoAnalogInput ain(0, 1023);
     host_stub::g_analog_val[0] = 512;

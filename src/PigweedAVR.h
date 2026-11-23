@@ -87,9 +87,9 @@ using byte = std::byte;
 #include "pw_metric/metric.h"
 #endif
 #if defined(ARDUINO) || __has_include(<SPI.h>)
-#include "pw_spi_arduino/initiator.h"
+#include "pw_spi_avr/initiator.h"
 #endif
 #if defined(ARDUINO) || __has_include(<Arduino.h>)
-#include "pw_digital_io_arduino/digital_io.h"
-#include "pw_analog_arduino/analog_input.h"
+#include "pw_digital_io_avr/digital_io.h"
+#include "pw_analog_avr/analog_input.h"
 #endif
