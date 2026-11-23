@@ -54,6 +54,8 @@ using ConstByteSpan = std::span<const std::byte>;
 
 template <typename Sig>
 using Function = std::function<Sig>;
+template <typename Sig, size_t>
+using InlineFunction = std::function<Sig>;
 
 namespace chrono {
 struct SystemClock {

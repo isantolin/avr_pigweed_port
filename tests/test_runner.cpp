@@ -31,7 +31,6 @@
 #include "pw_chrono/system_clock.h"
 #include "pw_chrono_avr/system_clock_avr.h"
 #include "pw_chrono_avr/system_timer.h"
-#include "pw_metric/metric.h"
 #include "pw_log/log.h"
 #include "pw_log_avr/log_avr.h"
 
@@ -589,14 +588,6 @@ bool TestPwCooperativeTimer() {
   return true;
 }
 
-// 23. Test pw_metric (static metric group & counter)
-bool TestPwMetric() {
-  PW_METRIC_GROUP(avr_group, "avr_test");
-  PW_METRIC(avr_group, avr_counter, "counter", 0u);
-  avr_counter.Increment(3);
-  return avr_counter.value() == 3u;
-}
-
 }  // namespace
 
 int main() {
@@ -626,7 +617,6 @@ int main() {
   RUN_TEST(TestPwChrono);
   RUN_TEST(TestPwLog);
   RUN_TEST(TestPwCooperativeTimer);
-  RUN_TEST(TestPwMetric);
 
   uart::Finish(g_total_tests, g_passed_tests);
   return 0;

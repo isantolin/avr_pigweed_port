@@ -175,19 +175,6 @@ pw_add_library(pw_chrono_avr.system_timer STATIC
     pw_function
 )
 
-pw_add_library(pw_metric STATIC
-  SOURCES
-    ${PW_ROOT}/pw_metric/metric.cc
-  PUBLIC_INCLUDES
-    ${PW_ROOT}/pw_metric/public
-  PUBLIC_DEPS
-    pw_assert
-    pw_containers.intrusive_list
-    pw_preprocessor
-    pw_span
-    pw_tokenizer
-)
-
 # Generate a real upstream raw RPC service used by the UART/HDLC integration
 # probe. This exercises generated service dispatch, unary responders and
 # bidirectional raw streams rather than only linking the RPC server.
@@ -400,7 +387,6 @@ target_link_libraries(test_runner.elf PRIVATE
   pw_tokenizer
   pw_chrono.system_clock
   pw_chrono_avr.system_timer
-  pw_metric
   pw_log
 )
 

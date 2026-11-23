@@ -14,7 +14,7 @@ namespace pw::chrono::avr {
 /// (wraparound-safe 32-bit modular arithmetic).
 class CooperativeSystemTimer {
  public:
-  using Callback = pw::Function<void(uint32_t now_ms)>;
+  using Callback = pw::InlineFunction<void(uint32_t now_ms), 8>;
 
   CooperativeSystemTimer() = default;
   ~CooperativeSystemTimer() { Cancel(); }
