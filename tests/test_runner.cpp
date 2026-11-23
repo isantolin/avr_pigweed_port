@@ -30,6 +30,7 @@
 #include "pw_tokenizer/hash.h"
 #include "pw_chrono/system_clock.h"
 #include "pw_chrono_avr/system_clock_avr.h"
+#include "pw_chrono_avr/system_timer.h"
 #include "pw_log/log.h"
 #include "pw_log_avr/log_avr.h"
 
@@ -476,18 +477,18 @@ bool TestPwString() {
   return true;
 }
 
-// 18. Test pw_base64
+// 18. Test pw_base64 (Encoding and decoding)
 bool TestPwBase64() {
   const char* plain = "Pigweed";
   char encoded[16];
   const size_t encoded_len = pw::base64::Encode(
       pw::as_bytes(pw::span(plain, 7)), pw::span(encoded));
   if (encoded_len != 12) {
-    uart::Puts_P(PSTR("Base64: encoded length mismatch\\r\\n"));
+    uart::Puts_P(PSTR("Base64: encoded length mismatch\r\n"));
     return false;
   }
   if (std::memcmp(encoded, "UGlnd2VlZA==", 12) != 0) {
-    uart::Puts_P(PSTR("Base64: encoded payload mismatch\\r\\n"));
+    uart::Puts_P(PSTR("Base64: encoded payload mismatch\r\n"));
     return false;
   }
 
@@ -501,7 +502,7 @@ bool TestPwBase64() {
       uart::PutInt(std::to_integer<uint8_t>(decoded[i]));
       uart::Putc(' ');
     }
-    uart::Puts_P(PSTR("\\r\\n"));
+    uart::Puts_P(PSTR("\r\n"));
     return false;
   }
 
@@ -509,7 +510,7 @@ bool TestPwBase64() {
   const size_t decoded_len = pw::base64::Decode(
       std::string_view(encoded, encoded_len), pw::span(decoded));
   if (decoded_len != 7) {
-    uart::Puts_P(PSTR("Base64: C++ decoded length mismatch\\r\\n"));
+    uart::Puts_P(PSTR("Base64: C++ decoded length mismatch\r\n"));
     return false;
   }
   if (std::memcmp(decoded, plain, 7) != 0) {
@@ -518,7 +519,7 @@ bool TestPwBase64() {
       uart::PutInt(std::to_integer<uint8_t>(decoded[i]));
       uart::Putc(' ');
     }
-    uart::Puts_P(PSTR("\\r\\n"));
+    uart::Puts_P(PSTR("\r\n"));
     return false;
   }
 
@@ -576,6 +577,16 @@ bool TestPwLog() {
   return true;
 }
 
+// 22. Test pw_chrono_avr::CooperativeSystemTimer
+bool TestPwCooperativeTimer() {
+  pw::chrono::avr::CooperativeSystemTimer timer;
+  bool fired = false;
+  timer.InvokeAfter(5, [&fired](uint32_t) { fired = true; });
+  if (!timer.IsPending() || fired) return false;
+  pw_chrono_avr_StepMillis(5);
+  if (!timer.Poll() || !fired || timer.IsPending()) return false;
+  return true;
+}
 
 }  // namespace
 
@@ -605,6 +616,7 @@ int main() {
   RUN_TEST(TestPwTokenizer);
   RUN_TEST(TestPwChrono);
   RUN_TEST(TestPwLog);
+  RUN_TEST(TestPwCooperativeTimer);
 
   uart::Finish(g_total_tests, g_passed_tests);
   return 0;

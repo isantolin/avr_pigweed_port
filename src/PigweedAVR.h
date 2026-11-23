@@ -80,3 +80,13 @@ using byte = std::byte;
 #include "pw_chrono_avr/system_clock_avr.h"
 #include "pw_log/log.h"
 #include "pw_log_avr/log_avr.h"
+
+// 5. Cooperative Timer and Arduino HAL Backends
+#include "pw_chrono_avr/system_timer.h"
+#if __has_include(<SPI.h>)
+#include "pw_spi_avr/initiator.h"
+#endif
+#if __has_include(<Arduino.h>)
+#include "pw_digital_io_avr/digital_io.h"
+#include "pw_analog_avr/analog_input.h"
+#endif
