@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#if defined(ARDUINO) || __has_include(<Arduino.h>)
+#if __has_include(<Arduino.h>)
 #include <Arduino.h>
 #endif
 
@@ -27,16 +27,16 @@ class ArduinoAnalogInput final : public AnalogInput {
     };
   }
 
- private:
   Result<int32_t> TryReadUntil(
       pw::chrono::SystemClock::time_point /*deadline*/) override {
-#if defined(ARDUINO) || __has_include(<Arduino.h>)
+#if __has_include(<Arduino.h>)
     return static_cast<int32_t>(::analogRead(pin_));
 #else
     return Status::Unimplemented();
 #endif
   }
 
+ private:
   uint8_t pin_;
   int32_t max_sample_;
 };

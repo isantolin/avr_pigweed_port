@@ -1,7 +1,7 @@
 // File: pw_spi_avr/src/initiator.cpp
 #include "pw_spi_avr/initiator.h"
 
-#if defined(ARDUINO) || __has_include(<SPI.h>)
+#if __has_include(<SPI.h>)
 
 namespace pw::spi {
 namespace {

@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#if defined(ARDUINO) || __has_include(<Arduino.h>)
+#if __has_include(<Arduino.h>)
 #include <Arduino.h>
 #endif
 

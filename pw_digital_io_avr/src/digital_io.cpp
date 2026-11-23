@@ -1,7 +1,7 @@
 // File: pw_digital_io_avr/src/digital_io.cpp
 #include "pw_digital_io_avr/digital_io.h"
 
-#if defined(ARDUINO) || __has_include(<Arduino.h>)
+#if __has_include(<Arduino.h>)
 
 namespace pw::digital_io {
 

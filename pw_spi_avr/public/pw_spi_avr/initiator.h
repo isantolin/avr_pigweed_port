@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(ARDUINO) || __has_include(<SPI.h>)
+#if __has_include(<SPI.h>)
 #include <Arduino.h>
 #include <SPI.h>
 #endif

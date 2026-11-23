@@ -233,7 +233,7 @@ def export_library(dest_dir: Path):
             shutil.copytree(b_path / "public_overrides", src_dir, dirs_exist_ok=True)
         if (b_path / "src").exists():
             for src_file in (b_path / "src").glob("*.cpp"):
-                if any(token in src_file.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake")):
+                if any(token in src_file.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake", "mock")):
                     continue
                 shutil.copy2(src_file, src_dir / src_file.name)
 
@@ -354,7 +354,7 @@ def export_library(dest_dir: Path):
             target_name = f"{mod}_{cc_file.stem}.cpp"
             if (
                 not cc_file.name.endswith(("_test.cc", "_fuzzer.cc", "_perf_test.cc"))
-                and not any(token in cc_file.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake"))
+                and not any(token in cc_file.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake", "mock"))
                 and cc_file.name not in EXCLUDED_SOURCES
                 and cc_file.stem not in excluded_source_stems
                 and Path(target_name).stem not in excluded_source_stems
@@ -364,7 +364,7 @@ def export_library(dest_dir: Path):
             target_name = f"{mod}_{cc_file.stem}.cpp"
             if (
                 not cc_file.name.endswith(("_test.cc", "_fuzzer.cc"))
-                and not any(token in cc_file.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake"))
+                and not any(token in cc_file.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake", "mock"))
                 and cc_file.name not in EXCLUDED_SOURCES
                 and cc_file.stem not in excluded_source_stems
                 and Path(target_name).stem not in excluded_source_stems
@@ -402,7 +402,7 @@ def export_library(dest_dir: Path):
     # module trees; Arduino CLI compiles every source in the library.
     for source_path in src_dir.rglob("*"):
         if source_path.is_file() and source_path.suffix in {".cc", ".cpp"}:
-            if any(token in source_path.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake")):
+            if any(token in source_path.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake", "mock")):
                 source_path.unlink()
 
     generate_pw_rpc_packet_header(src_dir)
