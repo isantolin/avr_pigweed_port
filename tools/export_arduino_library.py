@@ -173,6 +173,35 @@ def generate_pw_rpc_packet_header(output_dir: Path) -> Path:
                 f"{exc.stderr or exc.stdout}"
             ) from exc
 
+        metric_proto_dir = PW_ROOT / "pw_metric"
+        tokenizer_proto_dir = PW_ROOT / "pw_tokenizer"
+        metric_command = [
+            protoc,
+            "--experimental_allow_proto3_optional",
+            f"-I{metric_proto_dir}",
+            f"-I{tokenizer_proto_dir}",
+            f"--plugin=protoc-gen-pwpb={plugin_path}",
+            f"--pwpb_opt=-I{metric_proto_dir}",
+            f"--pwpb_out={output_dir}",
+            f"--plugin=protoc-gen-raw_rpc={raw_rpc_plugin_path}",
+            f"--raw_rpc_out={output_dir}",
+            "pw_metric_proto/metric_service.proto",
+        ]
+        try:
+            subprocess.run(
+                metric_command,
+                check=True,
+                capture_output=True,
+                text=True,
+                cwd=metric_proto_dir,
+                env=env,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(
+                "Pigweed pw_metric code generation failed:\n"
+                f"{exc.stderr or exc.stdout}"
+            ) from exc
+
     packet_header = output_dir / "pw_rpc" / "internal" / "packet.pwpb.h"
     if not packet_header.is_file():
         raise FileNotFoundError(
@@ -182,6 +211,13 @@ def generate_pw_rpc_packet_header(output_dir: Path) -> Path:
     if not transfer_header.is_file():
         raise FileNotFoundError(
             f"PWPB generator did not create the expected header: {transfer_header}"
+        )
+    metric_pwpb_header = output_dir / "pw_metric_proto" / "metric_service.pwpb.h"
+    metric_rpc_header = output_dir / "pw_metric_proto" / "metric_service.raw_rpc.pb.h"
+    if not metric_pwpb_header.is_file() or not metric_rpc_header.is_file():
+        raise FileNotFoundError(
+            "PWPB/raw_rpc generator did not create the expected pw_metric headers: "
+            f"{metric_pwpb_header}, {metric_rpc_header}"
         )
     return packet_header
 
@@ -221,6 +257,7 @@ def export_library(dest_dir: Path):
         "pw_assert_avr",
         "pw_chrono_avr",
         "pw_log_avr",
+        "pw_metric_avr",
         "pw_spi_avr",
         "pw_digital_io_avr",
         "pw_analog_avr",
@@ -264,6 +301,7 @@ def export_library(dest_dir: Path):
         "pw_rpc",
         "pw_transfer",
         "pw_log",
+        "pw_metric",
         "pw_spi",
         "pw_digital_io",
         "pw_analog",
@@ -287,7 +325,6 @@ def export_library(dest_dir: Path):
             "pw_containers_test_helpers.cc",
             "pw_tokenizer_generate_decoding_test_data.cc",
             "pw_tokenizer_tokenize_c99_test_entry_point.cc",
-            "pw_tokenizer_base64.cc",
             "pw_tokenizer_csv.cc",
             "pw_tokenizer_detokenize.cc",
             "pw_tokenizer_detokenize_from_this_program.cc",
@@ -305,6 +342,7 @@ def export_library(dest_dir: Path):
             "pw_chrono_wrap_time_system_clock.cc",
             "pw_chrono_system_clock.cc",
             "pw_log_proto_utils.cc",
+            "metric_service_nanopb.cc",
             "pw_digital_io_digital_io_service.cc",
             "pw_spi_mock_initiator.cc",
             "pw_crypto_aes_boringssl.cc",
@@ -387,6 +425,7 @@ def export_library(dest_dir: Path):
         "pw_assert_avr",
         "pw_chrono_avr",
         "pw_log_avr",
+        "pw_metric_avr",
         "pw_spi_avr",
         "pw_digital_io_avr",
         "pw_analog_avr",
@@ -546,6 +585,7 @@ def audit_export_no_hosted_stl(dest_dir: Path) -> None:
         REPO_ROOT / "src" / "arduino_stream.h",
         REPO_ROOT / "src" / "avr_uart_stream.h",
         REPO_ROOT / "tests" / "arduino_transfer_export_probe" / "arduino_transfer_export_probe.ino",
+        REPO_ROOT / "tests" / "arduino_metric_export_probe" / "arduino_metric_export_probe.ino",
         REPO_ROOT / "tests" / "pw_rpc_upstream_probe.cpp",
         REPO_ROOT / "tests" / "pw_transfer_upstream_probe.cpp",
         REPO_ROOT / "tools" / "ci" / "arduino_export_probe.cpp",

@@ -15,6 +15,76 @@ extern "C" uint32_t pw_chrono_avr_GetMillis(void) {
   return host_stub::g_millis;
 }
 
+extern "C" {
+#define DECLARE_ATOMIC_SHIM(SIZE, TYPE)                                        \
+  TYPE __atomic_load_##SIZE(const volatile void*, int);                        \
+  void __atomic_store_##SIZE(volatile void*, TYPE, int);                       \
+  TYPE __atomic_exchange_##SIZE(volatile void*, TYPE, int);                    \
+  TYPE __atomic_fetch_add_##SIZE(volatile void*, TYPE, int);                   \
+  TYPE __atomic_fetch_sub_##SIZE(volatile void*, TYPE, int);                   \
+  TYPE __atomic_fetch_and_##SIZE(volatile void*, TYPE, int);                   \
+  TYPE __atomic_fetch_or_##SIZE(volatile void*, TYPE, int);                    \
+  TYPE __atomic_fetch_xor_##SIZE(volatile void*, TYPE, int);                   \
+  TYPE __atomic_add_fetch_##SIZE(volatile void*, TYPE, int);                   \
+  TYPE __atomic_sub_fetch_##SIZE(volatile void*, TYPE, int);                   \
+  TYPE __atomic_and_fetch_##SIZE(volatile void*, TYPE, int);                   \
+  TYPE __atomic_or_fetch_##SIZE(volatile void*, TYPE, int);                    \
+  TYPE __atomic_xor_fetch_##SIZE(volatile void*, TYPE, int);                   \
+  bool __atomic_compare_exchange_##SIZE(                                       \
+      volatile void*, void*, TYPE, bool, int, int);
+
+DECLARE_ATOMIC_SHIM(1, uint8_t)
+DECLARE_ATOMIC_SHIM(2, uint16_t)
+DECLARE_ATOMIC_SHIM(4, uint32_t)
+#undef DECLARE_ATOMIC_SHIM
+}  // extern "C"
+
+template <typename T>
+void VerifyAtomicShimWidth(
+    T (*load_fn)(const volatile void*, int),
+    void (*store_fn)(volatile void*, T, int),
+    T (*exchange_fn)(volatile void*, T, int),
+    T (*fetch_add_fn)(volatile void*, T, int),
+    T (*fetch_sub_fn)(volatile void*, T, int),
+    T (*fetch_and_fn)(volatile void*, T, int),
+    T (*fetch_or_fn)(volatile void*, T, int),
+    T (*fetch_xor_fn)(volatile void*, T, int),
+    T (*add_fetch_fn)(volatile void*, T, int),
+    T (*sub_fetch_fn)(volatile void*, T, int),
+    T (*and_fetch_fn)(volatile void*, T, int),
+    T (*or_fetch_fn)(volatile void*, T, int),
+    T (*xor_fetch_fn)(volatile void*, T, int),
+    bool (*cas_fn)(volatile void*, void*, T, bool, int, int)) {
+  volatile T cell = 0;
+  store_fn(&cell, static_cast<T>(10), 0);
+  assert(load_fn(&cell, 0) == static_cast<T>(10));
+  assert(exchange_fn(&cell, static_cast<T>(25), 0) == static_cast<T>(10));
+  assert(load_fn(&cell, 0) == static_cast<T>(25));
+
+  assert(fetch_add_fn(&cell, static_cast<T>(5), 0) == static_cast<T>(25));
+  assert(fetch_sub_fn(&cell, static_cast<T>(10), 0) == static_cast<T>(30));
+  assert(fetch_or_fn(&cell, static_cast<T>(0x0F), 0) == static_cast<T>(20));
+  assert(fetch_and_fn(&cell, static_cast<T>(0x07), 0) == static_cast<T>(0x1F));
+  assert(fetch_xor_fn(&cell, static_cast<T>(0x05), 0) == static_cast<T>(0x07));
+  assert(load_fn(&cell, 0) == static_cast<T>(0x02));
+
+  assert(add_fetch_fn(&cell, static_cast<T>(8), 0) == static_cast<T>(10));
+  assert(sub_fetch_fn(&cell, static_cast<T>(3), 0) == static_cast<T>(7));
+  assert(or_fetch_fn(&cell, static_cast<T>(0x10), 0) == static_cast<T>(0x17));
+  assert(and_fetch_fn(&cell, static_cast<T>(0x0F), 0) == static_cast<T>(0x07));
+  assert(xor_fetch_fn(&cell, static_cast<T>(0x03), 0) == static_cast<T>(0x04));
+
+  T expected = static_cast<T>(0x04);
+  assert(cas_fn(&cell, &expected, static_cast<T>(0x42), true, 0, 0));
+  assert(load_fn(&cell, 0) == static_cast<T>(0x42));
+  assert(expected == static_cast<T>(0x04));
+
+  expected = static_cast<T>(0x01);
+  assert(!cas_fn(&cell, &expected, static_cast<T>(0x99), false, 0, 0));
+  assert(expected == static_cast<T>(0x42));
+  assert(load_fn(&cell, 0) == static_cast<T>(0x42));
+}
+
 int main() {
   // 1. CooperativeSystemTimer: normal deadline + 32-bit wraparound + Cancel
   {
@@ -143,6 +213,28 @@ int main() {
     assert(limits.min == 0 && limits.max == 1023);
     auto sample = static_cast<pw::analog::AnalogInput&>(ain).TryReadUntil(0);
     assert(sample.ok() && sample.value() == 512);
+  }
+
+  // 5. pw_metric_avr: 1/2/4-byte __atomic_* shims (host test mode)
+  {
+    VerifyAtomicShimWidth<uint8_t>(
+        __atomic_load_1, __atomic_store_1, __atomic_exchange_1,
+        __atomic_fetch_add_1, __atomic_fetch_sub_1, __atomic_fetch_and_1,
+        __atomic_fetch_or_1, __atomic_fetch_xor_1, __atomic_add_fetch_1,
+        __atomic_sub_fetch_1, __atomic_and_fetch_1, __atomic_or_fetch_1,
+        __atomic_xor_fetch_1, __atomic_compare_exchange_1);
+    VerifyAtomicShimWidth<uint16_t>(
+        __atomic_load_2, __atomic_store_2, __atomic_exchange_2,
+        __atomic_fetch_add_2, __atomic_fetch_sub_2, __atomic_fetch_and_2,
+        __atomic_fetch_or_2, __atomic_fetch_xor_2, __atomic_add_fetch_2,
+        __atomic_sub_fetch_2, __atomic_and_fetch_2, __atomic_or_fetch_2,
+        __atomic_xor_fetch_2, __atomic_compare_exchange_2);
+    VerifyAtomicShimWidth<uint32_t>(
+        __atomic_load_4, __atomic_store_4, __atomic_exchange_4,
+        __atomic_fetch_add_4, __atomic_fetch_sub_4, __atomic_fetch_and_4,
+        __atomic_fetch_or_4, __atomic_fetch_xor_4, __atomic_add_fetch_4,
+        __atomic_sub_fetch_4, __atomic_and_fetch_4, __atomic_or_fetch_4,
+        __atomic_xor_fetch_4, __atomic_compare_exchange_4);
   }
 
   std::cout << "[PASSED] All avr_pigweed_port host backend tests passed!\n";

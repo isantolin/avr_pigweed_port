@@ -58,6 +58,11 @@ set(ENV{PYTHONPATH} "${_pw_generated_pythonpath}")
 
 
 set(pw_unit_test_ENABLE_PW_ADD_TEST OFF CACHE BOOL "" FORCE)
+# The pinned Pigweed proto sources use proto2/proto3, not Editions. Keep
+# the generator compatible with the distro protoc (3.21) by disabling the
+# optional Editions flag before any subdirectory declares pw_proto_library
+# targets (including pw_tokenizer.proto); proto3 optional remains enabled.
+set(pw_protobuf_compiler_GENERATE_PROTOS_ARGS "--no-experimental-editions" CACHE STRING "Extra args for Pigweed proto generation" FORCE)
 include("${PW_ROOT}/pw_build/pigweed.cmake")
 include("${PW_ROOT}/pw_assert/backend.cmake")
 # Tokenized logging support for 8-bit AVR
@@ -154,10 +159,6 @@ target_link_libraries(pw_log.rate_limited PUBLIC
   pw_chrono.system_clock
 )
 add_subdirectory("${PW_ROOT}/pw_stream" pw_stream EXCLUDE_FROM_ALL)
-# The pinned Pigweed proto sources use proto2/proto3, not Editions. Keep
-# the generator compatible with the distro protoc (3.21) by disabling the
-# optional Editions flag; proto3 optional remains enabled by Pigweed.
-set(pw_protobuf_compiler_GENERATE_PROTOS_ARGS "--no-experimental-editions" CACHE STRING "Extra args for Pigweed proto generation" FORCE)
 add_subdirectory("${PW_ROOT}/pw_protobuf" pw_protobuf EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_checksum" pw_checksum EXCLUDE_FROM_ALL)
 # Enable pw_sync interfaces
@@ -174,6 +175,19 @@ pw_add_library(pw_chrono_avr.system_timer STATIC
     pw_chrono.system_clock
     pw_function
 )
+
+# Atomic shims for 8-bit AVR required by upstream pw_metric (std::atomic<uint32_t>).
+# Compile without LTO so static-archive members remain visible to compiler-synthesized
+# __atomic_* libcalls emitted during LTO codegen; -ffunction-sections + --gc-sections
+# still strips every unused atomic helper from the final binary.
+pw_add_library(pw_metric_avr STATIC
+  SOURCES
+    pw_metric_avr/src/atomic_avr.cpp
+)
+target_compile_options(pw_metric_avr PRIVATE -fno-lto)
+
+add_subdirectory("${PW_ROOT}/pw_metric" pw_metric EXCLUDE_FROM_ALL)
+target_link_libraries(pw_metric PUBLIC pw_metric_avr)
 
 # Generate a real upstream raw RPC service used by the UART/HDLC integration
 # probe. This exercises generated service dispatch, unary responders and
@@ -205,6 +219,11 @@ avr_remove_target_deps(pw_transfer.core
 )
 avr_remove_target_deps(pw_transfer pw_sync.mutex)
 avr_remove_target_deps(pw_transfer.config pw_chrono.system_timer)
+# MetricService (metric_service_pwpb.cc) implements the raw_rpc service
+# interface and encodes payloads with pwpb directly; it does not use pwpb_rpc.
+avr_remove_target_deps(pw_metric.metric_service_pwpb
+  pw_metric.metric_service_proto.pwpb_rpc
+)
 target_link_libraries(pw_transfer PUBLIC pw_sync.no_lock)
 target_compile_definitions(pw_transfer.core PUBLIC
   PW_TRANSFER_COOPERATIVE=1
@@ -313,6 +332,8 @@ target_link_libraries(pw_rpc_upstream_probe.elf PRIVATE
   pw_rpc.raw.server_api
   pw_rpc.raw.client_api
   avr_rpc_probe.raw_rpc
+  pw_metric
+  pw_metric.metric_service_pwpb
   pw_hdlc.rpc_channel_output
   pw_sync.no_lock
 )
@@ -387,6 +408,7 @@ target_link_libraries(test_runner.elf PRIVATE
   pw_tokenizer
   pw_chrono.system_clock
   pw_chrono_avr.system_timer
+  pw_metric
   pw_log
 )
 

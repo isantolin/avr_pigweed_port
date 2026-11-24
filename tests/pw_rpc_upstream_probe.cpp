@@ -9,6 +9,9 @@
 #include "pw_function/function.h"
 #include "pw_hdlc/decoder.h"
 #include "pw_hdlc/rpc_channel.h"
+#include "pw_metric/metric.h"
+#include "pw_metric/metric_service_pwpb.h"
+#include "pw_protobuf/decoder.h"
 #include "pw_rpc/client.h"
 #include "pw_rpc/raw/client_reader_writer.h"
 #include "pw_rpc/raw/server_reader_writer.h"
@@ -22,7 +25,7 @@ namespace {
 
 constexpr uint64_t kHdlcAddress = 1;
 constexpr uint32_t kRpcChannelId = 1;
-constexpr size_t kHdlcDecoderBufferSize = 64;
+constexpr size_t kHdlcDecoderBufferSize = 128;
 
 void EmitResult(uint8_t failure_code) {
   const uint16_t ubrr =
@@ -58,6 +61,62 @@ bool bidi_response_called = false;
 size_t bidi_response_size = 0;
 uint8_t bidi_response_middle = 0;
 bool bidi_server_write_ok = false;
+
+bool metric_walk_completed = false;
+bool metric_walk_status_ok = false;
+bool metric_walk_done = false;
+uint32_t metric_walk_value = 0;
+bool metric_get_received = false;
+bool metric_get_completed = false;
+bool metric_get_status_ok = false;
+uint32_t metric_get_value = 0;
+
+bool DecodeFirstMetricUint32(pw::ConstByteSpan response,
+                             uint32_t* out_value,
+                             bool* out_done) {
+  pw::protobuf::Decoder resp_decoder(response);
+  bool found_value = false;
+  if (out_done != nullptr) {
+    *out_done = false;
+  }
+  while (resp_decoder.Next().ok()) {
+    const uint32_t field = resp_decoder.FieldNumber();
+    if (field == 1u) {  // repeated Metric metrics = 1
+      pw::ConstByteSpan metric_bytes;
+      if (!resp_decoder.ReadBytes(&metric_bytes).ok()) return false;
+      pw::protobuf::Decoder metric_decoder(metric_bytes);
+      while (metric_decoder.Next().ok()) {
+        if (metric_decoder.FieldNumber() == 4u) {  // uint32 as_int = 4
+          if (!metric_decoder.ReadUint32(out_value).ok()) return false;
+          found_value = true;
+        }
+      }
+    } else if (field == 3u && out_done != nullptr) {  // bool done = 3
+      bool done = false;
+      if (!resp_decoder.ReadBool(&done).ok()) return false;
+      *out_done = done;
+    }
+  }
+  return found_value;
+}
+
+void OnMetricWalkCompleted(pw::ConstByteSpan response, pw::Status status) {
+  metric_walk_completed = true;
+  metric_walk_status_ok = status.ok();
+  if (status.ok()) {
+    (void)DecodeFirstMetricUint32(response, &metric_walk_value, &metric_walk_done);
+  }
+}
+
+void OnMetricGetNext(pw::ConstByteSpan response) {
+  metric_get_received = true;
+  (void)DecodeFirstMetricUint32(response, &metric_get_value, nullptr);
+}
+
+void OnMetricGetCompleted(pw::Status status) {
+  metric_get_completed = true;
+  metric_get_status_ok = status.ok();
+}
 
 void OnUnaryResponse(pw::ConstByteSpan response, pw::Status status) {
   unary_status_ok = status.ok();
@@ -164,6 +223,16 @@ int main() {
   static ProbeService service;
   server.RegisterService(service);
 
+  PW_METRIC_GROUP_STATIC(probe_group, "rpc_probe");
+  PW_METRIC_STATIC(probe_group, probe_counter, "hits", 0u);
+  probe_counter.Set(40u);
+  probe_counter.Increment(2u);
+  static pw::metric::MetricList root_metrics;
+  static pw::metric::GroupList root_groups;
+  root_groups.push_front(probe_group);
+  static pw::metric::MetricService metric_service(root_metrics, root_groups);
+  server.RegisterService(metric_service);
+
   static HdlcLoopbackWriter client_to_server_writer(server);
   static pw::hdlc::RpcChannelOutput client_output(
       client_to_server_writer, kHdlcAddress, "avr-client-hdlc");
@@ -200,6 +269,25 @@ int main() {
   if (bidi_response_size != (sizeof(request) / sizeof(request[0])) && failure_code == 0) failure_code = 8;
   if (bidi_response_middle != static_cast<uint8_t>(request[1]) &&
       failure_code == 0) failure_code = 9;
+
+  // Verify upstream pw::metric::MetricService::Walk and ::Get over HDLC/pw_rpc.
+  using RawMetricClient = ::pw::metric::proto::pw_rpc::raw::MetricService::Client;
+  static RawMetricClient metric_client(client, kRpcChannelId);
+  auto walk_call = metric_client.Walk(
+      pw::ConstByteSpan(), OnMetricWalkCompleted);
+  (void)walk_call;
+  if (failure_code == 0 && !metric_walk_completed) failure_code = 20;
+  if (failure_code == 0 && !metric_walk_status_ok) failure_code = 21;
+  if (failure_code == 0 && !metric_walk_done) failure_code = 22;
+  if (failure_code == 0 && metric_walk_value != 42u) failure_code = 23;
+
+  auto get_call = metric_client.Get(
+      pw::ConstByteSpan(), OnMetricGetNext, OnMetricGetCompleted);
+  (void)get_call;
+  if (failure_code == 0 && !metric_get_received) failure_code = 24;
+  if (failure_code == 0 && !metric_get_completed) failure_code = 25;
+  if (failure_code == 0 && !metric_get_status_ok) failure_code = 26;
+  if (failure_code == 0 && metric_get_value != 42u) failure_code = 27;
 
   // The RPC calls above traversed both HDLC encoders and decoders.
   EmitResult(failure_code);

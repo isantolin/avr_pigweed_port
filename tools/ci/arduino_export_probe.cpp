@@ -30,5 +30,14 @@ int main() {
   server.RegisterService(service);
   pw::transfer::Client transfer_client(client, 1, transfer_thread, 256);
   (void)transfer_client;
+
+  PW_METRIC_GROUP_STATIC(probe_group, "probe");
+  PW_METRIC_STATIC(probe_group, probe_hits, "hits", 0u);
+  probe_hits.Increment();
+  pw::metric::MetricList root_metrics;
+  pw::metric::GroupList root_groups;
+  root_groups.push_front(probe_group);
+  pw::metric::MetricService metric_service(root_metrics, root_groups);
+  server.RegisterService(metric_service);
   return 0;
 }

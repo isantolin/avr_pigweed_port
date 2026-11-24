@@ -98,6 +98,25 @@ jobs:
           python3 -m py_compile tools/pw_emu_avr/python/pw_emu_avr/*.py tools/pw_emu_avr/tests/*.py
           PYTHONPATH="$GITHUB_WORKSPACE/tools/pw_emu_avr/python:$GITHUB_WORKSPACE/third_party/pigweed/pw_emu/py:$GITHUB_WORKSPACE/third_party/pigweed/pw_env_setup/py" python3 -m unittest discover -s tools/pw_emu_avr/tests -v
 
+      - name: Build and run host C++ backend and atomic shim unit tests
+        if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
+        run: |
+          mkdir -p build/host
+          g++ -std=c++20 -Wall -Wextra -Werror -fno-builtin \
+            -DPW_METRIC_AVR_HOST_TEST \
+            -Itests/host/stubs \
+            -Ipw_chrono_avr/public \
+            -Ipw_spi_avr/public \
+            -Ipw_digital_io_avr/public \
+            -Ipw_analog_avr/public \
+            tests/host/test_avr_port_backends.cpp \
+            pw_chrono_avr/src/system_timer.cpp \
+            pw_spi_avr/src/initiator.cpp \
+            pw_digital_io_avr/src/digital_io.cpp \
+            pw_metric_avr/src/atomic_avr.cpp \
+            -o build/host/test_avr_port_backends
+          ./build/host/test_avr_port_backends
+
       - name: Configure CMake (${{ matrix.crc_impl }})
         run: |
           cmake -B build -G Ninja \
@@ -262,6 +281,15 @@ jobs:
             dist/PigweedAVR/src/pw_transfer/transfer_thread.h
             dist/PigweedAVR/src/pw_transfer/transfer.pwpb.h
             dist/PigweedAVR/src/assert_avr.cpp
+            dist/PigweedAVR/src/atomic_avr.cpp
+            dist/PigweedAVR/src/pw_metric/metric.h
+            dist/PigweedAVR/src/pw_metric/global.h
+            dist/PigweedAVR/src/pw_metric/metric_service_pwpb.h
+            dist/PigweedAVR/src/pw_metric_proto/metric_service.pwpb.h
+            dist/PigweedAVR/src/pw_metric_proto/metric_service.raw_rpc.pb.h
+            dist/PigweedAVR/src/pw_metric_metric.cpp
+            dist/PigweedAVR/src/pw_metric_metric_walker.cpp
+            dist/PigweedAVR/src/pw_metric_metric_service_pwpb.cpp
             dist/PigweedAVR/src/pw_transfer_transfer_thread.cpp
             dist/PigweedAVR/src/array
           )
@@ -349,6 +377,16 @@ jobs:
             tests/arduino_transfer_export_probe
           avr-size --format=avr --mcu=atmega2560 \
             build/arduino-transfer-export-probe/arduino_transfer_export_probe.ino.elf
+          arduino-cli compile \
+            --fqbn arduino:avr:mega \
+            --build-property "compiler.path=${AVR_TOOLCHAIN_DIR}/" \
+            --build-property "compiler.cpp.extra_flags=-std=gnu++17 -D__cpp_lib_endian=201907L -I${AVR_STDCPP_INC}" \
+            --libraries "$HOME/Arduino/libraries" \
+            --verbose \
+            --build-path build/arduino-metric-export-probe \
+            tests/arduino_metric_export_probe
+          avr-size --format=avr --mcu=atmega2560 \
+            build/arduino-metric-export-probe/arduino_metric_export_probe.ino.elf
 
       - name: Upload Build Artifacts
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
