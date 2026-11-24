@@ -58,6 +58,11 @@ set(ENV{PYTHONPATH} "${_pw_generated_pythonpath}")
 
 
 set(pw_unit_test_ENABLE_PW_ADD_TEST OFF CACHE BOOL "" FORCE)
+# The pinned Pigweed proto sources use proto2/proto3, not Editions. Keep
+# the generator compatible with the distro protoc (3.21) by disabling the
+# optional Editions flag before any subdirectory declares pw_proto_library
+# targets (including pw_tokenizer.proto); proto3 optional remains enabled.
+set(pw_protobuf_compiler_GENERATE_PROTOS_ARGS "--no-experimental-editions" CACHE STRING "Extra args for Pigweed proto generation" FORCE)
 include("${PW_ROOT}/pw_build/pigweed.cmake")
 include("${PW_ROOT}/pw_assert/backend.cmake")
 # Tokenized logging support for 8-bit AVR
@@ -154,10 +159,6 @@ target_link_libraries(pw_log.rate_limited PUBLIC
   pw_chrono.system_clock
 )
 add_subdirectory("${PW_ROOT}/pw_stream" pw_stream EXCLUDE_FROM_ALL)
-# The pinned Pigweed proto sources use proto2/proto3, not Editions. Keep
-# the generator compatible with the distro protoc (3.21) by disabling the
-# optional Editions flag; proto3 optional remains enabled by Pigweed.
-set(pw_protobuf_compiler_GENERATE_PROTOS_ARGS "--no-experimental-editions" CACHE STRING "Extra args for Pigweed proto generation" FORCE)
 add_subdirectory("${PW_ROOT}/pw_protobuf" pw_protobuf EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_checksum" pw_checksum EXCLUDE_FROM_ALL)
 # Enable pw_sync interfaces
