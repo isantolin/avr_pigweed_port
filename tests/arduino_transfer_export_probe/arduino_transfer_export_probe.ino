@@ -24,10 +24,29 @@ pw::rpc::Client client(pw::span<pw::rpc::Channel>(channels, 1));
 pw::transfer::TransferService transfer_service(transfer_thread, 256);
 pw::transfer::Client transfer_client(client, 1, transfer_thread, 256);
 
+class ProbeHandler final : public pw::transfer::ReadOnlyHandler {
+ public:
+  ProbeHandler() : pw::transfer::ReadOnlyHandler(1) {}
+  ~ProbeHandler() override { registration_.Detach(*this); }
+
+  bool Attach(pw::transfer::TransferService& service,
+              pw::transfer::TransferThread& thread) {
+    return registration_.Attach(*this, service, thread);
+  }
+
+  pw::Status PrepareRead() override { return pw::Status::FailedPrecondition(); }
+
+ private:
+  pw::transfer::CooperativeHandlerRegistration registration_;
+};
+
+ProbeHandler probe_handler;
+
 }  // namespace
 
 void setup() {
   server.RegisterService(transfer_service);
+  (void)probe_handler.Attach(transfer_service, transfer_thread);
 }
 
 void loop() {

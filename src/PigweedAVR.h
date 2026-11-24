@@ -67,6 +67,7 @@ using byte = std::byte;
 #include "pw_transfer/transfer_thread.h"
 #include "pw_transfer/transfer.h"
 #include "pw_transfer/client.h"
+#include "pw_transfer/cooperative_handler_registration.h"
 #endif
 #include "arduino_stream.h"
 

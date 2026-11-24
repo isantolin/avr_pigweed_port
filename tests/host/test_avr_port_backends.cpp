@@ -10,6 +10,7 @@
 #include "pw_chrono_avr/system_timer.h"
 #include "pw_digital_io_avr/digital_io.h"
 #include "pw_spi_avr/initiator.h"
+#include "pw_transfer/cooperative_handler_registration.h"
 
 extern "C" uint32_t pw_chrono_avr_GetMillis(void) {
   return host_stub::g_millis;
@@ -235,6 +236,62 @@ int main() {
         __atomic_fetch_or_4, __atomic_fetch_xor_4, __atomic_add_fetch_4,
         __atomic_sub_fetch_4, __atomic_and_fetch_4, __atomic_or_fetch_4,
         __atomic_xor_fetch_4, __atomic_compare_exchange_4);
+  }
+
+  // 6. pw_transfer_avr: CooperativeHandlerRegistration lifecycle & drains
+  {
+    pw::transfer::Handler handler(0x42U);
+    pw::transfer::TransferService service_a;
+    pw::transfer::TransferService service_b;
+    pw::transfer::TransferThread thread_a;
+    pw::transfer::TransferThread thread_b;
+    pw::transfer::CooperativeHandlerRegistration reg;
+
+    assert(!reg.IsAttached());
+    assert(!reg.IsAttachedTo(service_a));
+    assert(!reg.DetachFrom(handler, service_a));
+    reg.Detach(handler);  // no-op when detached
+
+    // Failed registration must leave helper detached after draining.
+    service_a.fail_next_register = true;
+    assert(!reg.Attach(handler, service_a, thread_a));
+    assert(!reg.IsAttached());
+    assert(service_a.register_attempts == 1U);
+    assert(thread_a.wait_count == 1U);
+
+    // Successful attach drains before and after RegisterHandler.
+    assert(reg.Attach(handler, service_a, thread_a));
+    assert(reg.IsAttached());
+    assert(reg.IsAttachedTo(service_a));
+    assert(!reg.IsAttachedTo(service_b));
+    assert(service_a.registered.size() == 1U);
+    assert(thread_a.wait_count == 3U);
+
+    // Re-attaching to the same service is an idempotent no-op.
+    assert(reg.Attach(handler, service_a, thread_a));
+    assert(service_a.register_attempts == 2U);
+    assert(thread_a.wait_count == 3U);
+
+    // DetachFrom with a different service does nothing.
+    assert(!reg.DetachFrom(handler, service_b));
+    assert(reg.IsAttachedTo(service_a));
+
+    // Re-attaching to service_b detaches from service_a (draining thread_a
+    // before & after UnregisterHandler) and attaches to service_b.
+    assert(reg.Attach(handler, service_b, thread_b));
+    assert(reg.IsAttachedTo(service_b));
+    assert(service_a.registered.empty());
+    assert(service_a.unregister_attempts == 1U);
+    assert(thread_a.wait_count == 5U);
+    assert(service_b.registered.size() == 1U);
+    assert(thread_b.wait_count == 2U);
+
+    // DetachFrom matching service detaches cleanly and is idempotent.
+    assert(reg.DetachFrom(handler, service_b));
+    assert(!reg.IsAttached());
+    assert(service_b.registered.empty());
+    assert(thread_b.wait_count == 4U);
+    assert(!reg.DetachFrom(handler, service_b));
   }
 
   std::cout << "[PASSED] All avr_pigweed_port host backend tests passed!\n";
