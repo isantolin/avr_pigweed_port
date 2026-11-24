@@ -91,7 +91,16 @@ using byte = std::byte;
 #include "pw_analog_avr/analog_input.h"
 #endif
 
-// 6. Metrics (with AVR ATOMIC_BLOCK shims)
+// 6. Metrics (with AVR ATOMIC_BLOCK shims and optional pwpb MetricService)
 #if __has_include("pw_metric/metric.h")
 #include "pw_metric/metric.h"
+#endif
+#if __has_include("pw_metric/global.h")
+#include "pw_metric/global.h"
+#endif
+#if defined(__AVR_ATmega2560__) && \
+    __has_include("pw_metric/metric_service_pwpb.h") && \
+    __has_include("pw_metric_proto/metric_service.pwpb.h") && \
+    __has_include("pw_metric_proto/metric_service.raw_rpc.pb.h")
+#include "pw_metric/metric_service_pwpb.h"
 #endif

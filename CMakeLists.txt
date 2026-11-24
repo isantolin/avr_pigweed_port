@@ -175,28 +175,18 @@ pw_add_library(pw_chrono_avr.system_timer STATIC
     pw_function
 )
 
-# Atomic shims for 8-bit AVR required by upstream pw_metric (std::atomic<uint32_t>)
+# Atomic shims for 8-bit AVR required by upstream pw_metric (std::atomic<uint32_t>).
+# Compile without LTO so static-archive members remain visible to compiler-synthesized
+# __atomic_* libcalls emitted during LTO codegen; -ffunction-sections + --gc-sections
+# still strips every unused atomic helper from the final binary.
 pw_add_library(pw_metric_avr STATIC
   SOURCES
     pw_metric_avr/src/atomic_avr.cpp
 )
+target_compile_options(pw_metric_avr PRIVATE -fno-lto)
 
-pw_add_library(pw_metric STATIC
-  SOURCES
-    ${PW_ROOT}/pw_metric/metric.cc
-    ${PW_ROOT}/pw_metric/global.cc
-  PUBLIC_INCLUDES
-    ${PW_ROOT}/pw_metric/public
-  PUBLIC_DEPS
-    pw_assert
-    pw_containers.intrusive_list
-    pw_log
-    pw_metric_avr
-    pw_preprocessor
-    pw_span
-    pw_tokenizer
-    pw_tokenizer.base64
-)
+add_subdirectory("${PW_ROOT}/pw_metric" pw_metric EXCLUDE_FROM_ALL)
+target_link_libraries(pw_metric PUBLIC pw_metric_avr)
 
 # Generate a real upstream raw RPC service used by the UART/HDLC integration
 # probe. This exercises generated service dispatch, unary responders and
@@ -228,6 +218,11 @@ avr_remove_target_deps(pw_transfer.core
 )
 avr_remove_target_deps(pw_transfer pw_sync.mutex)
 avr_remove_target_deps(pw_transfer.config pw_chrono.system_timer)
+# MetricService (metric_service_pwpb.cc) implements the raw_rpc service
+# interface and encodes payloads with pwpb directly; it does not use pwpb_rpc.
+avr_remove_target_deps(pw_metric.metric_service_pwpb
+  pw_metric.metric_service_proto.pwpb_rpc
+)
 target_link_libraries(pw_transfer PUBLIC pw_sync.no_lock)
 target_compile_definitions(pw_transfer.core PUBLIC
   PW_TRANSFER_COOPERATIVE=1
@@ -336,6 +331,8 @@ target_link_libraries(pw_rpc_upstream_probe.elf PRIVATE
   pw_rpc.raw.server_api
   pw_rpc.raw.client_api
   avr_rpc_probe.raw_rpc
+  pw_metric
+  pw_metric.metric_service_pwpb
   pw_hdlc.rpc_channel_output
   pw_sync.no_lock
 )

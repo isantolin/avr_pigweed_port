@@ -105,6 +105,66 @@ extern "C" {
     return prev;                                                               \
   }                                                                            \
                                                                                \
+  TYPE __attribute__((weak))                                                   \
+  __atomic_add_fetch_##SIZE(volatile void* ptr, TYPE val, int memorder) {      \
+    (void)memorder;                                                            \
+    TYPE result = 0;                                                           \
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {                                        \
+      volatile TYPE* p = static_cast<volatile TYPE*>(ptr);                     \
+      result = static_cast<TYPE>(*p + val);                                    \
+      *p = result;                                                             \
+    }                                                                          \
+    return result;                                                             \
+  }                                                                            \
+                                                                               \
+  TYPE __attribute__((weak))                                                   \
+  __atomic_sub_fetch_##SIZE(volatile void* ptr, TYPE val, int memorder) {      \
+    (void)memorder;                                                            \
+    TYPE result = 0;                                                           \
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {                                        \
+      volatile TYPE* p = static_cast<volatile TYPE*>(ptr);                     \
+      result = static_cast<TYPE>(*p - val);                                    \
+      *p = result;                                                             \
+    }                                                                          \
+    return result;                                                             \
+  }                                                                            \
+                                                                               \
+  TYPE __attribute__((weak))                                                   \
+  __atomic_and_fetch_##SIZE(volatile void* ptr, TYPE val, int memorder) {      \
+    (void)memorder;                                                            \
+    TYPE result = 0;                                                           \
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {                                        \
+      volatile TYPE* p = static_cast<volatile TYPE*>(ptr);                     \
+      result = static_cast<TYPE>(*p & val);                                    \
+      *p = result;                                                             \
+    }                                                                          \
+    return result;                                                             \
+  }                                                                            \
+                                                                               \
+  TYPE __attribute__((weak))                                                   \
+  __atomic_or_fetch_##SIZE(volatile void* ptr, TYPE val, int memorder) {       \
+    (void)memorder;                                                            \
+    TYPE result = 0;                                                           \
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {                                        \
+      volatile TYPE* p = static_cast<volatile TYPE*>(ptr);                     \
+      result = static_cast<TYPE>(*p | val);                                    \
+      *p = result;                                                             \
+    }                                                                          \
+    return result;                                                             \
+  }                                                                            \
+                                                                               \
+  TYPE __attribute__((weak))                                                   \
+  __atomic_xor_fetch_##SIZE(volatile void* ptr, TYPE val, int memorder) {      \
+    (void)memorder;                                                            \
+    TYPE result = 0;                                                           \
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {                                        \
+      volatile TYPE* p = static_cast<volatile TYPE*>(ptr);                     \
+      result = static_cast<TYPE>(*p ^ val);                                    \
+      *p = result;                                                             \
+    }                                                                          \
+    return result;                                                             \
+  }                                                                            \
+                                                                               \
   bool __attribute__((weak)) __atomic_compare_exchange_##SIZE(                 \
       volatile void* ptr, void* expected, TYPE desired, bool weak,             \
       int success_memorder, int failure_memorder) {                            \
