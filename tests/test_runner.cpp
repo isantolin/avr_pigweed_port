@@ -589,15 +589,61 @@ bool TestPwCooperativeTimer() {
   return true;
 }
 
-// 23. Test pw_metric (static metric group & atomic uint32_t counter on AVR)
+// 23. Test pw_metric (groups, typed metrics, saturating atomics, & 1/2/4-byte shims)
 bool TestPwMetric() {
   PW_METRIC_GROUP_STATIC(avr_group, "avr_test");
+  PW_METRIC_GROUP_STATIC(avr_group, child_group, "child");
   PW_METRIC_STATIC(avr_group, avr_counter, "counter", 0u);
+  PW_METRIC_TYPED_STATIC(avr_group, signed_gauge, "signed_gauge", int32_t, 0);
+  PW_METRIC_TYPED_STATIC(avr_group, temp_c, "temp_c", float, 0.0f);
+  PW_METRIC_TYPED_STATIC(child_group, link_up, "link_up", bool, false);
+
+  // 4-byte uint32_t saturating atomic counter
   avr_counter.Set(0u);
+  avr_counter.Decrement(1u);  // saturates at 0
+  if (avr_counter.value() != 0u) return false;
   avr_counter.Increment();
   avr_counter.Increment(3u);
   avr_counter.Decrement(1u);
-  return avr_counter.value() == 3u;
+  if (avr_counter.value() != 3u) return false;
+  avr_counter.Set(0xFFFFFFFEUL);
+  avr_counter.Increment(10u);  // saturates at UINT32_MAX
+  if (avr_counter.value() != 0xFFFFFFFFUL) return false;
+  avr_counter.Set(3u);
+
+  // 4-byte signed int32_t metric
+  signed_gauge.Set(-10);
+  signed_gauge.Increment(15);
+  signed_gauge.Decrement(2);
+  if (signed_gauge.value() != 3) return false;
+
+  // 4-byte float metric
+  temp_c.Set(23.5f);
+  if (temp_c.value() < 23.4f || temp_c.value() > 23.6f) return false;
+
+  // 1-byte bool metric
+  link_up.Set(true);
+  if (!link_up.value()) return false;
+  link_up.Set(false);
+  if (link_up.value()) return false;
+
+  // 2-byte std::atomic<uint16_t> shim verification (fetch_add / add_fetch / CAS)
+  std::atomic<uint16_t> u16_atom{100u};
+  if (u16_atom.fetch_add(25u, std::memory_order_relaxed) != 100u) return false;
+  if ((u16_atom += 5u) != 130u) return false;
+  uint16_t expected = 130u;
+  if (!u16_atom.compare_exchange_weak(expected, 200u, std::memory_order_relaxed)) {
+    return false;
+  }
+  if (u16_atom.load(std::memory_order_relaxed) != 200u) return false;
+
+  // Intrusive group/metric list structure
+  if (avr_group.metrics().size() != 3u) return false;
+  if (avr_group.children().size() != 1u) return false;
+  if (child_group.metrics().size() != 1u) return false;
+  if (avr_group.metrics().find(avr_counter.name()) != &avr_counter) return false;
+
+  return true;
 }
 
 }  // namespace
