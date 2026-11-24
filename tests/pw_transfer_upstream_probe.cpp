@@ -17,6 +17,7 @@
 #include "pw_status/status.h"
 #include "pw_stream/memory_stream.h"
 #include "pw_transfer/client.h"
+#include "pw_transfer/cooperative_handler_registration.h"
 #include "pw_transfer/internal/config.h"
 #include "pw_transfer/handler.h"
 #include "pw_transfer/internal/event.h"
@@ -561,7 +562,13 @@ int main() {
   pw::stream::MemoryWriter reverse_sink{pw::ByteSpan(reverse_sink_buffer)};
   pw::transfer::WriteOnlyHandler reverse_handler(kWriteResourceId,
                                                   reverse_sink);
-  if (!reverse_transfer_service.RegisterHandler(reverse_handler)) {
+  pw::transfer::CooperativeHandlerRegistration reverse_registration;
+  if (!reverse_registration.Attach(reverse_handler, reverse_transfer_service,
+                                   client_thread) ||
+      !reverse_registration.IsAttachedTo(reverse_transfer_service) ||
+      !reverse_registration.Attach(reverse_handler, reverse_transfer_service,
+                                   client_thread) ||
+      reverse_registration.DetachFrom(reverse_handler, transfer_service)) {
     MarkFailure(success, failure_code, 27);
   }
   pw::stream::MemoryReader reverse_source{pw::ConstByteSpan(reverse_data)};
@@ -577,7 +584,10 @@ int main() {
   if (!reverse_write_completion_status.ok() ||
       reverse_sink.bytes_written() != (sizeof(reverse_data) / sizeof(reverse_data[0])) ||
       std::memcmp(reverse_sink.data(), reverse_data,
-                  (sizeof(reverse_data) / sizeof(reverse_data[0]))) != 0) {
+                  (sizeof(reverse_data) / sizeof(reverse_data[0]))) != 0 ||
+      !reverse_registration.DetachFrom(reverse_handler,
+                                       reverse_transfer_service) ||
+      reverse_registration.IsAttached()) {
     MarkFailure(success, failure_code, 30);
   }
 

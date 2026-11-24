@@ -109,6 +109,7 @@ jobs:
             -Ipw_spi_avr/public \
             -Ipw_digital_io_avr/public \
             -Ipw_analog_avr/public \
+            -Ipw_transfer_avr/public \
             tests/host/test_avr_port_backends.cpp \
             pw_chrono_avr/src/system_timer.cpp \
             pw_spi_avr/src/initiator.cpp \
@@ -280,6 +281,7 @@ jobs:
             dist/PigweedAVR/src/pw_protobuf/encoder.h
             dist/PigweedAVR/src/pw_transfer/transfer_thread.h
             dist/PigweedAVR/src/pw_transfer/transfer.pwpb.h
+            dist/PigweedAVR/src/pw_transfer/cooperative_handler_registration.h
             dist/PigweedAVR/src/assert_avr.cpp
             dist/PigweedAVR/src/atomic_avr.cpp
             dist/PigweedAVR/src/pw_metric/metric.h

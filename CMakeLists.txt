@@ -358,7 +358,10 @@ add_executable(pw_transfer_upstream_probe.elf EXCLUDE_FROM_ALL
   tests/pw_transfer_upstream_probe.cpp
   src/cxx_abi_stubs.cpp
 )
-target_include_directories(pw_transfer_upstream_probe.elf PRIVATE src)
+target_include_directories(pw_transfer_upstream_probe.elf PRIVATE
+  src
+  pw_transfer_avr/public
+)
 target_link_libraries(pw_transfer_upstream_probe.elf PRIVATE
   pw_transfer
   pw_rpc.server

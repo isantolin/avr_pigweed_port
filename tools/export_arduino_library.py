@@ -261,6 +261,7 @@ def export_library(dest_dir: Path):
         "pw_spi_avr",
         "pw_digital_io_avr",
         "pw_analog_avr",
+        "pw_transfer_avr",
     ]
     for backend in backends:
         b_path = REPO_ROOT / backend
