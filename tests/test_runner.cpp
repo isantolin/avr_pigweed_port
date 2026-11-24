@@ -30,6 +30,7 @@
 #include "pw_tokenizer/hash.h"
 #include "pw_chrono/system_clock.h"
 #include "pw_chrono_avr/system_clock_avr.h"
+#include "pw_chrono_avr/system_timer.h"
 #include "pw_log/log.h"
 #include "pw_log_avr/log_avr.h"
 #include "pw_metric/metric.h"
@@ -577,7 +578,18 @@ bool TestPwLog() {
   return true;
 }
 
-// 22. Test pw_metric (static metric group & atomic uint32_t counter on AVR)
+// 22. Test pw_chrono_avr::CooperativeSystemTimer
+bool TestPwCooperativeTimer() {
+  pw::chrono::avr::CooperativeSystemTimer timer;
+  bool fired = false;
+  timer.InvokeAfter(5, [&fired](uint32_t) { fired = true; });
+  if (!timer.IsPending() || fired) return false;
+  pw_chrono_avr_StepMillis(5);
+  if (!timer.Poll() || !fired || timer.IsPending()) return false;
+  return true;
+}
+
+// 23. Test pw_metric (static metric group & atomic uint32_t counter on AVR)
 bool TestPwMetric() {
   PW_METRIC_GROUP_STATIC(avr_group, "avr_test");
   PW_METRIC_STATIC(avr_group, avr_counter, "counter", 0u);
@@ -616,6 +628,7 @@ int main() {
   RUN_TEST(TestPwTokenizer);
   RUN_TEST(TestPwChrono);
   RUN_TEST(TestPwLog);
+  RUN_TEST(TestPwCooperativeTimer);
   RUN_TEST(TestPwMetric);
 
   uart::Finish(g_total_tests, g_passed_tests);

@@ -165,6 +165,15 @@ add_subdirectory("${PW_ROOT}/pw_sync" pw_sync EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_hdlc" pw_hdlc EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_rpc" pw_rpc EXCLUDE_FROM_ALL)
 add_subdirectory("${PW_ROOT}/pw_transfer" pw_transfer EXCLUDE_FROM_ALL)
+pw_add_library(pw_chrono_avr.system_timer STATIC
+  SOURCES
+    pw_chrono_avr/src/system_timer.cpp
+  PUBLIC_INCLUDES
+    pw_chrono_avr/public
+  PUBLIC_DEPS
+    pw_chrono.system_clock
+    pw_function
+)
 
 # Atomic shims for 8-bit AVR required by upstream pw_metric (std::atomic<uint32_t>)
 pw_add_library(pw_metric_avr STATIC
@@ -400,6 +409,7 @@ target_link_libraries(test_runner.elf PRIVATE
   pw_base64
   pw_tokenizer
   pw_chrono.system_clock
+  pw_chrono_avr.system_timer
   pw_metric
   pw_log
 )

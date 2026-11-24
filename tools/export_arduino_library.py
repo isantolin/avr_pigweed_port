@@ -222,6 +222,9 @@ def export_library(dest_dir: Path):
         "pw_chrono_avr",
         "pw_log_avr",
         "pw_metric_avr",
+        "pw_spi_avr",
+        "pw_digital_io_avr",
+        "pw_analog_avr",
     ]
     for backend in backends:
         b_path = REPO_ROOT / backend
@@ -231,7 +234,7 @@ def export_library(dest_dir: Path):
             shutil.copytree(b_path / "public_overrides", src_dir, dirs_exist_ok=True)
         if (b_path / "src").exists():
             for src_file in (b_path / "src").glob("*.cpp"):
-                if any(token in src_file.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake")):
+                if any(token in src_file.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake", "mock")):
                     continue
                 shutil.copy2(src_file, src_dir / src_file.name)
 
@@ -263,6 +266,9 @@ def export_library(dest_dir: Path):
         "pw_transfer",
         "pw_log",
         "pw_metric",
+        "pw_spi",
+        "pw_digital_io",
+        "pw_analog",
         "pw_toolchain",
     ]
 
@@ -302,6 +308,8 @@ def export_library(dest_dir: Path):
             "pw_log_proto_utils.cc",
             "metric_service_nanopb.cc",
             "metric_service_pwpb.cc",
+            "pw_digital_io_digital_io_service.cc",
+            "pw_spi_mock_initiator.cc",
             "pw_crypto_aes_boringssl.cc",
             "pw_crypto_aes_mbedtls.cc",
             "pw_crypto_chacha20_boringssl.cc",
@@ -349,7 +357,7 @@ def export_library(dest_dir: Path):
             target_name = f"{mod}_{cc_file.stem}.cpp"
             if (
                 not cc_file.name.endswith(("_test.cc", "_fuzzer.cc", "_perf_test.cc"))
-                and not any(token in cc_file.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake"))
+                and not any(token in cc_file.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake", "mock"))
                 and cc_file.name not in EXCLUDED_SOURCES
                 and cc_file.stem not in excluded_source_stems
                 and Path(target_name).stem not in excluded_source_stems
@@ -359,7 +367,7 @@ def export_library(dest_dir: Path):
             target_name = f"{mod}_{cc_file.stem}.cpp"
             if (
                 not cc_file.name.endswith(("_test.cc", "_fuzzer.cc"))
-                and not any(token in cc_file.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake"))
+                and not any(token in cc_file.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake", "mock"))
                 and cc_file.name not in EXCLUDED_SOURCES
                 and cc_file.stem not in excluded_source_stems
                 and Path(target_name).stem not in excluded_source_stems
@@ -378,7 +386,15 @@ def export_library(dest_dir: Path):
     # Upstream module headers are copied after the first backend pass above.
     # Re-apply the selected AVR backend headers last so Pigweed's generic
     # pw_assert_backend templates cannot overwrite the AVR ABI/macros.
-    for backend in ("pw_assert_avr", "pw_chrono_avr", "pw_log_avr", "pw_metric_avr"):
+    for backend in (
+        "pw_assert_avr",
+        "pw_chrono_avr",
+        "pw_log_avr",
+        "pw_metric_avr",
+        "pw_spi_avr",
+        "pw_digital_io_avr",
+        "pw_analog_avr",
+    ):
         backend_public = REPO_ROOT / backend / "public"
         if backend_public.is_dir():
             shutil.copytree(backend_public, src_dir, dirs_exist_ok=True)
@@ -390,7 +406,7 @@ def export_library(dest_dir: Path):
     # module trees; Arduino CLI compiles every source in the library.
     for source_path in src_dir.rglob("*"):
         if source_path.is_file() and source_path.suffix in {".cc", ".cpp"}:
-            if any(token in source_path.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake")):
+            if any(token in source_path.stem.lower() for token in ("test", "example", "fuzzer", "perf", "fake", "mock")):
                 source_path.unlink()
 
     generate_pw_rpc_packet_header(src_dir)
