@@ -26,7 +26,7 @@ void ArduinoInitiator::End() {
 }
 
 Status ArduinoInitiator::DoConfigure(const Config& config) {
-  if (config.bits_per_word != BitsPerWord(8)) {
+  if (config.bits_per_word() != 8U) {
     return Status::InvalidArgument();
   }
   bit_order_ = config.bit_order;

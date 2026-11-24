@@ -70,8 +70,7 @@ enum class BitOrder { kMsbFirst, kLsbFirst };
 struct BitsPerWord {
   uint8_t value;
   constexpr explicit BitsPerWord(uint8_t v) : value(v) {}
-  constexpr bool operator==(const BitsPerWord& o) const { return value == o.value; }
-  constexpr bool operator!=(const BitsPerWord& o) const { return value != o.value; }
+  constexpr uint8_t operator()() const { return value; }
 };
 struct Config {
   ClockPolarity polarity;
