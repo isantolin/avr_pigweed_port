@@ -8,6 +8,12 @@ bazel_dep(name = "rules_cc", version = "0.2.28")
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "protobuf", version = "36.2", repo_name = "com_google_protobuf")
 
+# Host toolchain required by the upstream-Pigweed integration tests in this module.
+register_toolchains(
+    "@pigweed//pw_toolchain/host_clang:host_cc_toolchain_linux",
+    dev_dependency = True,
+)
+
 # The port and its consumers must resolve one identical upstream Pigweed tree.
 # The top-level bridge module owns the override when consuming this repository.
 local_path_override(
