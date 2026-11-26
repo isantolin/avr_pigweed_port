@@ -206,6 +206,35 @@ int main() {
            dio_state.value() == pw::digital_io::State::kActive);
   }
 
+  // Observation-only reads must preserve the existing pin direction and latch.
+  {
+    host_stub::g_pin_mode[9] = OUTPUT;
+    host_stub::g_pin_val[9] = HIGH;
+    pw::digital_io::ArduinoDigitalIn input(9, false, false);
+    assert(input.Enable().ok());
+    const auto state = input.GetState();
+    assert(state.ok() && state.value() == pw::digital_io::State::kActive);
+    assert(host_stub::g_pin_mode[9] == OUTPUT);
+    assert(host_stub::g_pin_val[9] == HIGH);
+    assert(input.Disable().ok());
+    assert(host_stub::g_pin_mode[9] == OUTPUT);
+    assert(host_stub::g_pin_val[9] == HIGH);
+
+    host_stub::g_pin_mode[10] = OUTPUT;
+    host_stub::g_pin_val[10] = LOW;
+    pw::digital_io::ArduinoDigitalInOut input_output(
+        10, false, pw::digital_io::State::kInactive, false);
+    assert(input_output.Enable().ok());
+    const auto input_output_state = input_output.GetState();
+    assert(input_output_state.ok() &&
+           input_output_state.value() == pw::digital_io::State::kInactive);
+    assert(host_stub::g_pin_mode[10] == OUTPUT);
+    assert(host_stub::g_pin_val[10] == LOW);
+    assert(input_output.Disable().ok());
+    assert(host_stub::g_pin_mode[10] == OUTPUT);
+    assert(host_stub::g_pin_val[10] == LOW);
+  }
+
   // 4. pw_analog_avr: ArduinoAnalogInput
   {
     pw::analog::ArduinoAnalogInput ain(0, 1023);

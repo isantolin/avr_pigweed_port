@@ -6,13 +6,14 @@
 namespace pw::digital_io {
 
 Status ArduinoDigitalIn::DoEnable(bool enable) {
-  if (enable) {
-    ::pinMode(pin_, pullup_ ? INPUT_PULLUP : INPUT);
-    enabled_ = true;
-  } else {
-    ::pinMode(pin_, INPUT);
-    enabled_ = false;
+  if (configure_pin_) {
+    if (enable) {
+      ::pinMode(pin_, pullup_ ? INPUT_PULLUP : INPUT);
+    } else {
+      ::pinMode(pin_, INPUT);
+    }
   }
+  enabled_ = enable;
   return OkStatus();
 }
 
@@ -46,16 +47,17 @@ Status ArduinoDigitalOut::DoSetState(State state) {
 }
 
 Status ArduinoDigitalInOut::DoEnable(bool enable) {
-  if (enable) {
-    if (!enabled_) {
-      ::pinMode(pin_, OUTPUT);
-      ::digitalWrite(pin_, (initial_state_ == State::kActive) ? HIGH : LOW);
-      enabled_ = true;
+  if (configure_pin_) {
+    if (enable) {
+      if (!enabled_) {
+        ::pinMode(pin_, OUTPUT);
+        ::digitalWrite(pin_, (initial_state_ == State::kActive) ? HIGH : LOW);
+      }
+    } else {
+      ::pinMode(pin_, pullup_ ? INPUT_PULLUP : INPUT);
     }
-  } else {
-    ::pinMode(pin_, pullup_ ? INPUT_PULLUP : INPUT);
-    enabled_ = false;
   }
+  enabled_ = enable;
   return OkStatus();
 }
 
