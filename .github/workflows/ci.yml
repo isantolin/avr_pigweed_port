@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'feat/**' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -10,7 +10,7 @@ on:
 # Keep only the newest run for each PR or branch. PR events are grouped by
 # PR number (stable across synchronize/reopened events); non-PR events use ref.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -44,6 +44,14 @@ jobs:
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: |
           bazel test //tests/host:peripheral_backends_upstream_test --test_output=errors
+
+      - name: Upload resolved Bzlmod lockfile
+        if: always() && matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS' && hashFiles('MODULE.bazel.lock') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: bazel-module-lockfile-avr
+          path: MODULE.bazel.lock
+          if-no-files-found: warn
 
       - name: Audit exact pinned Pigweed RPC and transfer sources
         run: |
