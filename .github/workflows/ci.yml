@@ -31,6 +31,18 @@ jobs:
         run: |
           git submodule update --init --recursive --depth 1
 
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ runner.os }}-${{ github.workflow }}-${{ matrix.crc_impl }}
+
+      - name: Build and test AVR peripheral backends against upstream Pigweed
+        if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
+        run: |
+          bazel test //tests/host:peripheral_backends_upstream_test --test_output=errors
+
       - name: Audit exact pinned Pigweed RPC and transfer sources
         run: |
           bash tools/ci/audit_pigweed_rpc.sh

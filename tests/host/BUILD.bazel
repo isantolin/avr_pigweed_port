@@ -1,0 +1,32 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+package(default_visibility = ["//visibility:public"])
+
+# Keep Arduino hardware mocks separate from the legacy Pigweed API stubs used
+# by the direct g++ smoke test. This Bazel test resolves real upstream Pigweed.
+cc_library(
+    name = "arduino_peripheral_stubs",
+    hdrs = [
+        "arduino_stubs/Arduino.h",
+        "arduino_stubs/SPI.h",
+    ],
+    strip_include_prefix = "arduino_stubs",
+)
+
+cc_test(
+    name = "peripheral_backends_upstream_test",
+    srcs = [
+        "test_peripheral_backends_upstream.cpp",
+        "//pw_digital_io_avr:pw_digital_io_avr_sources",
+        "//pw_spi_avr:pw_spi_avr_sources",
+    ],
+    copts = ["-Wall", "-Wextra", "-Werror"],
+    deps = [
+        ":arduino_peripheral_stubs",
+        "//pw_analog_avr:pw_analog_avr",
+        "//pw_digital_io_avr:pw_digital_io_avr",
+        "//pw_spi_avr:pw_spi_avr",
+        "@pigweed//pw_chrono:system_clock",
+        "@pigweed//pw_status",
+    ],
+)

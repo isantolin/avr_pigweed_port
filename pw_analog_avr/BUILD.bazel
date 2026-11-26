@@ -1,0 +1,16 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Public AVR adapter. The Arduino core is supplied by the consuming firmware
+# target; this target deliberately does not select or bundle an Arduino core.
+cc_library(
+    name = "pw_analog_avr",
+    hdrs = ["public/pw_analog_avr/analog_input.h"],
+    strip_include_prefix = "public",
+    deps = [
+        "@pigweed//pw_analog:analog_input",
+        "@pigweed//pw_chrono:system_clock",
+        "@pigweed//pw_result",
+    ],
+)

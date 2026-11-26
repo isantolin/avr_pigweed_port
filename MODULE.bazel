@@ -1,0 +1,13 @@
+module(
+    name = "avr_pigweed_port",
+    version = "0.1.0",
+)
+
+bazel_dep(name = "pigweed", version = "0.0.24")
+
+# The port and its consumers must resolve one identical upstream Pigweed tree.
+# The top-level bridge module uses the same override when consuming this repo.
+local_path_override(
+    module_name = "pigweed",
+    path = "third_party/pigweed",
+)
