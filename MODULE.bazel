@@ -8,6 +8,12 @@ bazel_dep(name = "rules_cc", version = "0.2.28")
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "protobuf", version = "36.2", repo_name = "com_google_protobuf")
 
+git_override(
+    module_name = "nanopb",
+    remote = "https://github.com/nanopb/nanopb.git",
+    commit = "93550bb52a6216a7396d0a168a42b3a88223d811",
+)
+
 # Host toolchain required by the upstream-Pigweed integration tests in this module.
 register_toolchains(
     "@pigweed//pw_toolchain/host_clang:host_cc_toolchain_linux",
