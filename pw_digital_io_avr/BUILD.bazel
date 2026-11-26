@@ -1,0 +1,21 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Header API and upstream interface dependencies. Compile the implementation
+# in the final firmware target so its selected Arduino core owns Arduino.h.
+cc_library(
+    name = "pw_digital_io_avr",
+    hdrs = ["public/pw_digital_io_avr/digital_io.h"],
+    strip_include_prefix = "public",
+    deps = [
+        "@pigweed//pw_digital_io",
+        "@pigweed//pw_result",
+        "@pigweed//pw_status",
+    ],
+)
+
+filegroup(
+    name = "pw_digital_io_avr_sources",
+    srcs = ["src/digital_io.cpp"],
+)

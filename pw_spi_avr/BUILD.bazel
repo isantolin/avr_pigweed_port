@@ -1,0 +1,22 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Header API and upstream interface dependencies. Compile the implementation
+# in the final firmware target so its selected Arduino core owns Arduino.h/SPI.h.
+cc_library(
+    name = "pw_spi_avr",
+    hdrs = ["public/pw_spi_avr/initiator.h"],
+    strip_include_prefix = "public",
+    deps = [
+        "@pigweed//pw_bytes",
+        "@pigweed//pw_spi:chip_selector",
+        "@pigweed//pw_spi:initiator",
+        "@pigweed//pw_status",
+    ],
+)
+
+filegroup(
+    name = "pw_spi_avr_sources",
+    srcs = ["src/initiator.cpp"],
+)

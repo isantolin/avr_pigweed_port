@@ -17,6 +17,21 @@ The Pigweed revision used by the current RPC/transfer work is:
 
 `55873baa1b37eaf7d0a830515a0846e3fc3a79e2`
 
+## Bazel host integration
+
+The AVR port exposes its upstream-Pigweed peripheral adapters as Bzlmod targets.
+The dependency graph is locked in the committed `MODULE.bazel.lock`; CI verifies
+the lockfile with Bazel 9.3.3 using `--lockfile_mode=error`.
+
+Run the host integration test with:
+
+```sh
+bazel test --lockfile_mode=error //tests/host:peripheral_backends_upstream_test --test_output=errors
+```
+
+This host test validates the adapter interfaces and is separate from the
+ATmega2560 firmware build and the simavr runtime probes below.
+
 ## Build for the minimum supported application target (ATmega2560)
 
 Initialize all submodules:
@@ -102,7 +117,7 @@ python3 tools/export_arduino_library.py
 
 Run the CMake configure/build steps above first, including the ATmega1284P transfer probe, so the generated `pw_transfer` PWPB and raw-RPC headers exist. Host-only and non-Mega exports may omit those generated bindings; the exporter warns when they are absent. `PigweedAVR.h` exposes the transfer API only when compiling for ATmega2560.
 
-The exported umbrella header is `PigweedAVR.h`. It exposes upstream RPC on supported Arduino targets and adds cooperative transfer headers/configuration only for ATmega2560. Port-owned headers, sketches, and probes avoid STL containers (`std::array`, `std::vector`) and `PigweedAVR.h` intentionally omits `pw_containers/vector.h`. Because upstream Google Pigweed C++17 internals rely on freestanding `<new>`, `<array>`, and `<type_traits>`, Arduino CLI AVR builds must use a modern `avr-g++` (>= 8) with `-std=gnu++17 -D__cpp_lib_endian=201907L` and pass `-I<libraries>/PigweedAVR/gcc<ver>/include` in `compiler.cpp.extra_flags` so `avr-libstdcpp`'s freestanding C++17 `<new>` takes precedence over the Arduino AVR core's C++11 `cores/arduino/new` while allowing Arduino CLI to discover and compile `PigweedAVR/src/*.cpp`. The export does not bundle the Nanopb C runtime: applications that use `pw_rpc.nanopb` must provide Nanopb 0.4.9.2 separately. The Arduino Bridge installer supplies those `pb_*` sources in its application library, avoiding duplicate runtime symbols in `PigweedAVR`.
+The exported umbrella header is `PigweedAVR.h`. It exposes upstream RPC on supported Arduino targets and adds cooperative transfer headers/configuration only for ATmega2560. Port-owned headers, sketches, and probes avoid STL containers (`std::array`, `std::vector`) and `PigweedAVR.h` intentionally omits `pw_containers/vector.h`. Because upstream Google Pigweed C++17 internals rely on freestanding `<new>`, `<array>`, and `<type_traits>`, Arduino CLI AVR builds must use a modern `avr-g++` (>= 8) with `-std=gnu++17 -D__cpp_lib_endian=201907L` and pass `-I<libraries>/PigweedAVR/gcc<ver>/include` in `compiler.cpp.extra_flags` so `avr-libstdcpp`'s freestanding C++17 `<new>` takes precedence over the Arduino AVR core's C++11 `cores/arduino/new` while allowing Arduino CLI to discover and compile `PigweedAVR/src/*.cpp`. The export does not bundle the Nanopb C runtime: applications that use `pw_rpc.nanopb` must provide Nanopb 0.4.9.3 separately. The Arduino Bridge installer supplies those `pb_*` sources in its application library, avoiding duplicate runtime symbols in `PigweedAVR`.
 
 ## `pw_emu` + simavr
 
