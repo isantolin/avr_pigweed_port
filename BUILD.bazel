@@ -1,0 +1,4 @@
+# Root-level exports consumed by downstream Bzlmod modules.
+exports_files([
+    "patches/0001-avr-pw-transfer-and-protobuf.patch",
+])
