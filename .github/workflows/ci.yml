@@ -58,6 +58,26 @@ jobs:
       - name: Verify Bzlmod lockfile is reproducible
         if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS'
         run: bazel test --lockfile_mode=error //tests/host:peripheral_backends_upstream_test --test_output=errors
+      - name: Commit resolved Bzlmod lockfile to PR branch
+        if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          lockfile="$(mktemp)"
+          cp MODULE.bazel.lock "$lockfile"
+          git fetch origin "refs/heads/$HEAD_REF:refs/remotes/origin/$HEAD_REF"
+          lockfile_worktree="$(mktemp -d)"
+          rmdir "$lockfile_worktree"
+          git worktree add -B "$HEAD_REF" "$lockfile_worktree" "origin/$HEAD_REF"
+          cp "$lockfile" "$lockfile_worktree/MODULE.bazel.lock"
+          git -C "$lockfile_worktree" add MODULE.bazel.lock
+          if ! git -C "$lockfile_worktree" diff --cached --quiet -- MODULE.bazel.lock; then
+            git -C "$lockfile_worktree" config user.name "github-actions[bot]"
+            git -C "$lockfile_worktree" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "$lockfile_worktree" commit -m "build(bazel): lock resolved Bzlmod dependencies"
+            git -C "$lockfile_worktree" push origin "HEAD:refs/heads/$HEAD_REF"
+          fi
+          git worktree remove "$lockfile_worktree" --force
 
       - name: Audit exact pinned Pigweed RPC and transfer sources
         run: |
@@ -428,20 +448,3 @@ jobs:
             build/firmware.lst
             build/test_runner.elf
             
-      - name: Commit resolved Bzlmod lockfile to PR branch
-        if: matrix.crc_impl == 'PW_CHECKSUM_CRC32_4BITS' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: |
-          lockfile="$(mktemp)"
-          cp MODULE.bazel.lock "$lockfile"
-          git fetch origin "refs/heads/$HEAD_REF:refs/remotes/origin/$HEAD_REF"
-          git checkout -B "$HEAD_REF" "origin/$HEAD_REF"
-          cp "$lockfile" MODULE.bazel.lock
-          git add MODULE.bazel.lock
-          if ! git diff --cached --quiet -- MODULE.bazel.lock; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "build(bazel): lock resolved Bzlmod dependencies"
-            git push origin "HEAD:refs/heads/$HEAD_REF"
-          fi
