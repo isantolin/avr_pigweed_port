@@ -17,6 +17,21 @@ The Pigweed revision used by the current RPC/transfer work is:
 
 `55873baa1b37eaf7d0a830515a0846e3fc3a79e2`
 
+## Bazel host integration
+
+The AVR port exposes its upstream-Pigweed peripheral adapters as Bzlmod targets.
+The dependency graph is locked in the committed `MODULE.bazel.lock`; CI verifies
+the lockfile with Bazel 9.3.3 using `--lockfile_mode=error`.
+
+Run the host integration test with:
+
+```sh
+bazel test --lockfile_mode=error //tests/host:peripheral_backends_upstream_test --test_output=errors
+```
+
+This host test validates the adapter interfaces and is separate from the
+ATmega2560 firmware build and the simavr runtime probes below.
+
 ## Build for the minimum supported application target (ATmega2560)
 
 Initialize all submodules:
