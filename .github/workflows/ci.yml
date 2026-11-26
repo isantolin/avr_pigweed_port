@@ -31,6 +31,7 @@ jobs:
         run: |
           git submodule update --init --recursive --depth 1
 
+# Keep this pin synchronized with the Bridge repository; .bazelversion selects Bazel 9.3.3.
       - name: Setup Bazel
         uses: bazel-contrib/setup-bazel@0.19.2
         with:
