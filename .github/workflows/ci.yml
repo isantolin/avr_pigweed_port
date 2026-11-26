@@ -32,9 +32,10 @@ jobs:
           git submodule update --init --recursive --depth 1
 
       - name: Setup Bazel
-        uses: bazel-contrib/setup-bazel@0.19.1
+        uses: bazel-contrib/setup-bazel@0.19.2
         with:
           bazelisk-cache: true
+          bazelisk-version: 1.30.0
           repository-cache: true
           disk-cache: ${{ runner.os }}-${{ github.workflow }}-${{ matrix.crc_impl }}
 
