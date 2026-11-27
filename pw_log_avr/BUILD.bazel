@@ -1,0 +1,12 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Public interface shared by AVR firmware and host-side bridge tests.
+# The host supplies its own implementation; AVR firmware links the CMake
+# pw_log_avr backend from this port.
+cc_library(
+    name = "pw_log_avr_headers",
+    hdrs = ["public/pw_log_avr/log_avr.h"],
+    strip_include_prefix = "public",
+)
