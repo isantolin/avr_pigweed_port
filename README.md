@@ -15,7 +15,7 @@ The port uses upstream **`pw_rpc`** and **`pw_transfer`**. The former custom `pw
 
 The Pigweed revision used by the current RPC/transfer work is:
 
-`55873baa1b37eaf7d0a830515a0846e3fc3a79e2`
+`247492d08e49dc912bc60e855b57c542a84257df`
 
 ## Bazel host integration
 

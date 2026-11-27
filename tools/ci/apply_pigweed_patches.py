@@ -8,7 +8,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 PW_ROOT = ROOT / "third_party" / "pigweed"
 PATCH_FILE = ROOT / "patches" / "0001-avr-pw-transfer-and-protobuf.patch"
-EXPECTED_PIGWEED_SHA = "55873baa1b37eaf7d0a830515a0846e3fc3a79e2"
+EXPECTED_PIGWEED_SHA = "247492d08e49dc912bc60e855b57c542a84257df"
 
 
 def main() -> int:
